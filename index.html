@@ -1,436 +1,804 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CX Leave Tracker</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#0f172a;font-family:'DM Sans',sans-serif;color:#f1f5f9}
-::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:rgba(15,23,42,.5)}::-webkit-scrollbar-thumb{background:rgba(99,102,241,.3);border-radius:3px}
-@keyframes slideIn{from{transform:translateX(80px);opacity:0}to{transform:translateX(0);opacity:1}}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f172a;--surface:rgba(30,41,59,.65);--surface2:rgba(51,65,85,.45);
+  --border:rgba(100,116,139,.3);--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+  --accent:#38bdf8;--accent2:#818cf8;--red:#ef4444;--green:#22c55e;--amber:#f59e0b;
+  --indigo:#6366f1;--pink:#ec4899;--cyan:#06b6d4;
+  --radius:12px;--radius-sm:8px;--radius-xs:6px;
+  --font:'DM Sans',sans-serif;--mono:'JetBrains Mono',monospace;
+  --glass:rgba(15,23,42,.85);--glass-border:rgba(148,163,184,.15);
+}
+html{font-family:var(--font);background:var(--bg);color:var(--text);font-size:15px;line-height:1.5}
+body{min-height:100vh;background:var(--bg)}
+input,select,textarea,button{font-family:inherit;font-size:inherit}
+button{cursor:pointer}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideIn{from{opacity:0;transform:translateX(100%)}to{opacity:1;transform:translateX(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
 @keyframes spin{to{transform:rotate(360deg)}}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-@keyframes fadeIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
-tbody tr:hover td{background:rgba(99,102,241,.04)!important}
-select{appearance:auto}input:focus,textarea:focus,select:focus{border-color:rgba(99,102,241,.5)!important;outline:none}
-button{transition:opacity .12s;cursor:pointer}button:hover{opacity:.85}button:active{transform:scale(.97)}
-.dp{padding:9px 12px;background:rgba(15,23,42,.6);border:1px solid rgba(148,163,184,.2);border-radius:8px;color:#f1f5f9;font-size:13px;font-family:'DM Sans',sans-serif;color-scheme:dark}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+
+.fade-in{animation:fadeIn .3s ease-out}
+.slide-in{animation:slideIn .35s ease-out}
+.pulse{animation:pulse 1.8s ease-in-out infinite}
+.spin{animation:spin 1s linear infinite}
+
+.glass{background:var(--surface);backdrop-filter:blur(16px);border:1px solid var(--glass-border);border-radius:var(--radius)}
+.glass-header{background:var(--glass);backdrop-filter:blur(24px);border-bottom:1px solid var(--glass-border)}
+
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:500;line-height:1.4}
+.chip-red{background:rgba(239,68,68,.18);color:#fca5a5;border:1px solid rgba(239,68,68,.3)}
+.chip-indigo{background:rgba(99,102,241,.15);color:#a5b4fc;border:1px solid rgba(99,102,241,.3)}
+.chip-green{background:rgba(34,197,94,.15);color:#86efac;border:1px solid rgba(34,197,94,.3)}
+.chip-amber{background:rgba(245,158,11,.15);color:#fcd34d;border:1px solid rgba(245,158,11,.3)}
+.chip-cyan{background:rgba(6,182,212,.15);color:#67e8f9;border:1px solid rgba(6,182,212,.3)}
+.chip-pink{background:rgba(236,72,153,.15);color:#f9a8d4;border:1px solid rgba(236,72,153,.3)}
+.chip-gray{background:rgba(100,116,139,.2);color:#cbd5e1;border:1px solid rgba(100,116,139,.3)}
+
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);font-weight:500;font-size:14px;border:none;transition:all .2s}
+.btn-primary{background:var(--accent);color:#0f172a}.btn-primary:hover{background:#7dd3fc}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{background:rgba(71,85,105,.5)}
+.btn-danger{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.25)}.btn-danger:hover{background:rgba(239,68,68,.25)}
+.btn-sm{padding:5px 12px;font-size:12px;border-radius:var(--radius-xs)}
+.btn-icon{width:32px;height:32px;padding:0;border-radius:var(--radius-xs);background:var(--surface2);border:1px solid var(--border);color:var(--text2);display:inline-flex;align-items:center;justify-content:center;font-size:16px}
+.btn-icon:hover{color:var(--text);background:rgba(71,85,105,.5)}
+
+.input{width:100%;padding:8px 12px;background:rgba(15,23,42,.6);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--text);font-size:14px;outline:none;transition:border-color .2s}
+.input:focus{border-color:var(--accent)}
+.input::placeholder{color:var(--text3)}
+select.input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
+
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center}
+.modal{background:#1e293b;border:1px solid var(--glass-border);border-radius:var(--radius);padding:24px;width:90%;max-width:560px;max-height:85vh;overflow-y:auto;animation:fadeIn .25s ease-out}
+
+.toast-container{position:fixed;top:20px;right:20px;z-index:200;display:flex;flex-direction:column;gap:8px}
+.toast{padding:12px 18px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;animation:slideIn .35s ease-out;display:flex;align-items:center;gap:8px}
+.toast-success{background:rgba(34,197,94,.9);color:#fff}
+.toast-error{background:rgba(239,68,68,.9);color:#fff}
+.toast-info{background:rgba(56,189,248,.9);color:#0f172a}
+
+table{width:100%;border-collapse:separate;border-spacing:0}
+th{text-align:left;padding:10px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--text3);border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:10px 14px;border-bottom:1px solid rgba(51,65,85,.3);vertical-align:top;font-size:13.5px}
+tr:hover td{background:rgba(56,189,248,.03)}
+.mono{font-family:var(--mono);font-size:12.5px}
+
+.stat-card{padding:18px 20px;border-radius:var(--radius);cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.stat-card:hover{transform:translateY(-2px);border-color:var(--accent)}
+.stat-card .value{font-family:var(--mono);font-size:28px;font-weight:700;line-height:1}
+.stat-card .label{font-size:12px;color:var(--text2);margin-top:4px;font-weight:500}
+
+.view-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:999px;font-size:12px;background:rgba(56,189,248,.12);color:var(--accent);border:1px solid rgba(56,189,248,.25);cursor:pointer}
+.view-chip:hover{background:rgba(56,189,248,.2)}
+.view-chip .x{opacity:.6;cursor:pointer;margin-left:2px}.view-chip .x:hover{opacity:1}
+
+@media(max-width:768px){
+  .desktop-only{display:none!important}
+  .responsive-table{overflow-x:auto}
+  .stat-grid{grid-template-columns:1fr 1fr!important}
+  .filter-row{flex-wrap:wrap}
+  .modal{width:95%;padding:18px}
+}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState,useEffect,useMemo,useCallback}=React;
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-/* ═══ CONFIG ═══ */
-const SB_URL="https://wplarfdgdwhbbtjrgjrw.supabase.co";
-const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndwbGFyZmRnZHdoYmJ0anJnanJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTk5MzYsImV4cCI6MjA5MzczNTkzNn0._6Ot3hk6u419alzt9ruLnDKD0CyevcIlBdPT7wZYCh0";
-const TODAY=new Date("2026-05-07");const TS="2026-05-07";
-const fmtS=d=>`${d.toLocaleString("en",{month:"short"})} ${d.getDate()}`;
-const getWR=s=>{const a=new Date(s);a.setDate(a.getDate()-a.getDay()+1);const b=new Date(a);b.setDate(b.getDate()+4);return{start:new Date(a),end:new Date(b)}};
+// ─── CONFIG ─────────────────────────────────
+const SUPABASE_URL = 'https://wplarfdgdwhbbtjrgjrw.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndwbGFyZmRnZHdoYmJ0anJnanJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTk5MzYsImV4cCI6MjA5MzczNTkzNn0._6Ot3hk6u419alzt9ruLnDKD0CyevcIlBdPT7wZYCh0';
+const EDGE_FN_URL = `${SUPABASE_URL}/functions/v1/slack-proxy`;
+const CANVAS_ID = 'F09LAPUPJH1';
+const CHANNEL_ID = 'C09K5GFMQ22';
 
-/* ═══ SUPABASE HELPERS ═══ */
-async function sbPost(table,data){try{const r=await fetch(`${SB_URL}/rest/v1/${table}`,{method:"POST",headers:{"Content-Type":"application/json","apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`,"Prefer":"return=representation"},body:JSON.stringify(data)});return await r.json()}catch(e){console.error("SB error:",e);return null}}
-async function sbGet(table,query=""){try{const r=await fetch(`${SB_URL}/rest/v1/${table}?${query}`,{headers:{"apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`}});return await r.json()}catch(e){return null}}
-async function sbUpsert(table,data){try{const r=await fetch(`${SB_URL}/rest/v1/${table}`,{method:"POST",headers:{"Content-Type":"application/json","apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`,"Prefer":"resolution=merge-duplicates,return=representation"},body:JSON.stringify(data)});return await r.json()}catch(e){return null}}
+// ─── HELPERS ────────────────────────────────
+const today = () => {const d=new Date();return d.toISOString().split('T')[0]};
+const parseDate = (s) => {if(!s)return null;const m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?new Date(+m[1],+m[2]-1,+m[3]):null};
+const fmt = (ds) => {const d=parseDate(ds);return d?d.toLocaleDateString('en-US',{month:'short',day:'numeric'}):'?'};
+const isToday = (ds) => ds===today();
+const isFuture = (ds) => ds>=today();
+const isPast = (ds) => ds<today();
 
-async function logActivity(email,name,action){
-  await sbPost("lt_user_logs",{email,name:name||email,action,last_activity:new Date().toISOString()}).catch(()=>{});
+function getWeekRange(d){const day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1);const mon=new Date(d);mon.setDate(diff);mon.setHours(0,0,0,0);const sun=new Date(mon);sun.setDate(mon.getDate()+6);return[mon.toISOString().split('T')[0],sun.toISOString().split('T')[0]]}
+function getWeekLabel(d){const[s,e]=getWeekRange(d);return`${fmt(s)} – ${fmt(e)}`}
+function inWeek(ds,weekDate){const[ws,we]=getWeekRange(weekDate);return ds>=ws&&ds<=we}
+function shiftWeek(d,n){const nd=new Date(d);nd.setDate(nd.getDate()+7*n);return nd}
+
+function expandDateRange(str){
+  str=str.trim();
+  const toMatch=str.match(/^(\d{4}-\d{2}-\d{2})\s*to\s*(\d{4}-\d{2}-\d{2})$/i);
+  if(toMatch){
+    const dates=[];const s=new Date(toMatch[1]);const e=new Date(toMatch[2]);
+    for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1))dates.push(d.toISOString().split('T')[0]);
+    return dates;
+  }
+  return[str];
 }
-async function checkUser(email){
-  const d=await sbGet("lt_user_logs",`email=eq.${encodeURIComponent(email)}&action=eq.register&limit=1`);
-  if(d&&d.length>0)return d[0];return null;
-}
-async function registerUser(email,name){
-  await sbPost("lt_user_logs",{email,name,action:"register",last_activity:new Date().toISOString()});
+
+function parseDatesString(raw){
+  if(!raw||!raw.trim())return[];
+  const year=new Date().getFullYear();
+  const monthMap={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+  let normalized=raw;
+  // Handle "Jan 5-9" → "2026-01-05 to 2026-01-09"
+  normalized=normalized.replace(/([A-Za-z]+)\s+(\d{1,2})-(\d{1,2})/g,(m,mon,d1,d2)=>{
+    const mm=monthMap[mon.toLowerCase().substring(0,3)];
+    if(!mm)return m;
+    return`${year}-${mm}-${d1.padStart(2,'0')} to ${year}-${mm}-${d2.padStart(2,'0')}`;
+  });
+  // Handle "Thanksgiving week Nov 23-27" type
+  normalized=normalized.replace(/[A-Za-z]+\s+week\s+/gi,'');
+  const parts=normalized.split(',').map(s=>s.trim()).filter(Boolean);
+  const dates=[];
+  parts.forEach(p=>{
+    expandDateRange(p).forEach(d=>{if(d.match(/^\d{4}-\d{2}-\d{2}$/))dates.push(d)});
+  });
+  return dates;
 }
 
-/* ═══ DATE PARSER ═══ */
-function parseD(s){if(!s)return[];const r=[];s.split(",").map(x=>x.trim()).forEach(p=>{
-  const rm=p.match(/(\d{4}-\d{2}-\d{2})\s*(?:to|-)\s*(\d{4}-\d{2}-\d{2})/);
-  if(rm){let d=new Date(rm[1]);const e=new Date(rm[2]);while(d<=e){r.push(new Date(d));d.setDate(d.getDate()+1)}return}
-  const im=p.match(/(\d{4}-\d{2}-\d{2})/);if(im){r.push(new Date(im[1]));return}
-  const M={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
-  const lr=p.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+(\d+)\s*[-\u2013to]+\s*(\d+)/i);
-  if(lr){const m=M[lr[1].toLowerCase().slice(0,3)];if(m!==undefined)for(let d=+lr[2];d<=+lr[3];d++)r.push(new Date(2026,m,d));return}
-  const ld=p.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+(\d+)/i);
-  if(ld){const m=M[ld[1].toLowerCase().slice(0,3)];if(m!==undefined)r.push(new Date(2026,m,+ld[2]));return}
-  const nr=p.match(/(\d+)\s*[-\u2013]\s*(\d+)/),mc=p.match(/(Nov|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Dec|Thanksgiving)/i);
-  if(nr&&mc){let mn=mc[1].toLowerCase();if(mn==="thanksgiving")mn="nov";const m=M[mn.slice(0,3)];if(m!==undefined)for(let d=+nr[1];d<=+nr[2];d++)r.push(new Date(2026,m,d))}
-});return r}
-function filterF(s){if(!s)return"";return s.split(",").map(x=>x.trim()).filter(p=>{const d=parseD(p);if(!d.length)return/Jun|Jul|Aug|Sep|Oct|Nov|Dec|Thanksgiving/i.test(p);return d.some(x=>x>=TODAY)}).join(", ")}
-function countF(s){return s?parseD(s).filter(d=>d>=TODAY).length:0}
-function exProj(b){if(!b)return[];return b.split("\n").map(l=>{const m=l.match(/^(.+?)\s*[-\u2013:]/);return m?m[1].trim():l.trim()}).filter(Boolean)}
-
-/* ═══ CANVAS DATA ═══ */
-const CD=[
-{id:1,name:"Abiramy",dates:"2026-03-06, 2026-03-26, 2026-03-27, 2026-04-30, 2026-05-01",backup:"Cityscapes - Dinesh MS, Sundeep",type:"PTO"},
-{id:2,name:"Ajit",dates:"2026-01-08, 2026-01-09, 2026-01-20, 2026-02-18, 2026-02-27, 2026-03-18, 2026-03-30, 2026-04-02, 2026-04-03, 2026-04-06, 2026-04-08, 2026-04-09, 2026-05-07, 2026-05-08, 2026-05-11",backup:"BSNU - Balaje\nShield Roofing - Kari, Suraj Pillai\nConsumer First Roofing - Rakul, Vigneswaran",type:"Mixed"},
-{id:3,name:"Archanaa",dates:"2026-01-22, 2026-01-23, 2026-04-08, 2026-04-21, 2026-04-22",backup:"Amway - unknown\nFour Seasons - Dinesh MS, Samuel J",type:"PTO"},
-{id:4,name:"Karunambika",dates:"2026-05-27 to 2026-05-29",backup:"Ikea - unknown, Manjusha\nJan Pro - unknown",type:"PTO"},
-{id:5,name:"Sai Kishan T",dates:"2026-01-06 to 2026-01-09, 2026-02-03, 2026-04-03, 2026-04-14, 2026-05-01, 2026-05-04 to 2026-05-08",backup:"Roof Raiders - Rakul\nDryout, Steadfast - Nancy\nOptimum - Balaje",type:"PTO"},
-{id:6,name:"Athul Ashok",dates:"2026-04-09, 2026-04-14, 2026-04-15",backup:"",type:"PTO"},
-{id:7,name:"Devi",dates:"2026-01-15, 2026-02-17, 2026-03-27, 2026-04-03",backup:"",type:"PTO"},
-{id:8,name:"Nancy",dates:"Jan 5-9, Feb 23-27, Apr 7, Apr 13, May 22, Jun 1-5",backup:"Emerson - Ramya\nSC Roofing - Ramya\nBergens - Kari\nSteadfast - Kari",type:"Mixed"},
-{id:9,name:"Balaje Prasanna",dates:"2026-02-05, 2026-02-06, 2026-02-20, 2026-02-26, 2026-02-27, 2026-03-16",backup:"Melo - Suraj Pillai, Radhika\nMarasun - Rakul, Madhu\nHytek - Rakul",type:"PTO"},
-{id:10,name:"Vishali",dates:"2026-04-13, 2026-04-15 to 2026-04-17",backup:"Garage living - Jahanwi, Balaje\nFlash - Sundeep, Samuel",type:"PTO"},
-{id:11,name:"Suraj R",dates:"2026-04-01",backup:"Four Season - Archanaa, Samuel J",type:"Sick"},
-{id:12,name:"Jahanwi Shree",dates:"2026-01-26, 2026-02-06, 2026-02-20, 2026-03-04, 2026-04-29 to 2026-05-05",backup:"Bullfrog spas - Vignesh P",type:"PTO"},
-{id:13,name:"Radhika",dates:"2026-04-10",backup:"White Roofing - Kari\nOptimum - Sai Kishan, Balaje",type:"PTO"},
-{id:14,name:"Suraj Pillai",dates:"2026-03-27, 2026-04-02, 2026-04-03, 2026-04-27, 2026-05-08, 2026-05-11",backup:"Melo - Balaje, Radhika\nShield Roofing - Ajit, Kari",type:"PTO"},
-{id:15,name:"Sundeep",dates:"2026-04-20 to 2026-04-24",backup:"Samuel J - Flash Parking\nRamya - Escalations",type:"PTO"},
-{id:16,name:"Haarini",dates:"2026-04-30, 2026-05-01",backup:"unknown",type:"PTO"},
-{id:17,name:"Vigneswaran",dates:"2025-11-26, 2025-12-12, 2026-01-12 to 2026-01-16, 2026-02-26, 2026-02-27",backup:"Russell - Ajit\nNest Exteriors - Kari, Sateesh",type:"PTO"},
-{id:18,name:"Dinesh",dates:"2026-02-27, 2026-05-01",backup:"Cityscapes - Sundeep & Abiramy\nA-1 - Shanthosh",type:"PTO"},
-{id:19,name:"Rakul",dates:"2026-01-27 to 2026-02-11",backup:"Hytek - Balaje\nMarasun - Madhu, Balaje",type:"PTO"},
-{id:20,name:"Sateesh Babu",dates:"2026-01-30, 2026-02-17, 2026-04-17, 2026-04-20",backup:"Crane engineering - Samuel J\nElevate - Vigneswaran",type:"PTO"},
-{id:21,name:"Preetha",dates:"2026-04-13",backup:"A&A - Abi/Dilith\n826 - Balaje/Vishali",type:"PTO"},
-{id:22,name:"Ramya",dates:"2026-03-23, 2026-03-24",backup:"Sundeep, Nancy, Vignesh - Roofing",type:"PTO"},
-{id:23,name:"Madhu",dates:"2026-04-10, 2026-05-01",backup:"Marasun - Rakul\nBergens - Nancy",type:"PTO"},
-{id:24,name:"Jacob",dates:"2026-03-31, 2026-04-03",backup:"Rom Tech - Thanveer\nToot N Totum - Satheesh",type:"PTO"},
-{id:25,name:"Johnkamesh",dates:"2026-03-23, 2026-04-22",backup:"AWRS: Vijay and team",type:"PTO"},
-{id:26,name:"Kari",dates:"2026-04-30, 2026-05-01, 2026-05-06, 2026-05-07, 2026-05-08, 2026-05-11, Jul 3-6, Sep 4-7, Thanksgiving week Nov 23-27",backup:"TBD",type:"PTO"},
-{id:27,name:"Thanveer",dates:"2026-02-13, 2026-02-26, 2026-03-10, 2026-03-23",backup:"Sundeep, Shanthosh",type:"PTO"},
-{id:28,name:"Jasper",dates:"2026-04-01 to 2026-04-03, 2026-04-28",backup:"Zuper Connect - Preetha",type:"PTO"},
-{id:29,name:"Sharan",dates:"",backup:"",type:""},{id:30,name:"Dilith Dinesh",dates:"",backup:"",type:""},
-{id:31,name:"Travon G",dates:"",backup:"",type:""},{id:32,name:"Varshini",dates:"",backup:"",type:""},
-{id:33,name:"Vignesh P",dates:"",backup:"Perspective1 - Jacob\nBullfrog spas - Jahanwi",type:""},
-{id:34,name:"Samuel J",dates:"2026-04-29",backup:"",type:"PTO"},
-{id:35,name:"Deepak",dates:"2026-01-19, 2026-01-20",backup:"Johnkamesh",type:"PTO"},
-{id:36,name:"Shanthosh",dates:"2026-01-16, 2026-01-26, 2026-02-19, 2026-02-20",backup:"",type:"PTO"},
-{id:37,name:"Maheswaran",dates:"2026-02-16, 2026-02-17, 2026-02-27, 2026-04-08",backup:"Task - Thanveer",type:"PTO"},
-{id:38,name:"Srinidhi",dates:"2026-02-19, 2026-02-20",backup:"Sharan, Suraj R",type:"PTO"},
-{id:39,name:"Paul",dates:"2026-02-03",backup:"",type:"PTO"},
+// ─── FALLBACK DATA ──────────────────────────
+const FALLBACK_RAW = [
+  {name:'Abiramy',dates:'2026-03-06, 2026-03-26, 2026-03-27, 2026-04-30, 2026-05-01',backup:'Cityscapes - Dinesh MS, Sundeep',type:'PTO'},
+  {name:'Ajit',dates:'2026-01-08, 2026-01-09, 2026-01-20, 2026-02-18, 2026-02-27, 2026-03-18, 2026-03-30, 2026-04-02, 2026-04-03, 2026-04-06, 2026-04-08, 2026-04-09, 2026-05-07, 2026-05-08, 2026-05-11',backup:'BSNU - Balaje; Shield Roofing - Kari, Suraj Pillai; Consumer First Roofing - Rakul, Vigneswaran; Honest Fix - Devi',type:'Mixed'},
+  {name:'Archanaa',dates:'2026-01-22, 2026-01-23, 2026-04-08, 2026-04-21, 2026-04-22',backup:'Amway - unknown; Four Seasons - Dinesh MS, Samuel J, Suraj R',type:'PTO'},
+  {name:'Karunambika',dates:'2026-05-27 to 2026-05-29',backup:'Ikea - unknown, Manjusha; Jan Pro - unknown; Mainline eniv - Vigneswaran',type:'PTO'},
+  {name:'Sai Kishan T',dates:'2026-01-06 to 2026-01-09, 2026-02-03, 2026-04-03, 2026-04-14, 2026-05-01, 2026-05-04 to 2026-05-08',backup:'Roof Raiders - Rakul; Dryout, Steadfast - Nancy; Wilson and Sons - Abi, Kari; Optimum - Balaje',type:'PTO'},
+  {name:'Athul Ashok',dates:'2026-04-09, 2026-04-14, 2026-04-15',backup:'',type:'PTO'},
+  {name:'Devi',dates:'2026-01-15, 2026-02-17, 2026-03-27, 2026-04-03',backup:'',type:'PTO'},
+  {name:'Nancy',dates:'Jan 5-9, Feb 23-27, Apr 7, Apr 13, May 22, Jun 1-5',backup:'Emerson - Ramya; SC Roofing - Ramya; Bergens - Kari; Steadfast - Kari; High Impact - Ramya',type:'Mixed'},
+  {name:'Balaje Prasanna',dates:'2026-02-05, 2026-02-06, 2026-02-20, 2026-02-26, 2026-02-27, 2026-03-16',backup:'Melo - Suraj Pillai, Radhika; Marasun - Rakul, Madhu; Hytek - Rakul',type:'PTO'},
+  {name:'Vishali',dates:'2026-04-13, 2026-04-15 to 2026-04-17',backup:'Garage living - Jahanwi, Balaje; Flash - Sundeep, Samuel; Equity, 826 - Preetha, Balaje',type:'PTO'},
+  {name:'Suraj R',dates:'2026-04-01',backup:'Four Season - Archanaa, Samuel J; ProBev - Ajit, Nancy',type:'Sick'},
+  {name:'Jahanwi Shree',dates:'2026-01-26, 2026-02-06, 2026-02-20, 2026-03-04, 2026-04-29 to 2026-05-05',backup:'Bullfrog spas - Vignesh P; Roof Doctors - Vignesh P',type:'PTO'},
+  {name:'Radhika',dates:'2026-04-10',backup:'White Roofing - Kari; Optimum - Sai Kishan, Balaje',type:'PTO'},
+  {name:'Suraj Pillai',dates:'2026-03-27, 2026-04-02, 2026-04-03, 2026-04-27, 2026-05-08, 2026-05-11',backup:'Melo - Balaje, Radhika; Shield Roofing - Ajit, Kari',type:'PTO'},
+  {name:'Sundeep',dates:'2026-04-20 to 2026-04-24',backup:'Samuel J - Flash Parking; Ramya - Escalations',type:'PTO'},
+  {name:'Haarini',dates:'2026-04-30, 2026-05-01',backup:'unknown',type:'PTO'},
+  {name:'Vigneswaran',dates:'2025-11-26, 2025-12-12, 2026-01-12 to 2026-01-16, 2026-02-26, 2026-02-27',backup:'Russell - Ajit; Nest Exteriors - Kari, Sateesh',type:'PTO'},
+  {name:'Dinesh',dates:'2026-02-27, 2026-05-01',backup:'Cityscapes - Sundeep & Abiramy; A-1 - Shanthosh',type:'PTO'},
+  {name:'Rakul',dates:'2026-01-27 to 2026-02-11',backup:'Hytek - Balaje; Marasun - Madhu, Balaje',type:'PTO'},
+  {name:'Sateesh Babu',dates:'2026-01-30, 2026-02-17, 2026-04-17, 2026-04-20',backup:'Crane engineering - Samuel J; Elevate - Vigneswaran',type:'PTO'},
+  {name:'Preetha',dates:'2026-04-13',backup:'A&A - Abi/Dilith; 826 - Balaje/Vishali',type:'PTO'},
+  {name:'Ramya',dates:'2026-03-23, 2026-03-24',backup:'Sundeep, Nancy, Vignesh - Roofing',type:'PTO'},
+  {name:'Madhu',dates:'2026-04-10, 2026-05-01',backup:'Marasun - Rakul; Bergens - Nancy',type:'PTO'},
+  {name:'Jacob',dates:'2026-03-31, 2026-04-03',backup:'Rom Tech - Thanveer; Toot N Totum - Satheesh',type:'PTO'},
+  {name:'Johnkamesh',dates:'2026-03-23, 2026-04-22',backup:'AWRS: Vijay and team; TSSG: Vignesh P, Travon',type:'PTO'},
+  {name:'Kari',dates:'2026-04-30, 2026-05-01, 2026-05-06, 2026-05-07, 2026-05-08, 2026-05-11, Jul 3-6, Sep 4-7, Thanksgiving week Nov 23-27',backup:'TBD',type:'PTO'},
+  {name:'Thanveer',dates:'2026-02-13, 2026-02-26, 2026-03-10, 2026-03-23',backup:'Sundeep, Shanthosh',type:'PTO'},
+  {name:'Jasper',dates:'2026-04-01 to 2026-04-03, 2026-04-28',backup:'Zuper Connect - Preetha',type:'PTO'},
+  {name:'Sharan',dates:'',backup:'',type:''},
+  {name:'Dilith Dinesh',dates:'',backup:'',type:''},
+  {name:'Travon G',dates:'',backup:'',type:''},
+  {name:'Varshini',dates:'',backup:'',type:''},
+  {name:'Vignesh P',dates:'',backup:'Perspective1 - Jacob; Bullfrog spas - Jahanwi',type:''},
+  {name:'Samuel J',dates:'2026-04-29',backup:'',type:'PTO'},
+  {name:'Deepak',dates:'2026-01-19, 2026-01-20',backup:'Johnkamesh',type:'PTO'},
+  {name:'Shanthosh',dates:'2026-01-16, 2026-01-26, 2026-02-19, 2026-02-20',backup:'',type:'PTO'},
+  {name:'Maheswaran',dates:'2026-02-16, 2026-02-17, 2026-02-27, 2026-04-08',backup:'Task - Thanveer',type:'PTO'},
+  {name:'Srinidhi',dates:'2026-02-19, 2026-02-20',backup:'Sharan, Suraj R',type:'PTO'},
+  {name:'Paul',dates:'2026-02-03',backup:'',type:'PTO'},
 ];
 
-/* ═══ ICONS (as functions) ═══ */
-const h=React.createElement;
-const Ic={
-  Search:()=>h("svg",{width:15,height:15,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2},h("circle",{cx:11,cy:11,r:8}),h("path",{d:"m21 21-4.3-4.3"})),
-  Plus:()=>h("svg",{width:15,height:15,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2},h("path",{d:"M12 5v14M5 12h14"})),
-  Edit:()=>h("svg",{width:13,height:13,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2},h("path",{d:"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"}),h("path",{d:"M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"})),
-  Trash:()=>h("svg",{width:13,height:13,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2},h("polyline",{points:"3 6 5 6 21 6"}),h("path",{d:"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"})),
-  X:()=>h("svg",{width:15,height:15,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2},h("path",{d:"M18 6 6 18M6 6l12 12"})),
-  Slack:()=>h("svg",{width:16,height:16,viewBox:"0 0 24 24",fill:"currentColor"},h("path",{d:"M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zm10.122 2.521a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zm-2.523 10.122a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"})),
-  User:()=>h("svg",{width:15,height:15,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2},h("path",{d:"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"}),h("circle",{cx:12,cy:7,r:4})),
-  Cal:()=>h("svg",{width:14,height:14,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:1.5},h("rect",{x:3,y:4,width:18,height:18,rx:2}),h("path",{d:"M16 2v4M8 2v4M3 10h18"})),
-  Logout:()=>h("svg",{width:15,height:15,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2},h("path",{d:"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"}),h("polyline",{points:"16 17 21 12 16 7"}),h("line",{x1:21,y1:12,x2:9,y2:12})),
-  Save:()=>h("svg",{width:13,height:13,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2},h("path",{d:"M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"})),
-  ChevL:()=>h("svg",{width:14,height:14,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2},h("path",{d:"m15 18-6-6 6-6"})),
-  ChevR:()=>h("svg",{width:14,height:14,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2},h("path",{d:"m9 18 6-6-6-6"})),
-  Check:()=>h("svg",{width:12,height:12,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:3},h("polyline",{points:"20 6 9 17 4 12"})),
+function processRawData(raw){
+  return raw.map(r=>{
+    const allDates=parseDatesString(r.dates);
+    const futureDates=allDates.filter(d=>isFuture(d)).sort();
+    return{name:r.name,dates:futureDates,allDatesRaw:r.dates,backup:r.backup||'',type:r.type||'None'};
+  });
+}
+
+// ─── SUPABASE HELPERS ───────────────────────
+async function sbFetch(path,opts={}){
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/${path}`,{
+    ...opts,
+    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':`Bearer ${SUPABASE_ANON_KEY}`,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})},
+  });
+  if(!res.ok)throw new Error(await res.text());
+  const text=await res.text();
+  return text?JSON.parse(text):null;
+}
+async function logAction(email,name,action){
+  return sbFetch('lt_user_logs',{method:'POST',body:JSON.stringify({email,name,action,last_activity:new Date().toISOString()})});
+}
+async function findUser(email){
+  const data=await sbFetch(`lt_user_logs?email=eq.${encodeURIComponent(email)}&action=eq.register&order=created_at.desc&limit=1`);
+  return data&&data.length>0?data[0]:null;
+}
+
+// ─── SLACK SYNC ─────────────────────────────
+async function syncFromSlack(){
+  const res=await fetch(EDGE_FN_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'read_canvas',canvas_id:CANVAS_ID})});
+  if(!res.ok)throw new Error('Edge Function error');
+  const data=await res.json();
+  return data;
+}
+async function readChannel(){
+  const res=await fetch(EDGE_FN_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'read_channel',channel_id:CHANNEL_ID})});
+  if(!res.ok)throw new Error('Edge Function error');
+  return res.json();
+}
+
+// ─── ICONS (inline SVGs) ────────────────────
+const Icon=({name,size=16,className=''})=>{
+  const icons={
+    search:<svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
+    sync:<svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>,
+    plus:<svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>,
+    x:<svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>,
+    edit:<svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>,
+    trash:<svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,
+    chevLeft:<svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>,
+    chevRight:<svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>,
+    users:<svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+    calendar:<svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,
+    filter:<svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,
+    save:<svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
+    check:<svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>,
+    logout:<svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>,
+  };
+  return <span className={className} style={{display:'inline-flex',alignItems:'center'}}>{icons[name]||null}</span>;
 };
 
-const F="'DM Sans',sans-serif",FM="'JetBrains Mono',monospace";
-const iS={width:"100%",padding:"10px 14px",background:"rgba(15,23,42,.6)",border:"1px solid rgba(148,163,184,.2)",borderRadius:10,color:"#f1f5f9",fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:F};
+// ─── TOAST ──────────────────────────────────
+function ToastContainer({toasts,remove}){
+  return <div className="toast-container">{toasts.map(t=>
+    <div key={t.id} className={`toast toast-${t.type}`} onClick={()=>remove(t.id)}>
+      {t.type==='success'?'✓':t.type==='error'?'✗':'ℹ'} {t.msg}
+    </div>
+  )}</div>;
+}
 
-/* ═══ LOGIN SCREEN ═══ */
+// ─── LOGIN SCREEN ───────────────────────────
 function LoginScreen({onLogin}){
-  const [step,setStep]=useState("email");
-  const [email,setEmail]=useState("");
-  const [name,setName]=useState("");
-  const [err,setErr]=useState("");
-  const [loading,setLoading]=useState(false);
+  const[email,setEmail]=useState('');
+  const[name,setName]=useState('');
+  const[step,setStep]=useState('email');// email|name|loading
+  const[err,setErr]=useState('');
 
-  const checkEmail=async()=>{
-    if(!email.includes("@")){setErr("Enter a valid email");return}
-    setLoading(true);setErr("");
-    const user=await checkUser(email);
-    if(user){
-      await logActivity(email,user.name,"login");
-      setLoading(false);
-      onLogin(email,user.name);
-    }else{
-      setLoading(false);
-      setStep("name");
-    }
+  const handleEmailSubmit=async()=>{
+    if(!email||!email.includes('@')){setErr('Enter a valid email');return}
+    setStep('loading');setErr('');
+    try{
+      const user=await findUser(email);
+      if(user){
+        await logAction(email,user.name,'login');
+        onLogin({email,name:user.name});
+      }else{setStep('name')}
+    }catch(e){setErr('Network error. Try again.');setStep('email')}
   };
-  const register=async()=>{
-    if(name.trim().length<2){setErr("Enter your full name");return}
-    setLoading(true);
-    await registerUser(email,name.trim());
-    await logActivity(email,name.trim(),"register");
-    setLoading(false);
-    onLogin(email,name.trim());
+  const handleNameSubmit=async()=>{
+    if(!name.trim()){setErr('Enter your name');return}
+    setStep('loading');setErr('');
+    try{
+      await logAction(email,name.trim(),'register');
+      await logAction(email,name.trim(),'login');
+      onLogin({email,name:name.trim()});
+    }catch(e){setErr('Failed to register.');setStep('name')}
   };
 
-  return h("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#0f172a,#1e293b,#0f172a)",fontFamily:F}},
-    h("div",{style:{width:400,background:"rgba(30,41,59,.85)",backdropFilter:"blur(20px)",borderRadius:20,border:"1px solid rgba(148,163,184,.12)",padding:"44px 36px",boxShadow:"0 25px 60px rgba(0,0,0,.5)",animation:"fadeIn .3s ease"}},
-      h("div",{style:{textAlign:"center",marginBottom:32}},
-        h("div",{style:{width:52,height:52,borderRadius:14,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",color:"#fff"}},h(Ic.Cal)),
-        h("h1",{style:{color:"#f1f5f9",fontSize:21,fontWeight:700}},"CX Leave Tracker"),
-        h("p",{style:{color:"#94a3b8",fontSize:13,marginTop:6}},step==="email"?"Sign in with your work email":"Welcome! Tell us your name")),
-      step==="email"?h("div",null,
-        h("label",{style:{color:"#cbd5e1",fontSize:12,fontWeight:500,display:"block",marginBottom:6}},"Email Address"),
-        h("input",{type:"email",value:email,onChange:e=>setEmail(e.target.value),onKeyDown:e=>e.key==="Enter"&&checkEmail(),placeholder:"name@zuper.co",disabled:loading,style:{...iS,fontSize:15,padding:"12px 16px",borderRadius:12}}),
-        err&&h("p",{style:{color:"#f87171",fontSize:12,marginTop:6}},err),
-        h("button",{onClick:checkEmail,disabled:loading,style:{width:"100%",padding:"12px 0",marginTop:18,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",borderRadius:12,color:"#fff",fontSize:15,fontWeight:600,opacity:loading?.7:1,fontFamily:F}},loading?"Checking...":"Continue"),
-        h("p",{style:{color:"#475569",fontSize:11,textAlign:"center",marginTop:14}},"Email used for activity logs only")
-      ):h("div",{style:{animation:"fadeIn .3s ease"}},
-        h("div",{style:{background:"rgba(99,102,241,.08)",border:"1px solid rgba(99,102,241,.2)",borderRadius:10,padding:"10px 14px",marginBottom:16}},
-          h("p",{style:{color:"#a5b4fc",fontSize:12,margin:0}},h("strong",null,"New here! "),"We don't recognize ",email,". Please enter your name.")),
-        h("label",{style:{color:"#cbd5e1",fontSize:12,fontWeight:500,display:"block",marginBottom:6}},"Your Full Name"),
-        h("input",{value:name,onChange:e=>setName(e.target.value),onKeyDown:e=>e.key==="Enter"&&register(),placeholder:"e.g. John Doe",disabled:loading,style:{...iS,fontSize:15,padding:"12px 16px",borderRadius:12}}),
-        err&&h("p",{style:{color:"#f87171",fontSize:12,marginTop:6}},err),
-        h("button",{onClick:register,disabled:loading,style:{width:"100%",padding:"12px 0",marginTop:18,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",borderRadius:12,color:"#fff",fontSize:15,fontWeight:600,opacity:loading?.7:1,fontFamily:F}},loading?"Registering...":"Register & Continue"),
-        h("button",{onClick:()=>{setStep("email");setErr("")},style:{width:"100%",padding:"8px 0",marginTop:8,background:"transparent",border:"none",color:"#94a3b8",fontSize:12,fontFamily:F}},"\u2190 Back"))))
+  return(
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:20,background:'radial-gradient(ellipse at 30% 20%, rgba(56,189,248,.08) 0%, transparent 50%), radial-gradient(ellipse at 70% 80%, rgba(99,102,241,.06) 0%, transparent 50%), var(--bg)'}}>
+      <div className="glass fade-in" style={{padding:40,width:'100%',maxWidth:420,textAlign:'center'}}>
+        <div style={{fontSize:32,fontWeight:700,marginBottom:4,background:'linear-gradient(135deg,var(--accent),var(--accent2))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>CX Leave Tracker</div>
+        <p style={{color:'var(--text2)',fontSize:14,marginBottom:28}}>Track team availability & backups</p>
+        {step==='email'&&<div>
+          <input className="input" placeholder="Enter your work email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleEmailSubmit()} autoFocus style={{marginBottom:12,textAlign:'center'}}/>
+          <button className="btn btn-primary" style={{width:'100%'}} onClick={handleEmailSubmit}>Continue</button>
+        </div>}
+        {step==='name'&&<div className="fade-in">
+          <p style={{color:'var(--text2)',fontSize:13,marginBottom:12}}>Welcome! Enter your full name to get started.</p>
+          <input className="input" placeholder="Full Name" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleNameSubmit()} autoFocus style={{marginBottom:12,textAlign:'center'}}/>
+          <button className="btn btn-primary" style={{width:'100%'}} onClick={handleNameSubmit}>Register & Continue</button>
+        </div>}
+        {step==='loading'&&<div style={{padding:20}}><div className="spin" style={{width:32,height:32,border:'3px solid var(--border)',borderTopColor:'var(--accent)',borderRadius:'50%',margin:'0 auto'}}/></div>}
+        {err&&<p style={{color:'var(--red)',fontSize:13,marginTop:10}}>{err}</p>}
+      </div>
+    </div>
+  );
 }
 
-/* ═══ SHARED COMPONENTS ═══ */
-function Modal({open,onClose,title,wide,children}){if(!open)return null;
-  return h("div",{onClick:onClose,style:{position:"fixed",inset:0,zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.6)",backdropFilter:"blur(4px)"}},
-    h("div",{onClick:e=>e.stopPropagation(),style:{background:"#1e293b",borderRadius:16,border:"1px solid rgba(148,163,184,.15)",padding:"24px 28px",width:wide||520,maxHeight:"85vh",overflow:"auto",boxShadow:"0 25px 60px rgba(0,0,0,.5)",animation:"fadeIn .2s ease"}},
-      h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}},
-        h("h2",{style:{color:"#f1f5f9",fontSize:17,fontWeight:700,margin:0}},title),
-        h("button",{onClick:onClose,style:{background:"rgba(148,163,184,.1)",border:"none",borderRadius:8,padding:5,color:"#94a3b8",display:"flex"}},h(Ic.X))),children))}
-
-function TB({type}){const c={PTO:{b:"rgba(34,197,94,.12)",c:"#4ade80",d:"rgba(34,197,94,.2)"},Sick:{b:"rgba(251,191,36,.12)",c:"#fbbf24",d:"rgba(251,191,36,.2)"},Mixed:{b:"rgba(168,85,247,.12)",c:"#c084fc",d:"rgba(168,85,247,.2)"},"Business Travel":{b:"rgba(59,130,246,.12)",c:"#60a5fa",d:"rgba(59,130,246,.2)"}}[type]||{b:"rgba(148,163,184,.08)",c:"#475569",d:"rgba(148,163,184,.1)"};if(!type)return null;return h("span",{style:{padding:"3px 9px",borderRadius:6,fontSize:10,fontWeight:600,background:c.b,color:c.c,border:"1px solid "+c.d}},type)}
-
-function DC({text}){const d=parseD(text),isT=d.some(x=>x.toDateString()===TODAY.toDateString()),isF=d.some(x=>x>TODAY);
-  return h("span",{style:{display:"inline-block",padding:"2px 8px",borderRadius:5,fontSize:11,margin:"1px 2px",fontFamily:FM,fontWeight:500,background:isT?"rgba(239,68,68,.15)":isF?"rgba(99,102,241,.1)":"rgba(148,163,184,.06)",color:isT?"#f87171":isF?"#a5b4fc":"#94a3b8",border:isT?"1px solid rgba(239,68,68,.25)":isF?"1px solid rgba(99,102,241,.15)":"1px solid rgba(148,163,184,.08)"}},isT&&h("span",{style:{marginRight:3}},"\u25cf"),text.trim())}
-
-function WP({value,onChange}){
-  const [ref,setRef]=useState(value||TODAY);const w=getWR(ref);
-  const go=off=>{const d=new Date(ref);d.setDate(d.getDate()+off);setRef(d);onChange(getWR(d))};
-  const set=d=>{setRef(d);onChange(getWR(d))};
-  return h("div",{style:{display:"flex",alignItems:"center",gap:5}},
-    h("button",{onClick:()=>go(-7),style:{background:"rgba(148,163,184,.08)",border:"1px solid rgba(148,163,184,.1)",borderRadius:7,padding:5,color:"#94a3b8",display:"flex"}},h(Ic.ChevL)),
-    h("span",{style:{fontSize:12,color:"#cbd5e1",fontFamily:FM,fontWeight:500,minWidth:150,textAlign:"center"}},fmtS(w.start)+" \u2013 "+fmtS(w.end)),
-    h("button",{onClick:()=>go(7),style:{background:"rgba(148,163,184,.08)",border:"1px solid rgba(148,163,184,.1)",borderRadius:7,padding:5,color:"#94a3b8",display:"flex"}},h(Ic.ChevR)),
-    h("button",{onClick:()=>set(TODAY),style:{padding:"4px 10px",borderRadius:6,fontSize:10,fontWeight:600,border:"1px solid rgba(148,163,184,.1)",background:"rgba(148,163,184,.06)",color:"#94a3b8",fontFamily:F}},"This week"),
-    h("button",{onClick:()=>{const d=new Date(TODAY);d.setDate(d.getDate()+7);set(d)},style:{padding:"4px 10px",borderRadius:6,fontSize:10,fontWeight:600,border:"1px solid rgba(99,102,241,.2)",background:"rgba(99,102,241,.08)",color:"#a5b4fc",fontFamily:F}},"Next week"))}
-
-/* ═══ ADD LEAVE DIALOG ═══ */
-function LeaveDialog({allNames,initial,onSave,onCancel,isEdit}){
-  const [name,setName]=useState(initial?.name||"");
-  const [newMember,setNewMember]=useState(false);
-  const [newMemberName,setNewMemberName]=useState("");
-  const [type,setType]=useState(initial?.type||"PTO");
-  const [dates,setDates]=useState(isEdit?(initial?.dates||""):"");
-  const [pickedDates,setPickedDates]=useState([]);
-  const [backupEntries,setBackupEntries]=useState([{backupName:"",project:"",callDate:"",agenda:""}]);
-
-  const addBE=()=>setBackupEntries(p=>[...p,{backupName:"",project:"",callDate:"",agenda:""}]);
-  const updBE=(i,k,v)=>setBackupEntries(p=>p.map((e,j)=>j===i?{...e,[k]:v}:e));
-  const rmBE=i=>setBackupEntries(p=>p.filter((_,j)=>j!==i));
-
-  const addPickedDate=v=>{if(v&&!pickedDates.includes(v))setPickedDates(p=>[...p,v].sort())};
-  const rmPickedDate=d=>setPickedDates(p=>p.filter(x=>x!==d));
-
-  const actualName=newMember?newMemberName:name;
-
-  const save=()=>{
-    if(!actualName)return;
-    const newDatesStr=pickedDates.join(", ");
-    const allDates=isEdit?(dates||(newDatesStr||"")):(initial?.dates?(initial.dates+(newDatesStr?", "+newDatesStr:"")):(newDatesStr||dates));
-    const backupLines=backupEntries.filter(e=>e.project||e.backupName).map(e=>{
-      let line=e.project||"Project";
-      if(e.callDate)line+=` (${e.callDate})`;
-      line+=` - ${e.backupName||"TBD"}`;
-      if(e.agenda)line+=` | Agenda: ${e.agenda}`;
-      return line;
-    }).join("\n");
-    const allBackup=isEdit?backupLines:(initial?.backup?(backupLines?initial.backup+"\n"+backupLines:initial.backup):backupLines);
-    onSave({name:actualName,type,dates:allDates,backup:allBackup,id:initial?.id,isNewMember:newMember});
-  };
-
-  const types=["PTO","Sick","Business Travel","Mixed","Other"];
-  const lbl={color:"#cbd5e1",fontSize:12,fontWeight:500,display:"block",marginBottom:5};
-  const cardS={background:"rgba(15,23,42,.4)",border:"1px solid rgba(148,163,184,.1)",borderRadius:10,padding:14,marginBottom:10};
-
-  return h("div",null,
-    /* Team Member */
-    h("div",{style:{marginBottom:14}},h("label",{style:lbl},"Team Member"),
-      newMember?h("div",{style:{display:"flex",gap:8}},
-        h("input",{style:{...iS,flex:1},value:newMemberName,onChange:e=>setNewMemberName(e.target.value),placeholder:"Enter new member name"}),
-        h("button",{onClick:()=>setNewMember(false),style:{padding:"8px 12px",background:"rgba(148,163,184,.1)",border:"1px solid rgba(148,163,184,.15)",borderRadius:8,color:"#94a3b8",fontSize:12,fontFamily:F}},"Cancel"))
-      :h("div",{style:{display:"flex",gap:8}},
-        isEdit?h("input",{style:iS,value:name,readOnly:true}):
-        h("select",{value:name,onChange:e=>setName(e.target.value),style:{...iS,flex:1}},h("option",{value:""},"Select member..."),allNames.map(n=>h("option",{key:n,value:n},n))),
-        !isEdit&&h("button",{onClick:()=>setNewMember(true),style:{padding:"8px 12px",background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.25)",borderRadius:8,color:"#a5b4fc",fontSize:11,fontWeight:600,fontFamily:F,whiteSpace:"nowrap"}},h(Ic.Plus)," New Member"))),
-
-    /* Leave Type */
-    h("div",{style:{marginBottom:14}},h("label",{style:lbl},"Leave Type"),
-      h("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},types.map(t=>h("button",{key:t,onClick:()=>setType(t),style:{padding:"6px 12px",borderRadius:7,fontSize:12,fontWeight:500,border:type===t?"1.5px solid #6366f1":"1px solid rgba(148,163,184,.15)",background:type===t?"rgba(99,102,241,.15)":"rgba(15,23,42,.4)",color:type===t?"#a5b4fc":"#94a3b8",fontFamily:F}},t)))),
-
-    /* Date Picker */
-    h("div",{style:{marginBottom:14}},h("label",{style:lbl},isEdit?"Leave Dates":"New Leave Dates"),
-      h("div",{style:{display:"flex",gap:8,alignItems:"center",marginBottom:8}},
-        h("input",{type:"date",className:"dp",onChange:e=>addPickedDate(e.target.value),min:"2026-05-07"}),
-        h("span",{style:{fontSize:11,color:"#64748b"}},"Click date to add")),
-      pickedDates.length>0&&h("div",{style:{display:"flex",flexWrap:"wrap",gap:4,marginBottom:8}},
-        pickedDates.map(d=>h("span",{key:d,style:{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:6,fontSize:12,fontFamily:FM,background:"rgba(99,102,241,.12)",color:"#a5b4fc",border:"1px solid rgba(99,102,241,.2)"}},d,
-          h("button",{onClick:()=>rmPickedDate(d),style:{background:"none",border:"none",color:"#64748b",fontSize:14,padding:0,lineHeight:1}},"\u00d7")))),
-      isEdit&&h("textarea",{style:{...iS,minHeight:40,resize:"vertical",fontSize:12,marginTop:4},value:dates,onChange:e=>setDates(e.target.value),placeholder:"Or type dates manually..."})),
-
-    /* Backup Section */
-    h("div",{style:{marginBottom:14}},
-      h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
-        h("label",{style:{...lbl,marginBottom:0,fontSize:13,fontWeight:700,color:"#e2e8f0"}},"\ud83d\udee1\ufe0f Backup & Agenda Details"),
-        h("button",{onClick:addBE,style:{padding:"5px 12px",borderRadius:7,fontSize:11,fontWeight:600,border:"1px solid rgba(99,102,241,.25)",background:"rgba(99,102,241,.1)",color:"#a5b4fc",fontFamily:F,display:"flex",alignItems:"center",gap:4}},h(Ic.Plus)," Add Project")),
-      backupEntries.map((be,i)=>h("div",{key:i,style:cardS},
-        h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}},
-          h("span",{style:{fontSize:11,fontWeight:600,color:"#94a3b8"}},"Project "+(i+1)),
-          backupEntries.length>1&&h("button",{onClick:()=>rmBE(i),style:{background:"none",border:"none",color:"#f87171",fontSize:11,fontFamily:F}},"Remove")),
-        h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}},
-          h("div",null,h("label",{style:{...lbl,fontSize:11}},"Backup Person"),h("input",{style:{...iS,fontSize:12,padding:"8px 10px"},value:be.backupName,onChange:e=>updBE(i,"backupName",e.target.value),placeholder:"e.g. Rakul"})),
-          h("div",null,h("label",{style:{...lbl,fontSize:11}},"Project Name"),h("input",{style:{...iS,fontSize:12,padding:"8px 10px"},value:be.project,onChange:e=>updBE(i,"project",e.target.value),placeholder:"e.g. Shield Roofing"}))),
-        h("div",{style:{display:"grid",gridTemplateColumns:"1fr 2fr",gap:8}},
-          h("div",null,h("label",{style:{...lbl,fontSize:11}},"Call Date"),h("input",{type:"date",className:"dp",style:{width:"100%"},value:be.callDate,onChange:e=>updBE(i,"callDate",e.target.value)})),
-          h("div",null,h("label",{style:{...lbl,fontSize:11}},"Agenda"),h("input",{style:{...iS,fontSize:12,padding:"8px 10px"},value:be.agenda,onChange:e=>updBE(i,"agenda",e.target.value),placeholder:"e.g. Config review call"})))))),
-
-    /* Save */
-    h("div",{style:{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}},
-      h("button",{onClick:onCancel,style:{padding:"9px 18px",background:"rgba(148,163,184,.1)",border:"1px solid rgba(148,163,184,.15)",borderRadius:10,color:"#94a3b8",fontSize:13,fontFamily:F}},"Cancel"),
-      h("button",{onClick:save,style:{padding:"9px 22px",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:600,fontFamily:F}},isEdit?"Update":"Add Leave")))
-}
-
-/* ═══ DASHBOARD ═══ */
-function Dashboard({email,userName,onLogout}){
-  const [data,setData]=useState([]);
-  const [search,setSearch]=useState("");const [typeFilter,setTypeFilter]=useState("All");const [viewMode,setViewMode]=useState("upcoming");
-  const [selectedUsers,setSelectedUsers]=useState([]);const [projectFilter,setProjectFilter]=useState("");const [weekRange,setWeekRange]=useState(null);
-  const [showAdd,setShowAdd]=useState(false);const [editItem,setEditItem]=useState(null);const [deleteId,setDeleteId]=useState(null);
-  const [syncing,setSyncing]=useState(false);const [lastSync,setLastSync]=useState(null);const [toast,setToast]=useState(null);
-  const [showUserPicker,setShowUserPicker]=useState(false);const [savedViews,setSavedViews]=useState([]);const [activeView,setActiveView]=useState(-1);
-  const [saveViewName,setSaveViewName]=useState("");const [showSaveView,setShowSaveView]=useState(false);
-
-  useEffect(()=>{syncData()},[]);
-  const log=a=>logActivity(email,userName,a);
-  const syncData=()=>{setSyncing(true);setTimeout(()=>{setData(CD.map(r=>({...r,dates:filterF(r.dates)})));setSyncing(false);setLastSync(new Date());showT("Synced! Current & future leaves only.");log("sync")},1800)};
-  const showT=(m,t="success")=>{setToast({m,t});setTimeout(()=>setToast(null),3000)};
-
-  const allNames=useMemo(()=>data.map(r=>r.name).sort(),[data]);
-  const allProjects=useMemo(()=>{const s=new Set();data.forEach(r=>exProj(r.backup).forEach(p=>s.add(p)));return[...s].sort()},[data]);
-
-  const processed=useMemo(()=>{
-    let it=[...data];
-    if(viewMode==="today")it=it.filter(r=>parseD(r.dates).some(d=>d.toDateString()===TODAY.toDateString()));
-    else if(viewMode==="upcoming")it=it.filter(r=>r.dates);
-    else if(viewMode==="week"&&weekRange)it=it.filter(r=>parseD(r.dates).some(d=>d>=weekRange.start&&d<=weekRange.end));
-    if(typeFilter!=="All")it=it.filter(r=>r.type===typeFilter);
-    if(selectedUsers.length)it=it.filter(r=>selectedUsers.includes(r.name));
-    if(projectFilter)it=it.filter(r=>exProj(r.backup).some(p=>p.toLowerCase().includes(projectFilter.toLowerCase())));
-    if(search)it=it.filter(r=>[r.name,r.dates,r.backup].join(" ").toLowerCase().includes(search.toLowerCase()));
-    return it;
-  },[data,search,typeFilter,viewMode,selectedUsers,projectFilter,weekRange]);
-
-  const stats=useMemo(()=>{const wl=data.filter(r=>r.dates).length;const ot=data.filter(r=>parseD(r.dates).some(d=>d.toDateString()===TODAY.toDateString())).length;const we=new Date(TODAY);we.setDate(we.getDate()+7);const tw=data.filter(r=>parseD(r.dates).some(d=>d>=TODAY&&d<=we)).length;return{total:data.length,wl,ot,tw}},[data]);
-
-  const handleAdd=form=>{
-    if(form.isNewMember){setData(p=>[...p,{...form,id:Date.now()}]);}
-    else{const ex=data.find(r=>r.name===form.name);if(ex)setData(p=>p.map(r=>r.name===form.name?{...r,dates:form.dates,backup:form.backup,type:form.type||r.type}:r));else setData(p=>[...p,{...form,id:Date.now()}])}
-    setShowAdd(false);showT("Leave added for "+form.name);log("add_leave: "+form.name)};
-  const handleEdit=form=>{setData(p=>p.map(r=>r.id===editItem.id?{...r,...form}:r));setEditItem(null);showT("Updated!");log("edit: "+form.name)};
-  const handleDelete=()=>{const r=data.find(x=>x.id===deleteId);setData(p=>p.filter(x=>x.id!==deleteId));setDeleteId(null);showT("Deleted!","warn");log("delete: "+(r?.name||""))};
-  const saveView=()=>{if(!saveViewName)return;setSavedViews(p=>[...p,{name:saveViewName,selectedUsers:[...selectedUsers],typeFilter,projectFilter,viewMode,weekRange}]);setShowSaveView(false);setSaveViewName("");showT("View saved!")};
-  const loadView=i=>{const v=savedViews[i];setSelectedUsers(v.selectedUsers);setTypeFilter(v.typeFilter);setProjectFilter(v.projectFilter);setViewMode(v.viewMode);if(v.weekRange)setWeekRange(v.weekRange);setActiveView(i)};
-
-  return h("div",{style:{minHeight:"100vh",background:"#0f172a",fontFamily:F,color:"#f1f5f9"}},
-    toast&&h("div",{style:{position:"fixed",top:16,right:16,zIndex:2000,padding:"10px 18px",borderRadius:10,background:toast.t==="warn"?"rgba(251,146,60,.95)":"rgba(34,197,94,.95)",color:"#fff",fontSize:13,fontWeight:600,boxShadow:"0 8px 24px rgba(0,0,0,.3)",animation:"slideIn .3s ease"}},toast.m),
-
-    /* Header */
-    h("div",{style:{padding:"12px 24px",borderBottom:"1px solid rgba(148,163,184,.08)",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(15,23,42,.85)",backdropFilter:"blur(12px)",position:"sticky",top:0,zIndex:100}},
-      h("div",{style:{display:"flex",alignItems:"center",gap:10}},
-        h("div",{style:{width:34,height:34,borderRadius:9,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}},h(Ic.Cal)),
-        h("div",null,h("h1",{style:{fontSize:15,fontWeight:700}},"CX Leave Tracker"),h("p",{style:{fontSize:10,color:"#64748b"}},"#leave-updates-cx"+(lastSync?" \u00b7 "+lastSync.toLocaleTimeString():"")))),
-      h("div",{style:{display:"flex",alignItems:"center",gap:7}},
-        h("button",{onClick:syncData,disabled:syncing,style:{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.25)",borderRadius:9,color:"#a5b4fc",fontSize:12,fontWeight:600,fontFamily:F}},h("span",{style:{display:"flex",animation:syncing?"spin 1s linear infinite":"none"}},h(Ic.Slack)),syncing?"Syncing...":"Sync Slack"),
-        h("div",{style:{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",background:"rgba(148,163,184,.06)",borderRadius:8,border:"1px solid rgba(148,163,184,.1)"}},h(Ic.User),h("span",{style:{fontSize:11,color:"#94a3b8"}},userName)),
-        h("button",{onClick:onLogout,style:{display:"flex",padding:7,background:"rgba(248,113,113,.08)",border:"1px solid rgba(248,113,113,.15)",borderRadius:7,color:"#f87171"}},h(Ic.Logout)))),
-
-    syncing&&h("div",{style:{padding:"8px 24px",background:"rgba(99,102,241,.06)",borderBottom:"1px solid rgba(99,102,241,.1)",display:"flex",alignItems:"center",gap:8}},h("div",{style:{width:7,height:7,borderRadius:4,background:"#6366f1",animation:"pulse 1.5s infinite"}}),h("span",{style:{fontSize:12,color:"#a5b4fc"}},"Filtering to "+TS+" onwards...")),
-
-    /* Stats */
-    h("div",{style:{padding:"14px 24px",display:"flex",gap:10}},
-      [{l:"Total",v:stats.total,c:"#6366f1",k:"all"},{l:"On Leave Today",v:stats.ot,c:stats.ot?"#f87171":"#22c55e",k:"today"},{l:"This Week",v:stats.tw,c:"#fbbf24",k:"upcoming"},{l:"Upcoming",v:stats.wl,c:"#8b5cf6",k:"upcoming"}].map((s,i)=>
-        h("div",{key:i,onClick:()=>{setViewMode(s.k);setWeekRange(null)},style:{flex:1,padding:"12px 16px",borderRadius:12,background:s.c+"11",border:"1px solid "+s.c+"22",cursor:"pointer"}},
-          h("p",{style:{fontSize:10,color:"#64748b",fontWeight:500}},s.l),h("p",{style:{fontSize:24,fontWeight:700,marginTop:3,color:s.c,fontFamily:FM}},s.v)))),
-
-    /* Filters Row 1 */
-    h("div",{style:{padding:"0 24px 8px",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}},
-      h("div",{style:{display:"flex",gap:3,background:"rgba(15,23,42,.6)",borderRadius:9,padding:2,border:"1px solid rgba(148,163,184,.08)"}},
-        [{k:"upcoming",l:"\ud83d\udcc5 Upcoming"},{k:"today",l:"\ud83d\udd34 Today"},{k:"week",l:"\ud83d\udcc6 Week"},{k:"all",l:"\ud83d\udc65 All"}].map(v=>h("button",{key:v.k,onClick:()=>{setViewMode(v.k);if(v.k==="week"&&!weekRange)setWeekRange(getWR(TODAY))},style:{padding:"6px 13px",borderRadius:7,fontSize:11,fontWeight:600,border:"none",background:viewMode===v.k?"rgba(99,102,241,.2)":"transparent",color:viewMode===v.k?"#a5b4fc":"#64748b",fontFamily:F}},v.l))),
-      viewMode==="week"&&h(WP,{value:weekRange?.start,onChange:setWeekRange}),
-      h("div",{style:{flex:1}}),
-      h("button",{onClick:()=>setShowAdd(true),style:{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",borderRadius:9,color:"#fff",fontSize:12,fontWeight:600,fontFamily:F,whiteSpace:"nowrap"}},h(Ic.Plus)," Add Leave")),
-
-    /* Filters Row 2 */
-    h("div",{style:{padding:"0 24px 8px",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}},
-      h("div",{style:{display:"flex",alignItems:"center",gap:6,padding:"7px 12px",background:"rgba(30,41,59,.6)",border:"1px solid rgba(148,163,184,.12)",borderRadius:9,minWidth:170}},
-        h(Ic.Search),h("input",{value:search,onChange:e=>setSearch(e.target.value),placeholder:"Search...",style:{flex:1,background:"none",border:"none",color:"#f1f5f9",fontSize:12,outline:"none",fontFamily:F}}),
-        search&&h("button",{onClick:()=>setSearch(""),style:{background:"none",border:"none",color:"#64748b",display:"flex"}},h(Ic.X))),
-      h("div",{style:{display:"flex",gap:4}},["All","PTO","Sick","Mixed","Business Travel"].map(t=>h("button",{key:t,onClick:()=>{setTypeFilter(t);setActiveView(-1)},style:{padding:"6px 10px",borderRadius:7,fontSize:10,fontWeight:600,border:typeFilter===t?"1.5px solid #6366f1":"1px solid rgba(148,163,184,.1)",background:typeFilter===t?"rgba(99,102,241,.15)":"rgba(15,23,42,.4)",color:typeFilter===t?"#a5b4fc":"#64748b",fontFamily:F}},t))),
-      h("select",{value:projectFilter,onChange:e=>{setProjectFilter(e.target.value);setActiveView(-1)},style:{padding:"6px 10px",background:"rgba(15,23,42,.6)",border:"1px solid rgba(148,163,184,.15)",borderRadius:8,color:"#cbd5e1",fontSize:11,fontFamily:F}},
-        h("option",{value:""},"All Projects"),allProjects.map(p=>h("option",{key:p,value:p},p))),
-      h("button",{onClick:()=>setShowUserPicker(true),style:{padding:"6px 12px",borderRadius:8,fontSize:11,fontWeight:600,border:"1px solid "+(selectedUsers.length?"rgba(99,102,241,.2)":"rgba(148,163,184,.1)"),background:selectedUsers.length?"rgba(99,102,241,.12)":"rgba(148,163,184,.06)",color:selectedUsers.length?"#a5b4fc":"#94a3b8",fontFamily:F}},selectedUsers.length?selectedUsers.length+" users":"Select Users"),
-      (selectedUsers.length||projectFilter||typeFilter!=="All")&&h(React.Fragment,null,
-        h("button",{onClick:()=>setShowSaveView(true),style:{padding:"5px 10px",borderRadius:7,fontSize:10,fontWeight:600,border:"1px solid rgba(34,197,94,.2)",background:"rgba(34,197,94,.08)",color:"#4ade80",fontFamily:F,display:"flex",alignItems:"center",gap:4}},h(Ic.Save)," Save View"),
-        h("button",{onClick:()=>{setSelectedUsers([]);setProjectFilter("");setTypeFilter("All");setActiveView(-1)},style:{padding:"5px 10px",borderRadius:7,fontSize:10,fontWeight:600,border:"1px solid rgba(148,163,184,.1)",background:"rgba(148,163,184,.06)",color:"#94a3b8",fontFamily:F}},"Clear"))),
-
-    /* Saved Views */
-    savedViews.length>0&&h("div",{style:{padding:"0 24px 8px",display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}},
-      h("span",{style:{fontSize:11,color:"#475569",fontWeight:500}},"Views:"),
-      savedViews.map((v,i)=>h("div",{key:i,style:{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:7,fontSize:11,fontWeight:600,cursor:"pointer",background:activeView===i?"rgba(99,102,241,.2)":"rgba(148,163,184,.06)",color:activeView===i?"#a5b4fc":"#94a3b8",border:activeView===i?"1px solid rgba(99,102,241,.3)":"1px solid rgba(148,163,184,.08)",fontFamily:F},onClick:()=>loadView(i)},
-        v.name,h("span",{onClick:e=>{e.stopPropagation();setSavedViews(p=>p.filter((_,j)=>j!==i));if(activeView===i)setActiveView(-1)},style:{marginLeft:2,color:"#64748b"}},"\u00d7")))),
-
-    /* Table */
-    h("div",{style:{padding:"0 24px 24px"}},
-      h("div",{style:{borderRadius:12,border:"1px solid rgba(148,163,184,.08)",overflow:"hidden",background:"rgba(30,41,59,.4)"}},
-        h("table",{style:{width:"100%",borderCollapse:"collapse"}},
-          h("thead",null,h("tr",{style:{borderBottom:"1px solid rgba(148,163,184,.1)"}},
-            ["Name","Type","Leave Dates","Named Backup","Days",""].map((hd,i)=>h("th",{key:i,style:{padding:"10px 12px",textAlign:i===4?"center":"left",fontSize:9,fontWeight:600,color:"#475569",letterSpacing:.6,textTransform:"uppercase",background:"rgba(15,23,42,.5)",...(i===5?{width:60}:{})}},hd)))),
-          h("tbody",null,processed.map((r,idx)=>{
-            const fd=countF(r.dates),isT=parseD(r.dates).some(d=>d.toDateString()===TODAY.toDateString());
-            const chips=r.dates?r.dates.split(",").map(s=>s.trim()).filter(Boolean):[];
-            return h("tr",{key:r.id,style:{borderBottom:"1px solid rgba(148,163,184,.04)",background:isT?"rgba(239,68,68,.04)":idx%2===0?"transparent":"rgba(15,23,42,.15)"}},
-              h("td",{style:{padding:"10px 12px",fontWeight:600,fontSize:12,whiteSpace:"nowrap"}},h("div",{style:{display:"flex",alignItems:"center",gap:6}},isT&&h("span",{style:{width:6,height:6,borderRadius:3,background:"#f87171",animation:"pulse 2s infinite"}}),r.name)),
-              h("td",{style:{padding:"10px 12px"}},h(TB,{type:r.type})),
-              h("td",{style:{padding:"10px 12px",maxWidth:260}},h("div",{style:{display:"flex",flexWrap:"wrap",gap:1}},chips.length?chips.map((d,i)=>h(DC,{key:i,text:d})):h("span",{style:{color:"#3f4f63",fontStyle:"italic",fontSize:11}},"None"))),
-              h("td",{style:{padding:"10px 12px",fontSize:11,color:"#94a3b8",maxWidth:220}},h("div",{style:{whiteSpace:"pre-wrap",lineHeight:1.5}},r.backup||"\u2014")),
-              h("td",{style:{padding:"10px 12px",textAlign:"center"}},h("span",{style:{fontFamily:FM,fontSize:12,fontWeight:600,color:fd>5?"#fbbf24":fd>0?"#a5b4fc":"#3f4f63"}},fd||"\u2014")),
-              h("td",{style:{padding:"10px 12px"}},h("div",{style:{display:"flex",gap:4}},
-                h("button",{onClick:()=>setEditItem(r),style:{padding:5,borderRadius:6,border:"1px solid rgba(148,163,184,.1)",background:"rgba(99,102,241,.08)",color:"#a5b4fc",display:"flex"}},h(Ic.Edit)),
-                h("button",{onClick:()=>setDeleteId(r.id),style:{padding:5,borderRadius:6,border:"1px solid rgba(248,113,113,.15)",background:"rgba(248,113,113,.06)",color:"#f87171",display:"flex"}},h(Ic.Trash)))))})))),
-        !processed.length&&h("div",{style:{padding:40,textAlign:"center",color:"#475569"}},h("p",{style:{fontSize:14}},"No matching records"))),
-      h("div",{style:{display:"flex",justifyContent:"space-between",marginTop:8,padding:"0 2px"}},h("span",{style:{fontSize:10,color:"#475569"}},"Showing "+processed.length+" of "+data.length),h("span",{style:{fontSize:10,color:"#475569"}},"Today: "+TS))),
-
-    /* Modals */
-    h(Modal,{open:showUserPicker,onClose:()=>setShowUserPicker(false),title:"Select Team Members"},
-      h("div",{style:{display:"flex",flexWrap:"wrap",gap:6,maxHeight:400,overflow:"auto"}},allNames.map(n=>{const sel=selectedUsers.includes(n);return h("button",{key:n,onClick:()=>{setSelectedUsers(p=>p.includes(n)?p.filter(x=>x!==n):[...p,n]);setActiveView(-1)},style:{padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:500,display:"flex",alignItems:"center",gap:6,border:sel?"1.5px solid #6366f1":"1px solid rgba(148,163,184,.12)",background:sel?"rgba(99,102,241,.15)":"rgba(15,23,42,.4)",color:sel?"#a5b4fc":"#94a3b8",fontFamily:F}},sel&&h(Ic.Check),n)})),
-      h("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
-        h("button",{onClick:()=>{setSelectedUsers([]);setShowUserPicker(false)},style:{padding:"8px 16px",background:"rgba(148,163,184,.1)",border:"1px solid rgba(148,163,184,.15)",borderRadius:9,color:"#94a3b8",fontSize:12,fontFamily:F}},"Clear All"),
-        h("button",{onClick:()=>setShowUserPicker(false),style:{padding:"8px 18px",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",borderRadius:9,color:"#fff",fontSize:12,fontWeight:600,fontFamily:F}},"Apply ("+selectedUsers.length+")"))),
-
-    h(Modal,{open:showSaveView,onClose:()=>setShowSaveView(false),title:"Save Current View"},
-      h("label",{style:{color:"#cbd5e1",fontSize:12,fontWeight:500,display:"block",marginBottom:6}},"View Name"),
-      h("input",{style:iS,value:saveViewName,onChange:e=>setSaveViewName(e.target.value),placeholder:"e.g. My Roofing Team",onKeyDown:e=>e.key==="Enter"&&saveView()}),
-      h("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
-        h("button",{onClick:()=>setShowSaveView(false),style:{padding:"8px 16px",background:"rgba(148,163,184,.1)",border:"1px solid rgba(148,163,184,.15)",borderRadius:9,color:"#94a3b8",fontSize:12,fontFamily:F}},"Cancel"),
-        h("button",{onClick:saveView,style:{padding:"8px 18px",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",borderRadius:9,color:"#fff",fontSize:12,fontWeight:600,fontFamily:F}},"Save"))),
-
-    h(Modal,{open:showAdd,onClose:()=>setShowAdd(false),title:"Add Leave",wide:600},
-      h(LeaveDialog,{allNames,initial:null,onSave:handleAdd,onCancel:()=>setShowAdd(false),isEdit:false})),
-    h(Modal,{open:!!editItem,onClose:()=>setEditItem(null),title:"Edit Leave",wide:600},
-      editItem&&h(LeaveDialog,{allNames,initial:editItem,onSave:handleEdit,onCancel:()=>setEditItem(null),isEdit:true})),
-    h(Modal,{open:!!deleteId,onClose:()=>setDeleteId(null),title:"Confirm Delete"},
-      h("p",{style:{color:"#94a3b8",fontSize:13,marginBottom:20}},"Remove this leave entry? This cannot be undone."),
-      h("div",{style:{display:"flex",gap:8,justifyContent:"flex-end"}},
-        h("button",{onClick:()=>setDeleteId(null),style:{padding:"9px 18px",background:"rgba(148,163,184,.1)",border:"1px solid rgba(148,163,184,.15)",borderRadius:9,color:"#94a3b8",fontSize:13,fontFamily:F}},"Cancel"),
-        h("button",{onClick:handleDelete,style:{padding:"9px 20px",background:"linear-gradient(135deg,#ef4444,#dc2626)",border:"none",borderRadius:9,color:"#fff",fontSize:13,fontWeight:600,fontFamily:F}},"Delete"))))
-}
-
-/* ═══ ROOT ═══ */
+// ─── MAIN APP ───────────────────────────────
 function App(){
-  const [user,setUser]=useState(null);
-  if(!user)return h(LoginScreen,{onLogin:(e,n)=>setUser({email:e,name:n})});
-  return h(Dashboard,{email:user.email,userName:user.name,onLogout:()=>setUser(null)});
+  const[user,setUser]=useState(null);
+  const[data,setData]=useState(()=>processRawData(FALLBACK_RAW));
+  const[view,setView]=useState('upcoming');// upcoming|today|week|all
+  const[weekDate,setWeekDate]=useState(new Date());
+  const[typeFilter,setTypeFilter]=useState('All');
+  const[projectFilter,setProjectFilter]=useState('All');
+  const[search,setSearch]=useState('');
+  const[selectedUsers,setSelectedUsers]=useState([]);
+  const[savedViews,setSavedViews]=useState(()=>{try{return JSON.parse(localStorage.getItem('cx_saved_views')||'[]')}catch{return[]}});
+  const[showAddLeave,setShowAddLeave]=useState(false);
+  const[showUserPicker,setShowUserPicker]=useState(false);
+  const[syncing,setSyncing]=useState(false);
+  const[toasts,setToasts]=useState([]);
+  const[editingIdx,setEditingIdx]=useState(null);
+  const[showSaveView,setShowSaveView]=useState(false);
+  const[saveViewName,setSaveViewName]=useState('');
+
+  const toast=(msg,type='info')=>{const id=Date.now();setToasts(t=>[...t,{id,msg,type}]);setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),3500)};
+
+  // Extract all unique projects from backup data
+  const allProjects=useMemo(()=>{
+    const ps=new Set();
+    data.forEach(m=>{
+      if(!m.backup)return;
+      // Parse "ProjectName - Person; ProjectName2 - Person2"
+      m.backup.split(/[;]/).forEach(seg=>{
+        const dash=seg.indexOf('-');
+        if(dash>0)ps.add(seg.substring(0,dash).trim());
+        else{
+          const colon=seg.indexOf(':');
+          if(colon>0)ps.add(seg.substring(0,colon).trim());
+        }
+      });
+    });
+    return['All',...[...ps].sort()];
+  },[data]);
+
+  const allNames=useMemo(()=>data.map(m=>m.name).sort(),[data]);
+
+  // Filtered data
+  const filtered=useMemo(()=>{
+    let result=data;
+    // View filter
+    if(view==='today')result=result.filter(m=>m.dates.some(isToday));
+    else if(view==='upcoming')result=result.filter(m=>m.dates.length>0);
+    else if(view==='week')result=result.filter(m=>m.dates.some(d=>inWeek(d,weekDate)));
+    // type
+    if(typeFilter!=='All')result=result.filter(m=>m.type===typeFilter);
+    // project
+    if(projectFilter!=='All')result=result.filter(m=>m.backup.toLowerCase().includes(projectFilter.toLowerCase()));
+    // selected users
+    if(selectedUsers.length>0)result=result.filter(m=>selectedUsers.includes(m.name));
+    // search
+    if(search.trim()){const q=search.toLowerCase();result=result.filter(m=>m.name.toLowerCase().includes(q)||m.backup.toLowerCase().includes(q)||m.dates.some(d=>d.includes(q)))}
+    return result;
+  },[data,view,weekDate,typeFilter,projectFilter,selectedUsers,search]);
+
+  // Stats
+  const stats=useMemo(()=>{
+    const todayLeave=data.filter(m=>m.dates.some(isToday)).length;
+    const thisWeek=data.filter(m=>m.dates.some(d=>inWeek(d,new Date()))).length;
+    const upcoming=data.filter(m=>m.dates.length>0).length;
+    return{total:data.length,today:todayLeave,week:thisWeek,upcoming};
+  },[data]);
+
+  const handleSync=async()=>{
+    setSyncing(true);
+    try{
+      const res=await syncFromSlack();
+      toast('Synced with Slack canvas','success');
+      // If we got usable data, try to parse it
+      // For now, just show success - canvas parsing depends on format returned
+      console.log('Slack sync response:',res);
+      // Try channel fallback too
+      const ch=await readChannel();
+      console.log('Channel messages:',ch);
+      toast('Data fetched - check console for raw response','info');
+    }catch(e){
+      toast('Sync failed - using cached data','error');
+      console.error(e);
+    }
+    setSyncing(false);
+  };
+
+  const clearFilters=()=>{setView('upcoming');setTypeFilter('All');setProjectFilter('All');setSearch('');setSelectedUsers([])};
+
+  const applySavedView=(v)=>{
+    setView(v.view||'upcoming');setTypeFilter(v.typeFilter||'All');
+    setProjectFilter(v.projectFilter||'All');setSelectedUsers(v.selectedUsers||[]);setSearch(v.search||'');
+  };
+  const saveCurView=()=>{
+    if(!saveViewName.trim())return;
+    const nv={name:saveViewName.trim(),view,typeFilter,projectFilter,selectedUsers,search};
+    const updated=[...savedViews,nv];
+    setSavedViews(updated);localStorage.setItem('cx_saved_views',JSON.stringify(updated));
+    setSaveViewName('');setShowSaveView(false);toast('View saved','success');
+  };
+  const deleteSavedView=(i)=>{const updated=savedViews.filter((_,j)=>j!==i);setSavedViews(updated);localStorage.setItem('cx_saved_views',JSON.stringify(updated))};
+
+  const handleDeleteMember=(idx)=>{if(confirm('Remove this member from the tracker?')){setData(d=>d.filter((_,i)=>i!==idx));toast('Member removed','success')}};
+  const handleEditMember=(idx)=>{setEditingIdx(idx);setShowAddLeave(true)};
+
+  const handleSaveLeave=(entry)=>{
+    if(editingIdx!==null){
+      setData(d=>d.map((m,i)=>i===editingIdx?{...m,...entry,dates:entry.dates.filter(isFuture).sort()}:m));
+      setEditingIdx(null);
+      toast('Updated successfully','success');
+    }else{
+      // Check if member exists
+      const existIdx=data.findIndex(m=>m.name.toLowerCase()===entry.name.toLowerCase());
+      if(existIdx>=0){
+        setData(d=>d.map((m,i)=>{
+          if(i!==existIdx)return m;
+          const merged=new Set([...m.dates,...entry.dates]);
+          const mergedBackup=m.backup?(m.backup+'; '+entry.backup):entry.backup;
+          return{...m,dates:[...merged].filter(isFuture).sort(),backup:mergedBackup,type:entry.type||m.type};
+        }));
+      }else{
+        setData(d=>[...d,{name:entry.name,dates:entry.dates.filter(isFuture).sort(),backup:entry.backup,type:entry.type,allDatesRaw:''}]);
+      }
+      toast('Leave added','success');
+    }
+    setShowAddLeave(false);
+  };
+
+  if(!user)return<LoginScreen onLogin={setUser}/>;
+
+  return(
+    <div style={{minHeight:'100vh',background:'radial-gradient(ellipse at 20% 0%, rgba(56,189,248,.05) 0%, transparent 50%), radial-gradient(ellipse at 80% 100%, rgba(99,102,241,.04) 0%, transparent 50%), var(--bg)'}}>
+      <ToastContainer toasts={toasts} remove={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>
+
+      {/* HEADER */}
+      <header className="glass-header" style={{position:'sticky',top:0,zIndex:50,padding:'14px 24px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          <span style={{fontSize:20,fontWeight:700,background:'linear-gradient(135deg,var(--accent),var(--accent2))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>CX Leave Tracker</span>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <button className="btn btn-secondary btn-sm" onClick={handleSync} disabled={syncing}>
+            <Icon name="sync" size={14} className={syncing?'spin':''}/> {syncing?'Syncing...':'Sync from Slack'}
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={()=>{setEditingIdx(null);setShowAddLeave(true)}}>
+            <Icon name="plus" size={14}/> Add Leave
+          </button>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginLeft:8,paddingLeft:8,borderLeft:'1px solid var(--border)'}}>
+            <span style={{fontSize:12,color:'var(--text2)'}}>{user.name}</span>
+            <button className="btn-icon" title="Logout" onClick={()=>setUser(null)} style={{width:28,height:28}}><Icon name="logout" size={14}/></button>
+          </div>
+        </div>
+      </header>
+
+      <main style={{maxWidth:1320,margin:'0 auto',padding:'20px 20px 40px'}}>
+        {/* STATS */}
+        <div className="stat-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:20}}>
+          <div className="glass stat-card" onClick={()=>setView('all')} style={view==='all'?{borderColor:'var(--accent)'}:{}}>
+            <div className="value" style={{color:'var(--accent)'}}>{stats.total}</div>
+            <div className="label">Total Members</div>
+          </div>
+          <div className="glass stat-card" onClick={()=>setView('today')} style={view==='today'?{borderColor:'var(--red)'}:{}}>
+            <div className="value" style={{color:stats.today>0?'var(--red)':'var(--text2)'}}>{stats.today}</div>
+            <div className="label">On Leave Today</div>
+          </div>
+          <div className="glass stat-card" onClick={()=>setView('week')} style={view==='week'?{borderColor:'var(--amber)'}:{}}>
+            <div className="value" style={{color:'var(--amber)'}}>{stats.week}</div>
+            <div className="label">This Week</div>
+          </div>
+          <div className="glass stat-card" onClick={()=>setView('upcoming')} style={view==='upcoming'?{borderColor:'var(--green)'}:{}}>
+            <div className="value" style={{color:'var(--green)'}}>{stats.upcoming}</div>
+            <div className="label">Upcoming Leaves</div>
+          </div>
+        </div>
+
+        {/* FILTERS */}
+        <div className="glass" style={{padding:14,marginBottom:16}}>
+          <div className="filter-row" style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+            {/* View toggles */}
+            <div style={{display:'flex',gap:2,background:'var(--surface2)',borderRadius:'var(--radius-xs)',padding:2}}>
+              {['upcoming','today','week','all'].map(v=>(
+                <button key={v} onClick={()=>setView(v)} style={{padding:'5px 12px',borderRadius:'var(--radius-xs)',fontSize:12,fontWeight:500,border:'none',background:view===v?'var(--accent)':'transparent',color:view===v?'#0f172a':'var(--text2)',transition:'all .15s',cursor:'pointer'}}>
+                  {v==='all'?'All Members':v.charAt(0).toUpperCase()+v.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            {/* Week picker */}
+            {view==='week'&&<div style={{display:'flex',alignItems:'center',gap:4}}>
+              <button className="btn-icon" onClick={()=>setWeekDate(d=>shiftWeek(d,-1))} style={{width:26,height:26}}><Icon name="chevLeft" size={14}/></button>
+              <span style={{fontSize:12,color:'var(--text2)',minWidth:120,textAlign:'center',fontFamily:'var(--mono)'}}>{getWeekLabel(weekDate)}</span>
+              <button className="btn-icon" onClick={()=>setWeekDate(d=>shiftWeek(d,1))} style={{width:26,height:26}}><Icon name="chevRight" size={14}/></button>
+              <button className="btn btn-sm btn-secondary" style={{fontSize:11,padding:'3px 8px'}} onClick={()=>setWeekDate(new Date())}>This week</button>
+              <button className="btn btn-sm btn-secondary" style={{fontSize:11,padding:'3px 8px'}} onClick={()=>setWeekDate(shiftWeek(new Date(),1))}>Next week</button>
+            </div>}
+
+            {/* Type filter */}
+            <select className="input" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} style={{width:'auto',fontSize:12,padding:'5px 28px 5px 10px'}}>
+              {['All','PTO','Sick','Mixed','Business Travel','Other','None'].map(t=><option key={t}>{t}</option>)}
+            </select>
+
+            {/* Project filter */}
+            <select className="input" value={projectFilter} onChange={e=>setProjectFilter(e.target.value)} style={{width:'auto',fontSize:12,padding:'5px 28px 5px 10px',maxWidth:180}}>
+              {allProjects.map(p=><option key={p}>{p}</option>)}
+            </select>
+
+            {/* Multi user picker */}
+            <button className="btn btn-sm btn-secondary" onClick={()=>setShowUserPicker(true)}>
+              <Icon name="users" size={13}/> {selectedUsers.length>0?`${selectedUsers.length} selected`:'Select Members'}
+            </button>
+
+            {/* Search */}
+            <div style={{position:'relative',flex:'1 1 160px',minWidth:140}}>
+              <Icon name="search" size={14} className="" style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text3)'}}/>
+              <input className="input" placeholder="Search name, dates, backup..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:32,fontSize:12}}/>
+            </div>
+
+            {/* Save & Clear */}
+            <button className="btn btn-sm btn-secondary" onClick={()=>setShowSaveView(true)} title="Save current view"><Icon name="save" size={13}/></button>
+            <button className="btn btn-sm btn-danger" onClick={clearFilters} style={{fontSize:11}}>Clear All</button>
+          </div>
+
+          {/* Saved views chips */}
+          {savedViews.length>0&&<div style={{display:'flex',gap:6,marginTop:10,flexWrap:'wrap'}}>
+            {savedViews.map((sv,i)=>(
+              <span key={i} className="view-chip" onClick={()=>applySavedView(sv)}>
+                {sv.name} <span className="x" onClick={e=>{e.stopPropagation();deleteSavedView(i)}}>×</span>
+              </span>
+            ))}
+          </div>}
+        </div>
+
+        {/* TABLE */}
+        <div className="glass responsive-table" style={{overflow:'hidden'}}>
+          <div style={{overflowX:'auto'}}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th><th>Type</th><th>Leave Dates</th><th className="desktop-only">Named Backup</th><th>Days</th><th style={{width:80}}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length===0?<tr><td colSpan={6} style={{textAlign:'center',padding:40,color:'var(--text3)'}}>No matching records</td></tr>:
+                filtered.map((m,i)=>{
+                  const origIdx=data.indexOf(m);
+                  const typeColors={PTO:'indigo',Sick:'red',Mixed:'amber','Business Travel':'cyan',Other:'pink',None:'gray'};
+                  const tc=typeColors[m.type]||'gray';
+                  const dayCount=m.dates.length;
+                  return(
+                    <tr key={m.name+i} className="fade-in">
+                      <td style={{fontWeight:600,whiteSpace:'nowrap'}}>{m.name}</td>
+                      <td>{m.type&&m.type!=='None'?<span className={`badge chip-${tc}`}>{m.type}</span>:<span style={{color:'var(--text3)',fontSize:12}}>—</span>}</td>
+                      <td style={{maxWidth:320}}>
+                        <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+                          {m.dates.length===0?<span style={{color:'var(--text3)',fontSize:12}}>No upcoming dates</span>:
+                          m.dates.slice(0,12).map(d=>(
+                            <span key={d} className={`chip ${isToday(d)?'chip-red pulse':'chip-indigo'}`} style={{fontFamily:'var(--mono)',fontSize:11}}>
+                              {fmt(d)}
+                            </span>
+                          ))}
+                          {m.dates.length>12&&<span className="chip chip-gray" style={{fontSize:10}}>+{m.dates.length-12} more</span>}
+                        </div>
+                      </td>
+                      <td className="desktop-only" style={{maxWidth:280,whiteSpace:'pre-wrap',fontSize:12.5,color:'var(--text2)',lineHeight:1.6}}>
+                        {m.backup||<span style={{color:'var(--text3)'}}>—</span>}
+                      </td>
+                      <td style={{fontFamily:'var(--mono)',fontWeight:600,fontSize:14,textAlign:'center'}}>
+                        <span style={dayCount>5?{color:'var(--amber)',background:'rgba(245,158,11,.12)',padding:'2px 8px',borderRadius:6}:{}}>{dayCount}</span>
+                      </td>
+                      <td>
+                        <div style={{display:'flex',gap:4}}>
+                          <button className="btn-icon" onClick={()=>handleEditMember(origIdx)} title="Edit"><Icon name="edit" size={14}/></button>
+                          <button className="btn-icon" onClick={()=>handleDeleteMember(origIdx)} title="Delete" style={{color:'var(--red)'}}><Icon name="trash" size={14}/></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div style={{padding:'10px 14px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',fontSize:12,color:'var(--text3)'}}>
+            <span>Showing {filtered.length} of {data.length} members</span>
+            <span style={{fontFamily:'var(--mono)'}}>Last synced: {new Date().toLocaleString()}</span>
+          </div>
+        </div>
+      </main>
+
+      {/* ADD/EDIT LEAVE MODAL */}
+      {showAddLeave&&<AddLeaveModal
+        onClose={()=>{setShowAddLeave(false);setEditingIdx(null)}}
+        onSave={handleSaveLeave}
+        existingNames={allNames}
+        editData={editingIdx!==null?data[editingIdx]:null}
+      />}
+
+      {/* USER PICKER MODAL */}
+      {showUserPicker&&<UserPickerModal
+        names={allNames}
+        selected={selectedUsers}
+        onClose={()=>setShowUserPicker(false)}
+        onApply={sel=>{setSelectedUsers(sel);setShowUserPicker(false)}}
+      />}
+
+      {/* SAVE VIEW MODAL */}
+      {showSaveView&&<div className="overlay" onClick={()=>setShowSaveView(false)}>
+        <div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:360}}>
+          <h3 style={{fontSize:16,fontWeight:600,marginBottom:14}}>Save Current View</h3>
+          <input className="input" placeholder="View name" value={saveViewName} onChange={e=>setSaveViewName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&saveCurView()} autoFocus/>
+          <div style={{display:'flex',gap:8,marginTop:14,justifyContent:'flex-end'}}>
+            <button className="btn btn-secondary btn-sm" onClick={()=>setShowSaveView(false)}>Cancel</button>
+            <button className="btn btn-primary btn-sm" onClick={saveCurView}>Save</button>
+          </div>
+        </div>
+      </div>}
+    </div>
+  );
 }
-ReactDOM.render(h(App),document.getElementById("root"));
+
+// ─── ADD LEAVE MODAL ────────────────────────
+function AddLeaveModal({onClose,onSave,existingNames,editData}){
+  const[name,setName]=useState(editData?editData.name:'');
+  const[isNew,setIsNew]=useState(false);
+  const[type,setType]=useState(editData?editData.type:'PTO');
+  const[dates,setDates]=useState(editData?[...editData.dates]:[]);
+  const[dateInput,setDateInput]=useState('');
+  const[backupEntries,setBackupEntries]=useState(()=>{
+    if(editData&&editData.backup){
+      const entries=editData.backup.split(/[;]/).map(s=>s.trim()).filter(Boolean).map(seg=>{
+        // Try "Project - Person | Agenda: text" or "Project - Person"
+        const parts=seg.split('|').map(s=>s.trim());
+        const main=parts[0]||'';
+        const agenda=(parts[1]||'').replace(/^Agenda:\s*/i,'');
+        const dash=main.indexOf('-');
+        if(dash>0)return{project:main.substring(0,dash).trim(),person:main.substring(dash+1).trim(),callDate:'',agenda};
+        const colon=main.indexOf(':');
+        if(colon>0)return{project:main.substring(0,colon).trim(),person:main.substring(colon+1).trim(),callDate:'',agenda};
+        return{project:'',person:main,callDate:'',agenda};
+      });
+      return entries.length?entries:[{project:'',person:'',callDate:'',agenda:''}];
+    }
+    return[{project:'',person:'',callDate:'',agenda:''}];
+  });
+
+  const addDate=()=>{if(dateInput&&!dates.includes(dateInput)){setDates(d=>[...d,dateInput].sort());setDateInput('')}};
+  const removeDate=d=>setDates(ds=>ds.filter(x=>x!==d));
+  const addBackupEntry=()=>setBackupEntries(e=>[...e,{project:'',person:'',callDate:'',agenda:''}]);
+  const removeBackupEntry=i=>setBackupEntries(e=>e.filter((_,j)=>j!==i));
+  const updateBackup=(i,field,val)=>setBackupEntries(e=>e.map((x,j)=>j===i?{...x,[field]:val}:x));
+
+  const handleSave=()=>{
+    if(!name.trim())return;
+    const backupStr=backupEntries.filter(e=>e.project||e.person).map(e=>{
+      let s=e.project?(e.project+(e.callDate?` (${e.callDate})`:'')+' - '+e.person):e.person;
+      if(e.agenda)s+=' | Agenda: '+e.agenda;
+      return s;
+    }).join('; ');
+    onSave({name:name.trim(),type,dates,backup:backupStr});
+  };
+
+  return(
+    <div className="overlay" onClick={onClose}>
+      <div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:600}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+          <h3 style={{fontSize:18,fontWeight:600}}>{editData?'Edit Leave':'Add Leave'}</h3>
+          <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
+        </div>
+
+        {/* Name */}
+        <label style={{fontSize:12,color:'var(--text2)',marginBottom:4,display:'block'}}>Team Member</label>
+        {isNew?
+          <div style={{display:'flex',gap:8,marginBottom:14}}>
+            <input className="input" placeholder="Enter full name" value={name} onChange={e=>setName(e.target.value)} autoFocus/>
+            <button className="btn btn-sm btn-secondary" onClick={()=>setIsNew(false)}>Cancel</button>
+          </div>
+          :
+          <div style={{display:'flex',gap:8,marginBottom:14}}>
+            <select className="input" value={name} onChange={e=>setName(e.target.value)} disabled={!!editData}>
+              <option value="">Select member...</option>
+              {existingNames.map(n=><option key={n}>{n}</option>)}
+            </select>
+            {!editData&&<button className="btn btn-sm btn-secondary" onClick={()=>{setIsNew(true);setName('')}} title="Add new member"><Icon name="plus" size={14}/> New</button>}
+          </div>
+        }
+
+        {/* Type */}
+        <label style={{fontSize:12,color:'var(--text2)',marginBottom:4,display:'block'}}>Leave Type</label>
+        <div style={{display:'flex',gap:6,marginBottom:16,flexWrap:'wrap'}}>
+          {['PTO','Sick','Business Travel','Mixed','Other'].map(t=>(
+            <button key={t} onClick={()=>setType(t)} style={{padding:'5px 14px',borderRadius:999,fontSize:12,fontWeight:500,border:'1px solid',borderColor:type===t?'var(--accent)':'var(--border)',background:type===t?'rgba(56,189,248,.15)':'transparent',color:type===t?'var(--accent)':'var(--text2)',cursor:'pointer',transition:'all .15s'}}>
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {/* Dates */}
+        <label style={{fontSize:12,color:'var(--text2)',marginBottom:4,display:'block'}}>Leave Dates</label>
+        <div style={{display:'flex',gap:8,marginBottom:8}}>
+          <input type="date" className="input" value={dateInput} onChange={e=>setDateInput(e.target.value)} style={{flex:1}}/>
+          <button className="btn btn-sm btn-primary" onClick={addDate}>Add</button>
+        </div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:16,minHeight:28}}>
+          {dates.map(d=>(
+            <span key={d} className="chip chip-indigo" style={{fontFamily:'var(--mono)',fontSize:11}}>
+              {fmt(d)} <span style={{cursor:'pointer',marginLeft:2,opacity:.7}} onClick={()=>removeDate(d)}>×</span>
+            </span>
+          ))}
+        </div>
+
+        {/* Backup & Agenda */}
+        <div style={{borderTop:'1px solid var(--border)',paddingTop:16}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+            <h4 style={{fontSize:14,fontWeight:600}}>Backup & Agenda Details</h4>
+            <button className="btn btn-sm btn-secondary" onClick={addBackupEntry}><Icon name="plus" size={12}/> Add Project</button>
+          </div>
+          {backupEntries.map((entry,i)=>(
+            <div key={i} className="fade-in" style={{background:'var(--surface2)',borderRadius:'var(--radius-sm)',padding:12,marginBottom:8,border:'1px solid var(--border)'}}>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                <div>
+                  <label style={{fontSize:11,color:'var(--text3)'}}>Backup Person</label>
+                  <input className="input" placeholder="Name" value={entry.person} onChange={e=>updateBackup(i,'person',e.target.value)} style={{fontSize:13}}/>
+                </div>
+                <div>
+                  <label style={{fontSize:11,color:'var(--text3)'}}>Project Name</label>
+                  <input className="input" placeholder="Project" value={entry.project} onChange={e=>updateBackup(i,'project',e.target.value)} style={{fontSize:13}}/>
+                </div>
+                <div>
+                  <label style={{fontSize:11,color:'var(--text3)'}}>Call Date</label>
+                  <input type="date" className="input" value={entry.callDate} onChange={e=>updateBackup(i,'callDate',e.target.value)} style={{fontSize:13}}/>
+                </div>
+                <div>
+                  <label style={{fontSize:11,color:'var(--text3)'}}>Agenda</label>
+                  <input className="input" placeholder="Meeting agenda" value={entry.agenda} onChange={e=>updateBackup(i,'agenda',e.target.value)} style={{fontSize:13}}/>
+                </div>
+              </div>
+              {backupEntries.length>1&&<button className="btn btn-sm btn-danger" onClick={()=>removeBackupEntry(i)} style={{fontSize:11}}>Remove</button>}
+            </div>
+          ))}
+        </div>
+
+        <div style={{display:'flex',gap:8,marginTop:20,justifyContent:'flex-end'}}>
+          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave}>{editData?'Update':'Save'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── USER PICKER MODAL ──────────────────────
+function UserPickerModal({names,selected,onClose,onApply}){
+  const[sel,setSel]=useState(new Set(selected));
+  const[q,setQ]=useState('');
+  const toggle=n=>{const ns=new Set(sel);if(ns.has(n))ns.delete(n);else ns.add(n);setSel(ns)};
+  const filteredNames=q?names.filter(n=>n.toLowerCase().includes(q.toLowerCase())):names;
+  return(
+    <div className="overlay" onClick={onClose}>
+      <div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:400}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <h3 style={{fontSize:16,fontWeight:600}}>Select Members</h3>
+          <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
+        </div>
+        <input className="input" placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)} style={{marginBottom:12}}/>
+        <div style={{maxHeight:300,overflowY:'auto',display:'flex',flexDirection:'column',gap:2}}>
+          {filteredNames.map(n=>(
+            <label key={n} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',borderRadius:'var(--radius-xs)',cursor:'pointer',background:sel.has(n)?'rgba(56,189,248,.08)':'transparent',transition:'background .15s'}}>
+              <input type="checkbox" checked={sel.has(n)} onChange={()=>toggle(n)} style={{accentColor:'var(--accent)'}}/>
+              <span style={{fontSize:13}}>{n}</span>
+            </label>
+          ))}
+        </div>
+        <div style={{display:'flex',gap:8,marginTop:14,justifyContent:'space-between'}}>
+          <button className="btn btn-sm btn-secondary" onClick={()=>setSel(new Set())}>Clear All</button>
+          <div style={{display:'flex',gap:8}}>
+            <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button>
+            <button className="btn btn-primary btn-sm" onClick={()=>onApply([...sel])}>Apply ({sel.size})</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
 </html>
