@@ -11,12 +11,11 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root,[data-theme="light"]{--bg:#faf7f4;--bg2:#f3ede6;--surface:#fff;--surface2:#f7f3ee;--surface3:#efe9e0;--border:#e0d5c7;--border2:#d4c5b3;--text:#2c1810;--text2:#6b5344;--text3:#9a8576;--accent:#e8590c;--accent2:#d9480f;--accent-light:rgba(232,89,12,.08);--accent-border:rgba(232,89,12,.2);--red:#e03131;--red-bg:rgba(224,49,49,.08);--red-border:rgba(224,49,49,.2);--green:#2b8a3e;--green-bg:rgba(43,138,62,.08);--amber:#e67700;--amber-bg:rgba(230,119,0,.08);--indigo:#5c47e0;--indigo-bg:rgba(92,71,224,.07);--indigo-border:rgba(92,71,224,.2);--cyan:#0c8599;--pink:#c2255c;--shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);--shadow-lg:0 4px 12px rgba(0,0,0,.08);--header-bg:rgba(255,255,255,.88);--header-border:rgba(224,213,199,.6);--overlay-bg:rgba(44,24,16,.3);--modal-bg:#fff;--input-bg:#f7f3ee;--badge-text:#fff;--chip-today-bg:rgba(224,49,49,.1);--chip-today-text:#c92a2a;--chip-today-border:rgba(224,49,49,.25);--chip-future-bg:rgba(92,71,224,.08);--chip-future-text:#5c47e0;--chip-future-border:rgba(92,71,224,.2);--stat-icon:rgba(232,89,12,.1);--toggle-bg:#e0d5c7;--toggle-active:var(--accent)}
-[data-theme="dark"]{--bg:#111010;--bg2:#1a1817;--surface:#1e1c1a;--surface2:#262320;--surface3:#302c28;--border:#3d3630;--border2:#4d443c;--text:#f0e8e0;--text2:#b0a090;--text3:#786858;--accent:#ff7b2e;--accent2:#ff6b14;--accent-light:rgba(255,123,46,.1);--accent-border:rgba(255,123,46,.25);--red:#ff6b6b;--red-bg:rgba(255,107,107,.12);--red-border:rgba(255,107,107,.3);--green:#51cf66;--green-bg:rgba(81,207,102,.1);--amber:#ffc078;--amber-bg:rgba(255,192,120,.1);--indigo:#9b8aff;--indigo-bg:rgba(155,138,255,.1);--indigo-border:rgba(155,138,255,.25);--cyan:#66d9e8;--pink:#f783ac;--shadow:0 1px 3px rgba(0,0,0,.3);--shadow-lg:0 4px 16px rgba(0,0,0,.4);--header-bg:rgba(17,16,16,.92);--header-border:rgba(61,54,48,.6);--overlay-bg:rgba(0,0,0,.55);--modal-bg:#1e1c1a;--input-bg:#151312;--badge-text:#111;--chip-today-bg:rgba(255,107,107,.14);--chip-today-text:#ff8787;--chip-today-border:rgba(255,107,107,.3);--chip-future-bg:rgba(155,138,255,.1);--chip-future-text:#b4a7ff;--chip-future-border:rgba(155,138,255,.25);--stat-icon:rgba(255,123,46,.12);--toggle-bg:#3d3630;--toggle-active:var(--accent)}
+:root,[data-theme="light"]{--bg:#faf7f4;--bg2:#f3ede6;--surface:#fff;--surface2:#f7f3ee;--surface3:#efe9e0;--border:#e0d5c7;--border2:#d4c5b3;--text:#2c1810;--text2:#6b5344;--text3:#9a8576;--accent:#e8590c;--accent2:#d9480f;--accent-light:rgba(232,89,12,.08);--accent-border:rgba(232,89,12,.2);--red:#e03131;--red-bg:rgba(224,49,49,.08);--red-border:rgba(224,49,49,.2);--green:#2b8a3e;--green-bg:rgba(43,138,62,.08);--amber:#e67700;--amber-bg:rgba(230,119,0,.08);--indigo:#5c47e0;--indigo-bg:rgba(92,71,224,.07);--indigo-border:rgba(92,71,224,.2);--cyan:#0c8599;--pink:#c2255c;--shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);--shadow-lg:0 4px 12px rgba(0,0,0,.08);--header-bg:rgba(255,255,255,.88);--header-border:rgba(224,213,199,.6);--overlay-bg:rgba(44,24,16,.3);--modal-bg:#fff;--input-bg:#f7f3ee;--badge-text:#fff;--chip-today-bg:rgba(224,49,49,.1);--chip-today-text:#c92a2a;--chip-today-border:rgba(224,49,49,.25);--chip-future-bg:rgba(92,71,224,.08);--chip-future-text:#5c47e0;--chip-future-border:rgba(92,71,224,.2);--toggle-bg:#e0d5c7}
+[data-theme="dark"]{--bg:#111010;--bg2:#1a1817;--surface:#1e1c1a;--surface2:#262320;--surface3:#302c28;--border:#3d3630;--border2:#4d443c;--text:#f0e8e0;--text2:#b0a090;--text3:#786858;--accent:#ff7b2e;--accent2:#ff6b14;--accent-light:rgba(255,123,46,.1);--accent-border:rgba(255,123,46,.25);--red:#ff6b6b;--red-bg:rgba(255,107,107,.12);--red-border:rgba(255,107,107,.3);--green:#51cf66;--green-bg:rgba(81,207,102,.1);--amber:#ffc078;--amber-bg:rgba(255,192,120,.1);--indigo:#9b8aff;--indigo-bg:rgba(155,138,255,.1);--indigo-border:rgba(155,138,255,.25);--cyan:#66d9e8;--pink:#f783ac;--shadow:0 1px 3px rgba(0,0,0,.3);--shadow-lg:0 4px 16px rgba(0,0,0,.4);--header-bg:rgba(17,16,16,.92);--header-border:rgba(61,54,48,.6);--overlay-bg:rgba(0,0,0,.55);--modal-bg:#1e1c1a;--input-bg:#151312;--badge-text:#111;--chip-today-bg:rgba(255,107,107,.14);--chip-today-text:#ff8787;--chip-today-border:rgba(255,107,107,.3);--chip-future-bg:rgba(155,138,255,.1);--chip-future-text:#b4a7ff;--chip-future-border:rgba(155,138,255,.25);--toggle-bg:#3d3630}
 html{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.55;transition:background .3s,color .3s}
 body{min-height:100vh;background:var(--bg)}
-input,select,textarea,button{font-family:inherit;font-size:inherit}
-button{cursor:pointer}
+input,select,textarea,button{font-family:inherit;font-size:inherit}button{cursor:pointer}
 ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideIn{from{opacity:0;transform:translateX(100%)}to{opacity:1;transform:translateX(0)}}
@@ -49,7 +48,6 @@ table{width:100%;border-collapse:separate;border-spacing:0}
 th{text-align:left;padding:10px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);border-bottom:1px solid var(--border);white-space:nowrap;background:var(--surface2)}
 td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top;font-size:13px}
 tr:hover td{background:var(--accent-light)}
-.mono{font-family:'JetBrains Mono',monospace;font-size:12px}
 .stat-card{padding:16px 18px;border-radius:14px;cursor:pointer;transition:all .2s;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow)}
 .stat-card:hover{transform:translateY(-2px);border-color:var(--accent-border);box-shadow:var(--shadow-lg)}
 .stat-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
@@ -68,10 +66,9 @@ tr:hover td{background:var(--accent-light)}
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const{useState,useEffect,useRef,useCallback,useMemo}=React;
+const{useState,useEffect,useMemo}=React;
 const SUPABASE_URL='https://wplarfdgdwhbbtjrgjrw.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndwbGFyZmRnZHdoYmJ0anJnanJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTk5MzYsImV4cCI6MjA5MzczNTkzNn0._6Ot3hk6u419alzt9ruLnDKD0CyevcIlBdPT7wZYCh0';
-const EDGE_FN_URL=`${SUPABASE_URL}/functions/v1/slack-proxy`;
 
 const SLACK_USERS={'U076358T0Q5':'Dinesh MS','U037YB1SD6Y':'Sundeep','U072FRECZ41':'Balaje','U0A3GTQANUT':'Kari','U04S03L5EC9':'Suraj Pillai','U08JL5H9GSG':'Nancy','U8JPFF83Y':'Ramya','U08MX6QKNUQ':'Vigneswaran','U01QUJKDDRP':'Preetha','U07CZN255CP':'Rakul','U06AK5LTU4B':'Sateesh Babu','U02CFDXAHV2':'Devi','U0A8VJU90NQ':'Unknown','U065H6E5940':'Unknown','U05338G3Q7M':'Samuel J','U07662DHBS6':'Unknown','U03Q0AH8PGW':'Manjusha','U04RERW24F8':'Vignesh P','U08CELR2E05':'Radhika','U07CKR6FG92':'Madhu','U03E0G6UCH0':'Sai Kishan T','U04M46PN9RC':'Johnkamesh','U07CWKK62TA':'Jahanwi Shree','U06BZA0EWQM':'Jacob','U07235UJSSW':'Ajit','U071WGRMX62':'Unknown','U07V18B4SQP':'Unknown','U02HN9RC3DM':'Archanaa','U03BWDXKPU5':'Karunambika','U079W3Q6ZB9':'Thanveer','U099LL9097X':'Shanthosh','U06S2QPP0S1':'Unknown','U02JTAK36TX':'Unknown','U02A8N46ZV5':'Unknown','U04M7S27J13':'Unknown','U04078U5RE3':'Deepak','URZHXB6QL':'Unknown','U4RQ6868Y':'Vijay','U08KNEUM7HD':'Unknown','U08KNEWE6G7':'Unknown','U06PU003J1Y':'Unknown','U03CE9S8685':'Abiramy','U0768GE2SH2':'Unknown'};
 
@@ -80,219 +77,236 @@ const parseDate=(s)=>{if(!s)return null;const m=s.match(/^(\d{4})-(\d{2})-(\d{2}
 const fmtDate=(ds)=>{const d=parseDate(ds);return d?d.toLocaleDateString('en-US',{month:'short',day:'numeric'}):'?'};
 const isToday=(ds)=>ds===todayStr();
 const isFuture=(ds)=>ds>=todayStr();
-
 function getWeekRange(d){const day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1);const mon=new Date(d);mon.setDate(diff);mon.setHours(0,0,0,0);const sun=new Date(mon);sun.setDate(mon.getDate()+6);const f=x=>x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');return[f(mon),f(sun)]}
-function getWeekLabel(d){const[s,e]=getWeekRange(d);return`${fmtDate(s)} \u2013 ${fmtDate(e)}`}
-function inWeek(ds,weekDate){const[ws,we]=getWeekRange(weekDate);return ds>=ws&&ds<=we}
+function getWeekLabel(d){const[s,e]=getWeekRange(d);return fmtDate(s)+' \u2013 '+fmtDate(e)}
+function inWeek(ds,wd){const[ws,we]=getWeekRange(wd);return ds>=ws&&ds<=we}
 function shiftWeek(d,n){const nd=new Date(d);nd.setDate(nd.getDate()+7*n);return nd}
 function expandDateRange(start,end){const dates=[];const s=new Date(start);const e=new Date(end);for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1)){dates.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'))}return dates}
 
 function parseDatesFromCell(raw){
-  if(!raw||!raw.trim())return[];
-  const dates=new Set();const year=new Date().getFullYear();
-  const slackDates=[...raw.matchAll(/!\[\]\(slack_date:(\d{4}-\d{2}-\d{2})\)/g)];
-  slackDates.forEach(m=>dates.add(m[1]));
-  const rangePattern=/!\[\]\(slack_date:(\d{4}-\d{2}-\d{2})\)\s*[-\u2013]\s*!\[\]\(slack_date:(\d{4}-\d{2}-\d{2})\)/g;
-  let rm;while((rm=rangePattern.exec(raw))!==null){expandDateRange(rm[1],rm[2]).forEach(d=>dates.add(d))}
-  const toPattern=/!\[\]\(slack_date:(\d{4}-\d{2}-\d{2})\)\s+to\s+!\[\]\(slack_date:(\d{4}-\d{2}-\d{2})\)/g;
-  while((rm=toPattern.exec(raw))!==null){expandDateRange(rm[1],rm[2]).forEach(d=>dates.add(d))}
-  const monthMap={january:'01',jan:'01',february:'02',feb:'02',march:'03',mar:'03',april:'04',apr:'04',may:'05',june:'06',jun:'06',july:'07',jul:'07',august:'08',aug:'08',september:'09',sep:'09',october:'10',oct:'10',november:'11',nov:'11',december:'12',dec:'12'};
-  let cleaned=raw.replace(/!\[\]\(slack_date:\d{4}-\d{2}-\d{2}\)/g,'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,'').replace(/\*\*/g,'');
-  const monthRangePattern=/(\w+)\s+(\d{1,2})\s*(?:st|nd|rd|th)?\s*[-\u2013]\s*(?:(\w+)\s+)?(\d{1,2})(?:st|nd|rd|th)?/gi;
-  let mr;while((mr=monthRangePattern.exec(cleaned))!==null){const m1=monthMap[mr[1].toLowerCase()];const m2=mr[3]?monthMap[mr[3].toLowerCase()]:m1;if(m1&&m2){const s=`${year}-${m1}-${String(mr[2]).padStart(2,'0')}`;const e=`${year}-${m2}-${String(mr[4]).padStart(2,'0')}`;expandDateRange(s,e).forEach(d=>dates.add(d))}}
-  const monthDayPattern=/\b(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|october|oct|november|nov|december|dec)\s+(\d{1,2})(?:st|nd|rd|th)?\b/gi;
-  let md;while((md=monthDayPattern.exec(cleaned))!==null){const mm=monthMap[md[1].toLowerCase()];if(mm)dates.add(`${year}-${mm}-${String(md[2]).padStart(2,'0')}`)}
-  const dayMonthPattern=/(\d{1,2})(?:st|nd|rd|th)\s+(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|october|oct|november|nov|december|dec)/gi;
-  let dm;while((dm=dayMonthPattern.exec(cleaned))!==null){const mm=monthMap[dm[2].toLowerCase()];if(mm)dates.add(`${year}-${mm}-${String(dm[1]).padStart(2,'0')}`)}
-  const usDateRange=/(\d{2})\/(\d{2})\/(\d{4})\s*to\s*(\d{2})\/(\d{2})\/(\d{4})/g;
-  let ur;while((ur=usDateRange.exec(cleaned))!==null){expandDateRange(`${ur[3]}-${ur[1]}-${ur[2]}`,`${ur[6]}-${ur[4]}-${ur[5]}`).forEach(d=>dates.add(d))}
-  const weirdPattern=/(\w+)\s*-\s*(\d{1,2})\s*-\s*(\d{4})/gi;
-  let wp;while((wp=weirdPattern.exec(cleaned))!==null){const mm=monthMap[wp[1].toLowerCase()];if(mm)dates.add(`${wp[3]}-${mm}-${String(wp[2]).padStart(2,'0')}`)}
+  if(!raw||!raw.trim())return[];const dates=new Set();const year=new Date().getFullYear();
+  [...raw.matchAll(/!\[\]\(slack_date:(\d{4}-\d{2}-\d{2})\)/g)].forEach(m=>dates.add(m[1]));
+  let rm;const rp=/!\[\]\(slack_date:(\d{4}-\d{2}-\d{2})\)\s*[-\u2013]\s*!\[\]\(slack_date:(\d{4}-\d{2}-\d{2})\)/g;
+  while((rm=rp.exec(raw))!==null)expandDateRange(rm[1],rm[2]).forEach(d=>dates.add(d));
+  const tp=/!\[\]\(slack_date:(\d{4}-\d{2}-\d{2})\)\s+to\s+!\[\]\(slack_date:(\d{4}-\d{2}-\d{2})\)/g;
+  while((rm=tp.exec(raw))!==null)expandDateRange(rm[1],rm[2]).forEach(d=>dates.add(d));
+  const mm={january:'01',jan:'01',february:'02',feb:'02',march:'03',mar:'03',april:'04',apr:'04',may:'05',june:'06',jun:'06',july:'07',jul:'07',august:'08',aug:'08',september:'09',sep:'09',october:'10',oct:'10',november:'11',nov:'11',december:'12',dec:'12'};
+  let cl=raw.replace(/!\[\]\(slack_date:\d{4}-\d{2}-\d{2}\)/g,'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,'').replace(/\*\*/g,'');
+  const mrp=/(\w+)\s+(\d{1,2})\s*(?:st|nd|rd|th)?\s*[-\u2013]\s*(?:(\w+)\s+)?(\d{1,2})(?:st|nd|rd|th)?/gi;
+  let mr;while((mr=mrp.exec(cl))!==null){const m1=mm[mr[1].toLowerCase()];const m2=mr[3]?mm[mr[3].toLowerCase()]:m1;if(m1&&m2)expandDateRange(`${year}-${m1}-${String(mr[2]).padStart(2,'0')}`,`${year}-${m2}-${String(mr[4]).padStart(2,'0')}`).forEach(d=>dates.add(d))}
+  const mdp=/\b(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|october|oct|november|nov|december|dec)\s+(\d{1,2})(?:st|nd|rd|th)?\b/gi;
+  let md;while((md=mdp.exec(cl))!==null){const mn=mm[md[1].toLowerCase()];if(mn)dates.add(`${year}-${mn}-${String(md[2]).padStart(2,'0')}`)}
+  const dmp=/(\d{1,2})(?:st|nd|rd|th)\s+(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|october|oct|november|nov|december|dec)/gi;
+  let dm;while((dm=dmp.exec(cl))!==null){const mn=mm[dm[2].toLowerCase()];if(mn)dates.add(`${year}-${mn}-${String(dm[1]).padStart(2,'0')}`)}
+  const ur=/(\d{2})\/(\d{2})\/(\d{4})\s*to\s*(\d{2})\/(\d{2})\/(\d{4})/g;
+  while((rm=ur.exec(cl))!==null)expandDateRange(`${rm[3]}-${rm[1]}-${rm[2]}`,`${rm[6]}-${rm[4]}-${rm[5]}`).forEach(d=>dates.add(d));
+  const wp=/(\w+)\s*-\s*(\d{1,2})\s*-\s*(\d{4})/gi;
+  while((rm=wp.exec(cl))!==null){const mn=mm[rm[1].toLowerCase()];if(mn)dates.add(`${rm[3]}-${mn}-${String(rm[2]).padStart(2,'0')}`)}
   return[...dates].filter(d=>d.match(/^\d{4}-\d{2}-\d{2}$/)).sort();
 }
-
 function cleanBackup(raw){if(!raw)return'';let s=raw;s=s.replace(/<@(\w+)>/g,(_,uid)=>SLACK_USERS[uid]||uid);s=s.replace(/<br\s*\/?>/gi,'\n');s=s.replace(/!\[\]\(@\w+\)/g,'');s=s.replace(/\*\*/g,'');s=s.replace(/\\/g,'');s=s.replace(/\[([^\]]+)\]\([^)]+\)/g,'$1');return s.trim()}
 function detectLeaveType(dc){if(!dc)return'PTO';const t=dc.toLowerCase();if(t.includes('sick')&&t.includes('planned'))return'Mixed';if(t.includes('sick'))return'Sick';if(t.includes('business travel'))return'Business Travel';return'PTO'}
 
 function parseCanvasMarkdown(md){
   const lines=md.split('\n');const members=[];let headerPassed=false;
-  for(const line of lines){
-    const trimmed=line.trim();if(!trimmed.startsWith('|'))continue;
-    const cells=trimmed.split('|').map(c=>c.trim());
-    if(cells[0]==='')cells.shift();if(cells[cells.length-1]==='')cells.pop();
-    if(cells.length<2)continue;
+  for(const line of lines){const trimmed=line.trim();if(!trimmed.startsWith('|'))continue;
+    const cells=trimmed.split('|').map(c=>c.trim());if(cells[0]==='')cells.shift();if(cells[cells.length-1]==='')cells.pop();if(cells.length<2)continue;
     if(cells[0]==='Name'||cells[0].match(/^[\s-]+$/)){headerPassed=true;continue}
     if(cells.every(c=>c.match(/^[\s-]*$/))){headerPassed=true;continue}
     if(!headerPassed&&cells[0].includes('---')){headerPassed=true;continue}
-    const name=cells[0].replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim();
-    if(!name)continue;
+    const name=cells[0].replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim();if(!name)continue;
     const dateCell=cells[1]||'';const backupCell=cells[2]||'';
-    const allDates=parseDatesFromCell(dateCell);
-    const futureDates=allDates.filter(isFuture).sort();
-    const type=detectLeaveType(dateCell);
-    const backup=cleanBackup(backupCell);
+    const futureDates=parseDatesFromCell(dateCell).filter(isFuture).sort();
+    const type=detectLeaveType(dateCell);const backup=cleanBackup(backupCell);
     const existing=members.find(m=>m.name.toLowerCase()===name.toLowerCase());
-    if(existing){const merged=new Set([...existing.dates,...futureDates]);existing.dates=[...merged].sort();if(backup&&!existing.backup.includes(backup)){existing.backup=existing.backup?existing.backup+'\n'+backup:backup}continue}
+    if(existing){const merged=new Set([...existing.dates,...futureDates]);existing.dates=[...merged].sort();if(backup&&!existing.backup.includes(backup))existing.backup=existing.backup?existing.backup+'\n'+backup:backup;continue}
     members.push({name,dates:futureDates,backup,type,allDatesRaw:dateCell});
   }
   return members;
 }
 
-const CANVAS_MARKDOWN=`|Name|Date|Named backup |
+// ─── LIVE SYNC via Anthropic API + Slack MCP ───
+async function syncCanvasViaAPI(){
+  const response=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      model:"claude-sonnet-4-20250514",
+      max_tokens:1000,
+      messages:[{role:"user",content:"Read the Slack canvas with ID F09LAPUPJH1 and return ONLY the raw markdown_content field from the result. Do not summarize or interpret it. Return the complete raw markdown text."}],
+      mcp_servers:[{type:"url",url:"https://mcp.slack.com/mcp",name:"slack-mcp"}]
+    })
+  });
+  const data=await response.json();
+  // Extract text and tool results
+  let fullText='';
+  if(data.content){
+    for(const block of data.content){
+      if(block.type==='text')fullText+=block.text+'\n';
+      if(block.type==='mcp_tool_result'&&block.content){
+        for(const sub of block.content){if(sub.text)fullText+=sub.text+'\n'}
+      }
+    }
+  }
+  return fullText;
+}
+
+// Supabase helpers
+async function sbFetch(path,opts={}){const res=await fetch(SUPABASE_URL+'/rest/v1/'+path,{...opts,headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})}});if(!res.ok)throw new Error(await res.text());const text=await res.text();return text?JSON.parse(text):null}
+async function logAction(email,name,action){return sbFetch('lt_user_logs',{method:'POST',body:JSON.stringify({email,name,action,last_activity:new Date().toISOString()})})}
+async function findUser(email){const data=await sbFetch('lt_user_logs?email=eq.'+encodeURIComponent(email)+'&action=eq.register&order=created_at.desc&limit=1');return data&&data.length>0?data[0]:null}
+
+const Icon=({name,size=16})=>{const p={width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round',viewBox:'0 0 24 24'};const icons={search:<svg {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,sync:<svg {...p}><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>,plus:<svg {...p}><path d="M12 5v14M5 12h14"/></svg>,x:<svg {...p}><path d="M18 6 6 18M6 6l12 12"/></svg>,edit:<svg {...p}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>,trash:<svg {...p}><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,chevL:<svg {...p}><path d="m15 18-6-6 6-6"/></svg>,chevR:<svg {...p}><path d="m9 18 6-6-6-6"/></svg>,users:<svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,save:<svg {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,logout:<svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>};return<span style={{display:'inline-flex',alignItems:'center'}}>{icons[name]||null}</span>};
+function ToastContainer({toasts,remove}){return<div className="toast-container">{toasts.map(t=><div key={t.id} className={'toast toast-'+t.type} onClick={()=>remove(t.id)}>{t.type==='success'?'\u2713':t.type==='error'?'\u2717':'\u2139'} {t.msg}</div>)}</div>}
+
+function LoginScreen({onLogin}){
+  const[email,setEmail]=useState('');const[name,setName]=useState('');const[step,setStep]=useState('email');const[err,setErr]=useState('');
+  const handleEmail=async()=>{if(!email||!email.includes('@')){setErr('Enter a valid email');return}setStep('loading');setErr('');try{const user=await findUser(email);if(user){await logAction(email,user.name,'login');const s={email,name:user.name};localStorage.setItem('cx_lt_session',JSON.stringify(s));onLogin(s)}else setStep('name')}catch(e){setErr('Network error');setStep('email')}};
+  const handleName=async()=>{if(!name.trim()){setErr('Enter your name');return}setStep('loading');setErr('');try{await logAction(email,name.trim(),'register');const s={email,name:name.trim()};localStorage.setItem('cx_lt_session',JSON.stringify(s));onLogin(s)}catch(e){setErr('Failed');setStep('name')}};
+  return(<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:20,background:'var(--bg)'}}><div className="card fade-in" style={{padding:40,width:'100%',maxWidth:400,textAlign:'center'}}><div style={{width:56,height:56,borderRadius:16,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:24,color:'#fff',fontWeight:700}}>CX</div><div style={{fontSize:24,fontWeight:700,marginBottom:4}}>Leave Tracker</div><p style={{color:'var(--text2)',fontSize:13.5,marginBottom:28}}>Track team availability & backups</p>
+  {step==='email'&&<div><input className="input" placeholder="Enter your work email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleEmail()} autoFocus style={{marginBottom:12,textAlign:'center'}}/><button className="btn btn-primary" style={{width:'100%'}} onClick={handleEmail}>Continue</button></div>}
+  {step==='name'&&<div className="fade-in"><p style={{color:'var(--text2)',fontSize:13,marginBottom:12}}>Welcome! Set your name to get started.</p><input className="input" placeholder="Full Name" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleName()} autoFocus style={{marginBottom:12,textAlign:'center'}}/><button className="btn btn-primary" style={{width:'100%'}} onClick={handleName}>Register</button></div>}
+  {step==='loading'&&<div style={{padding:20}}><div className="spin" style={{width:32,height:32,border:'3px solid var(--border)',borderTopColor:'var(--accent)',borderRadius:'50%',margin:'0 auto'}}/></div>}
+  {err&&<p style={{color:'var(--red)',fontSize:13,marginTop:10}}>{err}</p>}</div></div>);
+}
+
+// ─── EMBEDDED CANVAS (latest snapshot from 2026-05-14) ───
+const CANVAS_MD=`|Name|Date|Named backup |
 |  ---  |  ---  |  ---  |
-|Abiramy\u00a0|![](slack_date:2026-03-06)   ![](slack_date:2026-03-26)![](slack_date:2026-03-27)  ![](slack_date:2026-04-30)![](slack_date:2026-05-01)  ![](slack_date:2026-05-27) ![](slack_date:2026-05-26)![](slack_date:2026-05-28)  ![](slack_date:2026-05-29) |Cityscapes - <@U076358T0Q5> <@U037YB1SD6Y> |
+|Abiramy |![](slack_date:2026-03-06)   ![](slack_date:2026-03-26)![](slack_date:2026-03-27)  ![](slack_date:2026-04-30)![](slack_date:2026-05-01)  ![](slack_date:2026-05-27) ![](slack_date:2026-05-26)![](slack_date:2026-05-28)  ![](slack_date:2026-05-29) |Cityscapes - <@U076358T0Q5> <@U037YB1SD6Y> |
 |Ajit|![](slack_date:2026-01-08)<br>![](slack_date:2026-01-09) - Planned Leave, <br>![](slack_date:2026-01-20) - Sick Leave <br>![](slack_date:2026-02-18) - Planned leave <br>![](slack_date:2026-02-27) - Planned Leave <br>![](slack_date:2026-03-30) - Planned leave<br>![](slack_date:2026-03-18) - Sick Leave<br>![](slack_date:2026-04-03) - Planned leave<br>![](slack_date:2026-04-06) - Planned Leave<br>![](slack_date:2026-04-02) - Sick Leave <br>![](slack_date:2026-04-08) - Sick Leave <br>![](slack_date:2026-04-09) - Sick Leave <br>![](slack_date:2026-05-07) - Planned Leave <br>![](slack_date:2026-05-08) - Planned Leave <br>![](slack_date:2026-05-11) - Planned Leave  |BSNU - <@U072FRECZ41><br>Shield Roofing - <@U0A3GTQANUT> <@U04S03L5EC9> |
-|Archanaa|![](slack_date:2026-01-22) ![](slack_date:2026-01-23)<br>![](slack_date:2026-04-08) \u00a0<br>![](slack_date:2026-04-21)![](slack_date:2026-04-22)  |Amway - <@U065H6E5940> <br>Four Seasons - <@U076358T0Q5> <@U05338G3Q7M> <@U8JPFF83Y> |
+|Archanaa|![](slack_date:2026-01-22) ![](slack_date:2026-01-23)<br>![](slack_date:2026-04-08)<br>![](slack_date:2026-04-21)![](slack_date:2026-04-22)  |Amway - <@U065H6E5940> <br>Four Seasons - <@U076358T0Q5> <@U05338G3Q7M> <@U8JPFF83Y> |
 |Karunambika|![](slack_date:2026-05-27) -   ![](slack_date:2026-05-29) |Ikea - <@U07662DHBS6> and <@U03Q0AH8PGW> <br>Jan Pro - <@U065H6E5940> <br>Mainline eniv - <@U08MX6QKNUQ> |
 |Sai Kishan T|![](slack_date:2026-01-06) - ![](slack_date:2026-01-09)<br>![](slack_date:2026-02-03) ![](slack_date:2026-04-03) ![](slack_date:2026-04-14) <br>![](slack_date:2026-05-01)  ![](slack_date:2026-05-04) - ![](slack_date:2026-05-08) |Roof Raiders - Rakul<br>Dryout, Steadfast - Nancy<br>Wilson and Sons - Abi, Kari<br>Optimum - Balaje|
 |Athul Ashok|![](slack_date:2026-04-09) ![](slack_date:2026-04-14) ![](slack_date:2026-04-15) ||
 |Devi | ![](slack_date:2026-02-17) ![](slack_date:2026-01-15) ![](slack_date:2026-03-27) ![](slack_date:2026-04-03) ||
 |Sharan|||
-|Nancy |juJanuary 5 afternoon - Jan 9th - **Business Travel** <br>February 23 - February 27 - **PTO** <br>April 7 - out sick<br>April 13 - out sick\u00a0<br>May 22 <br>June 1 - 5 |Emerson - Ramya <br>SC Roofing - Ramya |
+|Nancy |juJanuary 5 afternoon - Jan 9th - **Business Travel** <br>February 23 - February 27 - **PTO** <br>April 7 - out sick<br>April 13 - out sick <br>May 22 <br>June 1 - 5 |Emerson - Ramya <br>SC Roofing - Ramya |
 |Balaje Prasanna|![](slack_date:2026-02-05) (half day), ![](slack_date:2026-02-06), ![](slack_date:2026-02-20), ![](slack_date:2026-02-26), ![](slack_date:2026-02-27)<br>![](slack_date:2026-03-16)|Melo - <@U04S03L5EC9> <@U08CELR2E05> |
 |Vishali|<br>![](slack_date:2026-04-13) <br>![](slack_date:2026-04-15)  to ![](slack_date:2026-04-17) |Garage living - Jahanwi, Balaje|
 |Suraj R|![](slack_date:2026-04-01) Sick Leave|Four Season - <@U02HN9RC3DM>, <@U05338G3Q7M>, <@U076358T0Q5> |
-|Jahanwi Shree|26 January- out sick <br>![](slack_date:2026-02-06) - PTO<br>![](slack_date:2026-02-20) - PTO<br>![](slack_date:2026-03-04) - PTO<br>![](slack_date:2026-04-29) - ![](slack_date:2026-05-05) - PTO|Bullfrog spas- <@U04RERW24F8>\u00a0<br>Roof Doctors - <@U04RERW24F8> |
+|Jahanwi Shree|26 January- out sick <br>![](slack_date:2026-02-06) - PTO<br>![](slack_date:2026-02-20) - PTO<br>![](slack_date:2026-03-04) - PTO<br>![](slack_date:2026-04-29) - ![](slack_date:2026-05-05) - PTO|Bullfrog spas- <@U04RERW24F8> <br>Roof Doctors - <@U04RERW24F8> |
 |Radhika|![](slack_date:2026-04-10)  PTO|White Roofing- <@U0A3GTQANUT> <br>Bay Valley - <@U08MX6QKNUQ> |
-|Suraj Pillai|27th March, 2nd April, 3rd April, ![](slack_date:2026-04-27) ![](slack_date:2026-05-08) ![](slack_date:2026-05-11) |Melo - <@U072FRECZ41> <@U08CELR2E05> |
+|Suraj Pillai|27th March, 2nd April, 3rd April, ![](slack_date:2026-04-27) ![](slack_date:2026-05-08) ![](slack_date:2026-05-11) ![](slack_date:2026-05-15) |Melo - <@U072FRECZ41> <@U08CELR2E05> <br>FSR - <@U08JL5H9GSG> <br>Meadowbrook - <@U05338G3Q7M> <br>CuttingEdge - <@U06S2QPP0S1> <br>Photon Brothers - <@U06S2QPP0S1><br>Rival Roofing - <@U072FRECZ41> <br>Shield Roofing - <@U07235UJSSW> <@U0A3GTQANUT> <br>SC Roofing - <@U08MX6QKNUQ> <@U08JL5H9GSG> and Day 41 team<br>Vivid Roofs - <@U08JL5H9GSG> and Day 41 team<br>Bayfront - <@U08JL5H9GSG> and Day41 team|
 |Sundeep|![](slack_date:2026-04-20) to ![](slack_date:2026-04-24) |<@U05338G3Q7M> - Flash Parking|
 |Haarini|![](slack_date:2026-04-30) ![](slack_date:2026-05-01) |<@U07662DHBS6> |
 |Vigneswaran|![](slack_date:2025-11-26)<br>![](slack_date:2025-12-12)<br>![](slack_date:2025-12-15) ![](slack_date:2025-12-31) <br>![](slack_date:2026-01-12) ![](slack_date:2026-01-13) ![](slack_date:2026-01-14) ![](slack_date:2026-01-16) ![](slack_date:2026-01-15)<br>![](slack_date:2026-02-26) ![](slack_date:2026-02-27)|Russell - <@U07235UJSSW> and Paul |
 |Paul|![](slack_date:2026-02-03)||
 |Deepak|![](slack_date:2026-01-19)![](slack_date:2026-01-20)|<@U04078U5RE3> |
 |Dilith Dinesh|||
-|Dinesh|![](slack_date:2026-02-27)\u00a0May -1-2026|Cityscapes - <@U037YB1SD6Y> & <@U03CE9S8685> |
-|Rakul|January 27th- Feb 11th|Hytek- <@U072FRECZ41>\u00a0|
+|Dinesh|![](slack_date:2026-02-27) May -1-2026|Cityscapes - <@U037YB1SD6Y> and <@U03CE9S8685> |
+|Rakul|January 27th- Feb 11th|Hytek- <@U072FRECZ41> |
 |Shanthosh|![](slack_date:2026-01-16) ![](slack_date:2026-01-26) ![](slack_date:2026-02-19) ![](slack_date:2026-02-20) ||
 |Maheswaran|![](slack_date:2026-02-16) ![](slack_date:2026-02-17) ![](slack_date:2026-02-27) ![](slack_date:2026-04-08) |Task - <@U079W3Q6ZB9> <br>Total Exterior - <@U07CKR6FG92> |
 |Sateesh Babu|![](slack_date:2026-01-30) ![](slack_date:2026-02-17)<br>![](slack_date:2026-04-17) ![](slack_date:2026-04-20) |Crane engineering - <@U05338G3Q7M> |
 |Travon G|||
-|Preetha|![](slack_date:2026-04-13) |A&A - Abi / Dilith|
+|Preetha|![](slack_date:2026-04-13) |A and A - Abi / Dilith|
 |Ramya|![](slack_date:2026-03-23) ![](slack_date:2026-03-24) |Sundeep, Nancy, Vignesh - for Roofing|
 |Athul Ashok|||
 |Varshini|||
 |Madhu|April 10<br>May 1<br>May 5 - out sick|Marasun- Rakul<br>Iron head - Radhika|
 |Samuel J|April 29||
 |Abiramy |||
-|Jacob|05/12/2026 to 05/15/2026\u00a0\u00a0|Rom Tech - Thanveer<br>TFB - Travon|
-|Vignesh. P||Perspective1 - <@U06BZA0EWQM>\u00a0|
+|Jacob|05/12/2026 to 05/15/2026  |Rom Tech - Thanveer<br>TFB - Travon|
+|Vignesh. P||Perspective1 - <@U06BZA0EWQM> |
 |Srinidhi |![](slack_date:2026-02-19) , ![](slack_date:2026-02-20) |Sharan, Suraj R|
 |Johnkamesh|![](slack_date:2026-03-23) , ![](slack_date:2026-04-22) |AWRS: Vijay; TSSG: Vignesh P|
 |Kari |![](slack_date:2026-04-30) ![](slack_date:2026-05-01)  ![](slack_date:2026-05-06) (pm), ![](slack_date:2026-05-07)  ![](slack_date:2026-05-08) ![](slack_date:2026-05-11) <br>July 3 - July 6<br>Sep 4 - Sep 7<br>Thanksgiving week Nov 23 - Nov 27|TBD|
-|Thanveer|![](slack_date:2026-02-13) ![](slack_date:2026-02-26)\u00a010th March ![](slack_date:2026-03-23) |<@U037YB1SD6Y> <@U099LL9097X> |
-|Jasper|![](slack_date:2026-04-01) ![](slack_date:2026-04-02)![](slack_date:2026-04-03)<br>![](slack_date:2026-04-28) |Zuper Renewals - <@U02JTAK36TX>|`;
-
-async function sbFetch(path,opts={}){const res=await fetch(`${SUPABASE_URL}/rest/v1/${path}`,{...opts,headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':`Bearer ${SUPABASE_ANON_KEY}`,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})}});if(!res.ok)throw new Error(await res.text());const text=await res.text();return text?JSON.parse(text):null}
-async function logAction(email,name,action){return sbFetch('lt_user_logs',{method:'POST',body:JSON.stringify({email,name,action,last_activity:new Date().toISOString()})})}
-async function findUser(email){const data=await sbFetch(`lt_user_logs?email=eq.${encodeURIComponent(email)}&action=eq.register&order=created_at.desc&limit=1`);return data&&data.length>0?data[0]:null}
-async function syncFromSlack(){const res=await fetch(EDGE_FN_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'read_canvas',canvas_id:'F09LAPUPJH1'})});if(!res.ok)throw new Error('Edge Function error: '+res.status);return res.json()}
-
-const Icon=({name,size=16})=>{const p={width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round',viewBox:'0 0 24 24'};const icons={search:<svg {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,sync:<svg {...p}><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>,plus:<svg {...p}><path d="M12 5v14M5 12h14"/></svg>,x:<svg {...p}><path d="M18 6 6 18M6 6l12 12"/></svg>,edit:<svg {...p}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>,trash:<svg {...p}><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,chevL:<svg {...p}><path d="m15 18-6-6 6-6"/></svg>,chevR:<svg {...p}><path d="m9 18 6-6-6-6"/></svg>,users:<svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,save:<svg {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,logout:<svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>,sun:<svg {...p}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>,moon:<svg {...p}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,filter:<svg {...p}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>};return<span style={{display:'inline-flex',alignItems:'center'}}>{icons[name]||null}</span>};
-
-function ToastContainer({toasts,remove}){return<div className="toast-container">{toasts.map(t=><div key={t.id} className={`toast toast-${t.type}`} onClick={()=>remove(t.id)}>{t.type==='success'?'\u2713':t.type==='error'?'\u2717':'\u2139'} {t.msg}</div>)}</div>}
-
-function LoginScreen({onLogin}){
-  const[email,setEmail]=useState('');const[name,setName]=useState('');const[step,setStep]=useState('email');const[err,setErr]=useState('');
-  const handleEmailSubmit=async()=>{if(!email||!email.includes('@')){setErr('Enter a valid email');return}setStep('loading');setErr('');try{const user=await findUser(email);if(user){await logAction(email,user.name,'login');const sess={email,name:user.name};localStorage.setItem('cx_lt_session',JSON.stringify(sess));onLogin(sess)}else{setStep('name')}}catch(e){setErr('Network error. Try again.');setStep('email')}};
-  const handleNameSubmit=async()=>{if(!name.trim()){setErr('Enter your name');return}setStep('loading');setErr('');try{await logAction(email,name.trim(),'register');await logAction(email,name.trim(),'login');const sess={email,name:name.trim()};localStorage.setItem('cx_lt_session',JSON.stringify(sess));onLogin(sess)}catch(e){setErr('Failed to register.');setStep('name')}};
-  return(<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:20,background:'var(--bg)'}}><div className="card fade-in" style={{padding:40,width:'100%',maxWidth:400,textAlign:'center'}}><div style={{width:56,height:56,borderRadius:16,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:24,color:'#fff',fontWeight:700}}>CX</div><div style={{fontSize:24,fontWeight:700,marginBottom:4,color:'var(--text)'}}>Leave Tracker</div><p style={{color:'var(--text2)',fontSize:13.5,marginBottom:28}}>Track team availability & backups</p>{step==='email'&&<div><input className="input" placeholder="Enter your work email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleEmailSubmit()} autoFocus style={{marginBottom:12,textAlign:'center'}}/><button className="btn btn-primary" style={{width:'100%'}} onClick={handleEmailSubmit}>Continue</button></div>}{step==='name'&&<div className="fade-in"><p style={{color:'var(--text2)',fontSize:13,marginBottom:12}}>Welcome! Enter your full name to get started.</p><input className="input" placeholder="Full Name" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleNameSubmit()} autoFocus style={{marginBottom:12,textAlign:'center'}}/><button className="btn btn-primary" style={{width:'100%'}} onClick={handleNameSubmit}>Register & Continue</button></div>}{step==='loading'&&<div style={{padding:20}}><div className="spin" style={{width:32,height:32,border:'3px solid var(--border)',borderTopColor:'var(--accent)',borderRadius:'50%',margin:'0 auto'}}/></div>}{err&&<p style={{color:'var(--red)',fontSize:13,marginTop:10}}>{err}</p>}</div></div>);
-}
+|Thanveer|![](slack_date:2026-02-13) ![](slack_date:2026-02-26) 10th March ![](slack_date:2026-03-23) |<@U037YB1SD6Y> <@U099LL9097X> |
+|Jasper|![](slack_date:2026-04-01) ![](slack_date:2026-04-02)![](slack_date:2026-04-03)<br>![](slack_date:2026-04-28) |Zuper Renewals - <@U02JTAK36TX>|
+`;
 
 function App(){
   const[theme,setTheme]=useState(()=>localStorage.getItem('cx_lt_theme')||'light');
   useEffect(()=>{document.documentElement.setAttribute('data-theme',theme);localStorage.setItem('cx_lt_theme',theme)},[theme]);
   const[user,setUser]=useState(()=>{try{return JSON.parse(localStorage.getItem('cx_lt_session'))}catch{return null}});
-  const[data,setData]=useState(()=>parseCanvasMarkdown(CANVAS_MARKDOWN));
-  const[lastSync,setLastSync]=useState('Canvas snapshot');
-  const[view,setView]=useState('upcoming');
-  const[weekDate,setWeekDate]=useState(new Date());
-  const[typeFilter,setTypeFilter]=useState('All');
-  const[projectFilter,setProjectFilter]=useState('All');
-  const[search,setSearch]=useState('');
-  const[selectedUsers,setSelectedUsers]=useState([]);
+  const[data,setData]=useState(()=>parseCanvasMarkdown(CANVAS_MD));
+  const[lastSync,setLastSync]=useState('Snapshot');
+  const[view,setView]=useState('upcoming');const[weekDate,setWeekDate]=useState(new Date());
+  const[typeFilter,setTypeFilter]=useState('All');const[projectFilter,setProjectFilter]=useState('All');
+  const[search,setSearch]=useState('');const[selectedUsers,setSelectedUsers]=useState([]);
   const[savedViews,setSavedViews]=useState(()=>{try{return JSON.parse(localStorage.getItem('cx_saved_views')||'[]')}catch{return[]}});
-  const[showAddLeave,setShowAddLeave]=useState(false);
-  const[showUserPicker,setShowUserPicker]=useState(false);
-  const[syncing,setSyncing]=useState(false);
-  const[toasts,setToasts]=useState([]);
-  const[editingIdx,setEditingIdx]=useState(null);
-  const[showSaveView,setShowSaveView]=useState(false);
-  const[saveViewName,setSaveViewName]=useState('');
+  const[showAddLeave,setShowAddLeave]=useState(false);const[showUserPicker,setShowUserPicker]=useState(false);
+  const[syncing,setSyncing]=useState(false);const[toasts,setToasts]=useState([]);
+  const[editingIdx,setEditingIdx]=useState(null);const[showSaveView,setShowSaveView]=useState(false);const[saveViewName,setSaveViewName]=useState('');
   const toast=(msg,type='info')=>{const id=Date.now();setToasts(t=>[...t,{id,msg,type}]);setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),3500)};
-
-  const allProjects=useMemo(()=>{const ps=new Set();data.forEach(m=>{if(!m.backup)return;m.backup.split(/[\n;]/).forEach(seg=>{const dash=seg.indexOf('-');if(dash>0)ps.add(seg.substring(0,dash).trim());else{const colon=seg.indexOf(':');if(colon>0)ps.add(seg.substring(0,colon).trim())}})});return['All',...[...ps].filter(p=>p.length>1&&p.length<50).sort()]},[data]);
+  const allProjects=useMemo(()=>{const ps=new Set();data.forEach(m=>{if(!m.backup)return;m.backup.split(/[\n;]/).forEach(seg=>{const dash=seg.indexOf('-');if(dash>0)ps.add(seg.substring(0,dash).trim())})});return['All',...[...ps].filter(p=>p.length>1&&p.length<50).sort()]},[data]);
   const allNames=useMemo(()=>data.map(m=>m.name).sort(),[data]);
+  const filtered=useMemo(()=>{let r=data;if(view==='today')r=r.filter(m=>m.dates.some(isToday));else if(view==='upcoming')r=r.filter(m=>m.dates.length>0);else if(view==='week')r=r.filter(m=>m.dates.some(d=>inWeek(d,weekDate)));if(typeFilter!=='All')r=r.filter(m=>m.type===typeFilter);if(projectFilter!=='All')r=r.filter(m=>m.backup.toLowerCase().includes(projectFilter.toLowerCase()));if(selectedUsers.length>0)r=r.filter(m=>selectedUsers.includes(m.name));if(search.trim()){const q=search.toLowerCase();r=r.filter(m=>m.name.toLowerCase().includes(q)||m.backup.toLowerCase().includes(q)||m.dates.some(d=>d.includes(q)))}return r},[data,view,weekDate,typeFilter,projectFilter,selectedUsers,search]);
+  const stats=useMemo(()=>({total:data.length,today:data.filter(m=>m.dates.some(isToday)).length,week:data.filter(m=>m.dates.some(d=>inWeek(d,new Date()))).length,upcoming:data.filter(m=>m.dates.length>0).length}),[data]);
 
-  const filtered=useMemo(()=>{let result=data;if(view==='today')result=result.filter(m=>m.dates.some(isToday));else if(view==='upcoming')result=result.filter(m=>m.dates.length>0);else if(view==='week')result=result.filter(m=>m.dates.some(d=>inWeek(d,weekDate)));if(typeFilter!=='All')result=result.filter(m=>m.type===typeFilter);if(projectFilter!=='All')result=result.filter(m=>m.backup.toLowerCase().includes(projectFilter.toLowerCase()));if(selectedUsers.length>0)result=result.filter(m=>selectedUsers.includes(m.name));if(search.trim()){const q=search.toLowerCase();result=result.filter(m=>m.name.toLowerCase().includes(q)||m.backup.toLowerCase().includes(q)||m.dates.some(d=>d.includes(q)))}return result},[data,view,weekDate,typeFilter,projectFilter,selectedUsers,search]);
-
-  const stats=useMemo(()=>{const todayLeave=data.filter(m=>m.dates.some(isToday)).length;const thisWeek=data.filter(m=>m.dates.some(d=>inWeek(d,new Date()))).length;const upcoming=data.filter(m=>m.dates.length>0).length;return{total:data.length,today:todayLeave,week:thisWeek,upcoming}},[data]);
-
-  const handleSync=async()=>{setSyncing(true);try{const res=await syncFromSlack();console.log('Sync response:',res);let parsed=null;if(res.sections&&res.sections.ok&&res.sections.sections){const allMd=res.sections.sections.map(s=>s.markdown||'').join('\n');if(allMd.includes('|')){parsed=parseCanvasMarkdown(allMd)}}if(res.file_info&&res.file_info.ok&&res.file_info.file){const f=res.file_info.file;if(f.preview){const testParse=parseCanvasMarkdown(f.preview);if(testParse.length>(parsed?.length||0))parsed=testParse}}if(parsed&&parsed.length>0){setData(parsed);setLastSync(new Date().toLocaleString());toast(`Synced ${parsed.length} members from Slack`,'success')}else{toast('Re-loaded canvas snapshot data','info');setData(parseCanvasMarkdown(CANVAS_MARKDOWN));setLastSync('Canvas snapshot')}}catch(e){console.error('Sync error:',e);toast('Sync failed \u2014 using canvas snapshot','error')}setSyncing(false)};
+  const handleSync=async()=>{
+    setSyncing(true);
+    try{
+      toast('Fetching live canvas data from Slack...','info');
+      const rawText=await syncCanvasViaAPI();
+      console.log('API sync raw text length:',rawText.length);
+      // Try to find the markdown table in the response
+      let mdContent=rawText;
+      // The API response might have the table embedded in explanatory text
+      // Look for the table pattern
+      const tableStart=rawText.indexOf('|Name|');
+      if(tableStart===-1){
+        // Try alternate: look for any pipe-delimited table
+        const altStart=rawText.indexOf('|Abiramy');
+        if(altStart>-1)mdContent=rawText.substring(altStart);
+        else{
+          // If no table found at all, the API may have just described it
+          // Check if the raw text contains slack_date patterns
+          if(rawText.includes('slack_date:')){mdContent=rawText}
+          else{toast('Could not extract table from API response. Using snapshot.','error');setSyncing(false);return}
+        }
+      }else{mdContent=rawText.substring(tableStart)}
+      const parsed=parseCanvasMarkdown(mdContent);
+      if(parsed.length>0){setData(parsed);setLastSync(new Date().toLocaleTimeString());toast('Synced '+parsed.length+' members live from Slack!','success')}
+      else{toast('Parsed 0 rows. Using snapshot.','error')}
+    }catch(e){console.error('Sync error:',e);toast('Sync failed: '+e.message,'error')}
+    setSyncing(false);
+  };
 
   const clearFilters=()=>{setView('upcoming');setTypeFilter('All');setProjectFilter('All');setSearch('');setSelectedUsers([])};
-  const applySavedView=(v)=>{setView(v.view||'upcoming');setTypeFilter(v.typeFilter||'All');setProjectFilter(v.projectFilter||'All');setSelectedUsers(v.selectedUsers||[]);setSearch(v.search||'')};
-  const saveCurView=()=>{if(!saveViewName.trim())return;const nv={name:saveViewName.trim(),view,typeFilter,projectFilter,selectedUsers,search};const updated=[...savedViews,nv];setSavedViews(updated);localStorage.setItem('cx_saved_views',JSON.stringify(updated));setSaveViewName('');setShowSaveView(false);toast('View saved','success')};
-  const deleteSavedView=(i)=>{const updated=savedViews.filter((_,j)=>j!==i);setSavedViews(updated);localStorage.setItem('cx_saved_views',JSON.stringify(updated))};
-  const handleDeleteMember=(idx)=>{if(confirm('Remove this member?')){setData(d=>d.filter((_,i)=>i!==idx));toast('Removed','success')}};
-  const handleEditMember=(idx)=>{setEditingIdx(idx);setShowAddLeave(true)};
-  const handleSaveLeave=(entry)=>{if(editingIdx!==null){setData(d=>d.map((m,i)=>i===editingIdx?{...m,...entry,dates:entry.dates.filter(isFuture).sort()}:m));setEditingIdx(null);toast('Updated','success')}else{const existIdx=data.findIndex(m=>m.name.toLowerCase()===entry.name.toLowerCase());if(existIdx>=0){setData(d=>d.map((m,i)=>{if(i!==existIdx)return m;const merged=new Set([...m.dates,...entry.dates]);return{...m,dates:[...merged].filter(isFuture).sort(),backup:m.backup?(m.backup+'\n'+entry.backup):entry.backup,type:entry.type||m.type}}))}else{setData(d=>[...d,{name:entry.name,dates:entry.dates.filter(isFuture).sort(),backup:entry.backup,type:entry.type,allDatesRaw:''}])}}setShowAddLeave(false);if(editingIdx===null)toast('Leave added','success')};
+  const applySavedView=v=>{setView(v.view||'upcoming');setTypeFilter(v.typeFilter||'All');setProjectFilter(v.projectFilter||'All');setSelectedUsers(v.selectedUsers||[]);setSearch(v.search||'')};
+  const saveCurView=()=>{if(!saveViewName.trim())return;const nv={name:saveViewName.trim(),view,typeFilter,projectFilter,selectedUsers,search};const u=[...savedViews,nv];setSavedViews(u);localStorage.setItem('cx_saved_views',JSON.stringify(u));setSaveViewName('');setShowSaveView(false);toast('View saved','success')};
+  const deleteSavedView=i=>{const u=savedViews.filter((_,j)=>j!==i);setSavedViews(u);localStorage.setItem('cx_saved_views',JSON.stringify(u))};
+  const handleDeleteMember=idx=>{if(confirm('Remove this member?')){setData(d=>d.filter((_,i)=>i!==idx));toast('Removed','success')}};
+  const handleEditMember=idx=>{setEditingIdx(idx);setShowAddLeave(true)};
+  const handleSaveLeave=entry=>{if(editingIdx!==null){setData(d=>d.map((m,i)=>i===editingIdx?{...m,...entry,dates:entry.dates.filter(isFuture).sort()}:m));setEditingIdx(null);toast('Updated','success')}else{const ei=data.findIndex(m=>m.name.toLowerCase()===entry.name.toLowerCase());if(ei>=0){setData(d=>d.map((m,i)=>{if(i!==ei)return m;const merged=new Set([...m.dates,...entry.dates]);return{...m,dates:[...merged].filter(isFuture).sort(),backup:m.backup?(m.backup+'\n'+entry.backup):entry.backup,type:entry.type||m.type}}))}else{setData(d=>[...d,{name:entry.name,dates:entry.dates.filter(isFuture).sort(),backup:entry.backup,type:entry.type,allDatesRaw:''}])}toast('Leave added','success')}setShowAddLeave(false)};
   const handleLogout=()=>{localStorage.removeItem('cx_lt_session');setUser(null)};
-
   if(!user)return<LoginScreen onLogin={setUser}/>;
-  const typeBadgeClass={PTO:'badge-pto',Sick:'badge-sick',Mixed:'badge-mixed','Business Travel':'badge-bt',Other:'badge-other'};
-
+  const tbc={PTO:'badge-pto',Sick:'badge-sick',Mixed:'badge-mixed','Business Travel':'badge-bt',Other:'badge-other'};
   return(<div style={{minHeight:'100vh',background:'var(--bg)'}}>
     <ToastContainer toasts={toasts} remove={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>
     <header style={{position:'sticky',top:0,zIndex:50,padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',background:'var(--header-bg)',backdropFilter:'blur(16px)',borderBottom:'1px solid var(--header-border)'}}>
-      <div style={{display:'flex',alignItems:'center',gap:10}}><div style={{width:32,height:32,borderRadius:8,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'#fff',fontWeight:700}}>CX</div><span style={{fontSize:17,fontWeight:700,color:'var(--text)'}}>Leave Tracker</span></div>
+      <div style={{display:'flex',alignItems:'center',gap:10}}><div style={{width:32,height:32,borderRadius:8,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'#fff',fontWeight:700}}>CX</div><span style={{fontSize:17,fontWeight:700}}>Leave Tracker</span></div>
       <div style={{display:'flex',alignItems:'center',gap:8}}>
-        <button className="btn btn-secondary btn-sm" onClick={handleSync} disabled={syncing}><span className={syncing?'spin':''} style={{display:'inline-flex'}}><Icon name="sync" size={14}/></span> {syncing?'Syncing...':'Sync'}</button>
+        <button className="btn btn-secondary btn-sm" onClick={handleSync} disabled={syncing}><span className={syncing?'spin':''} style={{display:'inline-flex'}}><Icon name="sync" size={14}/></span> {syncing?'Syncing...':'Sync from Slack'}</button>
         <button className="btn btn-primary btn-sm" onClick={()=>{setEditingIdx(null);setShowAddLeave(true)}}><Icon name="plus" size={14}/> Add</button>
-        <button className="theme-toggle" onClick={()=>setTheme(t=>t==='light'?'dark':'light')} title={theme==='light'?'Dark mode':'Light mode'}/>
-        <div style={{display:'flex',alignItems:'center',gap:6,marginLeft:4,paddingLeft:8,borderLeft:'1px solid var(--border)'}}>
-          <span style={{fontSize:12,color:'var(--text2)',maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name}</span>
-          <button className="btn-icon" title="Logout" onClick={handleLogout} style={{width:28,height:28}}><Icon name="logout" size={14}/></button>
-        </div>
+        <button className="theme-toggle" onClick={()=>setTheme(t=>t==='light'?'dark':'light')}/>
+        <div style={{display:'flex',alignItems:'center',gap:6,marginLeft:4,paddingLeft:8,borderLeft:'1px solid var(--border)'}}><span style={{fontSize:12,color:'var(--text2)',maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name}</span><button className="btn-icon" title="Logout" onClick={handleLogout} style={{width:28,height:28}}><Icon name="logout" size={14}/></button></div>
       </div>
     </header>
     <main style={{maxWidth:1320,margin:'0 auto',padding:'18px 18px 40px'}}>
       <div className="stat-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:18}}>
-        {[{key:'all',val:stats.total,label:'Total Members',color:'var(--accent)'},{key:'today',val:stats.today,label:'On Leave Today',color:'var(--red)'},{key:'week',val:stats.week,label:'This Week',color:'var(--amber)'},{key:'upcoming',val:stats.upcoming,label:'Upcoming Leaves',color:'var(--green)'}].map(s=>(<div key={s.key} className={`stat-card ${view===s.key?'active':''}`} onClick={()=>setView(s.key)}><div className="value" style={{color:s.color}}>{s.val}</div><div className="label">{s.label}</div></div>))}
+        {[{key:'all',val:stats.total,label:'Total Members',color:'var(--accent)'},{key:'today',val:stats.today,label:'On Leave Today',color:'var(--red)'},{key:'week',val:stats.week,label:'This Week',color:'var(--amber)'},{key:'upcoming',val:stats.upcoming,label:'Upcoming Leaves',color:'var(--green)'}].map(s=>(<div key={s.key} className={'stat-card '+(view===s.key?'active':'')} onClick={()=>setView(s.key)}><div className="value" style={{color:s.color}}>{s.val}</div><div className="label">{s.label}</div></div>))}
       </div>
       <div className="card" style={{padding:12,marginBottom:14}}>
         <div className="filter-row" style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
           <div style={{display:'flex',gap:2,background:'var(--surface2)',borderRadius:8,padding:2,border:'1px solid var(--border)'}}>
-            {['upcoming','today','week','all'].map(v=>(<button key={v} onClick={()=>setView(v)} style={{padding:'5px 12px',borderRadius:6,fontSize:12,fontWeight:500,border:'none',background:view===v?'var(--accent)':'transparent',color:view===v?'#fff':'var(--text2)',transition:'all .15s',cursor:'pointer'}}>{v==='all'?'All Members':v.charAt(0).toUpperCase()+v.slice(1)}</button>))}
+            {['upcoming','today','week','all'].map(v=>(<button key={v} onClick={()=>setView(v)} style={{padding:'5px 12px',borderRadius:6,fontSize:12,fontWeight:500,border:'none',background:view===v?'var(--accent)':'transparent',color:view===v?'#fff':'var(--text2)',cursor:'pointer'}}>{v==='all'?'All':v[0].toUpperCase()+v.slice(1)}</button>))}
           </div>
-          {view==='week'&&<div style={{display:'flex',alignItems:'center',gap:4}}>
-            <button className="btn-icon" onClick={()=>setWeekDate(d=>shiftWeek(d,-1))} style={{width:26,height:26}}><Icon name="chevL" size={14}/></button>
-            <span style={{fontSize:12,color:'var(--text2)',minWidth:110,textAlign:'center',fontFamily:"'JetBrains Mono',monospace"}}>{getWeekLabel(weekDate)}</span>
-            <button className="btn-icon" onClick={()=>setWeekDate(d=>shiftWeek(d,1))} style={{width:26,height:26}}><Icon name="chevR" size={14}/></button>
-            <button className="btn btn-sm btn-secondary" style={{fontSize:11,padding:'3px 8px'}} onClick={()=>setWeekDate(new Date())}>This week</button>
-          </div>}
-          <select className="input" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} style={{width:'auto',fontSize:12,padding:'5px 28px 5px 10px'}}>
-            {['All','PTO','Sick','Mixed','Business Travel','Other'].map(t=><option key={t}>{t}</option>)}
-          </select>
-          <select className="input" value={projectFilter} onChange={e=>setProjectFilter(e.target.value)} style={{width:'auto',fontSize:12,padding:'5px 28px 5px 10px',maxWidth:170}}>
-            {allProjects.map(p=><option key={p}>{p}</option>)}
-          </select>
-          <button className="btn btn-sm btn-secondary" onClick={()=>setShowUserPicker(true)}><Icon name="users" size={13}/> {selectedUsers.length>0?`${selectedUsers.length} selected`:'Members'}</button>
-          <div style={{position:'relative',flex:'1 1 140px',minWidth:130}}>
-            <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text3)',display:'flex'}}><Icon name="search" size={14}/></span>
-            <input className="input" placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:32,fontSize:12}}/>
-          </div>
+          {view==='week'&&<div style={{display:'flex',alignItems:'center',gap:4}}><button className="btn-icon" onClick={()=>setWeekDate(d=>shiftWeek(d,-1))} style={{width:26,height:26}}><Icon name="chevL" size={14}/></button><span style={{fontSize:12,color:'var(--text2)',minWidth:110,textAlign:'center',fontFamily:"'JetBrains Mono',monospace"}}>{getWeekLabel(weekDate)}</span><button className="btn-icon" onClick={()=>setWeekDate(d=>shiftWeek(d,1))} style={{width:26,height:26}}><Icon name="chevR" size={14}/></button><button className="btn btn-sm btn-secondary" style={{fontSize:11,padding:'3px 8px'}} onClick={()=>setWeekDate(new Date())}>This week</button></div>}
+          <select className="input" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} style={{width:'auto',fontSize:12,padding:'5px 28px 5px 10px'}}>{['All','PTO','Sick','Mixed','Business Travel','Other'].map(t=><option key={t}>{t}</option>)}</select>
+          <select className="input" value={projectFilter} onChange={e=>setProjectFilter(e.target.value)} style={{width:'auto',fontSize:12,padding:'5px 28px 5px 10px',maxWidth:170}}>{allProjects.map(p=><option key={p}>{p}</option>)}</select>
+          <button className="btn btn-sm btn-secondary" onClick={()=>setShowUserPicker(true)}><Icon name="users" size={13}/> {selectedUsers.length>0?selectedUsers.length+' selected':'Members'}</button>
+          <div style={{position:'relative',flex:'1 1 140px',minWidth:130}}><span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text3)',display:'flex'}}><Icon name="search" size={14}/></span><input className="input" placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:32,fontSize:12}}/></div>
           <button className="btn btn-sm btn-secondary" onClick={()=>setShowSaveView(true)} title="Save view"><Icon name="save" size={13}/></button>
           <button className="btn btn-sm btn-danger" onClick={clearFilters} style={{fontSize:11}}>Clear</button>
         </div>
-        {savedViews.length>0&&<div style={{display:'flex',gap:6,marginTop:10,flexWrap:'wrap'}}>{savedViews.map((sv,i)=>(<span key={i} className="view-chip" onClick={()=>applySavedView(sv)}>{sv.name} <span className="x" onClick={e=>{e.stopPropagation();deleteSavedView(i)}}>×</span></span>))}</div>}
+        {savedViews.length>0&&<div style={{display:'flex',gap:6,marginTop:10,flexWrap:'wrap'}}>{savedViews.map((sv,i)=>(<span key={i} className="view-chip" onClick={()=>applySavedView(sv)}>{sv.name} <span className="x" onClick={e=>{e.stopPropagation();deleteSavedView(i)}}>\u00d7</span></span>))}</div>}
       </div>
-      <div className="card responsive-table" style={{overflow:'hidden'}}>
-        <div style={{overflowX:'auto'}}>
-          <table><thead><tr><th>Name</th><th>Type</th><th>Leave Dates</th><th className="desktop-only">Named Backup</th><th>Days</th><th style={{width:72}}>Actions</th></tr></thead>
-          <tbody>{filtered.length===0?<tr><td colSpan={6} style={{textAlign:'center',padding:40,color:'var(--text3)'}}>No matching records</td></tr>:filtered.map((m,i)=>{const origIdx=data.indexOf(m);const bc=typeBadgeClass[m.type]||'badge-none';const dayCount=m.dates.length;return(<tr key={m.name+i} className="fade-in"><td style={{fontWeight:600,whiteSpace:'nowrap',fontSize:13.5}}>{m.name}</td><td>{m.type&&m.type!=='None'?<span className={`badge ${bc}`}>{m.type}</span>:<span style={{color:'var(--text3)',fontSize:11}}>\u2014</span>}</td><td style={{maxWidth:300}}><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{m.dates.length===0?<span style={{color:'var(--text3)',fontSize:12}}>No upcoming</span>:m.dates.slice(0,10).map(d=>(<span key={d} className={`chip ${isToday(d)?'chip-today pulse':'chip-future'}`} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)}</span>))}{m.dates.length>10&&<span className="chip chip-gray" style={{fontSize:10}}>+{m.dates.length-10}</span>}</div></td><td className="desktop-only" style={{maxWidth:260,whiteSpace:'pre-wrap',fontSize:12,color:'var(--text2)',lineHeight:1.55}}>{m.backup||<span style={{color:'var(--text3)'}}>\u2014</span>}</td><td style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,fontSize:14,textAlign:'center'}}><span style={dayCount>5?{color:'var(--amber)',background:'var(--amber-bg)',padding:'2px 8px',borderRadius:6}:{}}>{dayCount}</span></td><td><div style={{display:'flex',gap:4}}><button className="btn-icon" onClick={()=>handleEditMember(origIdx)} title="Edit" style={{width:28,height:28}}><Icon name="edit" size={13}/></button><button className="btn-icon" onClick={()=>handleDeleteMember(origIdx)} title="Delete" style={{width:28,height:28,color:'var(--red)'}}><Icon name="trash" size={13}/></button></div></td></tr>)})}</tbody></table>
-        </div>
-        <div style={{padding:'10px 14px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',fontSize:11.5,color:'var(--text3)'}}><span>Showing {filtered.length} of {data.length} members</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>Synced: {lastSync}</span></div>
-      </div>
+      <div className="card responsive-table" style={{overflow:'hidden'}}><div style={{overflowX:'auto'}}><table><thead><tr><th>Name</th><th>Type</th><th>Leave Dates</th><th className="desktop-only">Named Backup</th><th>Days</th><th style={{width:72}}>Actions</th></tr></thead><tbody>
+        {filtered.length===0?<tr><td colSpan={6} style={{textAlign:'center',padding:40,color:'var(--text3)'}}>No matching records</td></tr>:filtered.map((m,i)=>{const oi=data.indexOf(m);const dc=m.dates.length;return(<tr key={m.name+i} className="fade-in"><td style={{fontWeight:600,whiteSpace:'nowrap',fontSize:13.5}}>{m.name}</td><td>{m.type?<span className={'badge '+(tbc[m.type]||'badge-none')}>{m.type}</span>:<span style={{color:'var(--text3)'}}>\u2014</span>}</td><td style={{maxWidth:300}}><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{dc===0?<span style={{color:'var(--text3)',fontSize:12}}>No upcoming</span>:m.dates.slice(0,10).map(d=>(<span key={d} className={'chip '+(isToday(d)?'chip-today pulse':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)}</span>))}{dc>10&&<span className="chip chip-gray" style={{fontSize:10}}>+{dc-10}</span>}</div></td><td className="desktop-only" style={{maxWidth:260,whiteSpace:'pre-wrap',fontSize:12,color:'var(--text2)',lineHeight:1.55}}>{m.backup||<span style={{color:'var(--text3)'}}>\u2014</span>}</td><td style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,fontSize:14,textAlign:'center'}}><span style={dc>5?{color:'var(--amber)',background:'var(--amber-bg)',padding:'2px 8px',borderRadius:6}:{}}>{dc}</span></td><td><div style={{display:'flex',gap:4}}><button className="btn-icon" onClick={()=>handleEditMember(oi)} title="Edit" style={{width:28,height:28}}><Icon name="edit" size={13}/></button><button className="btn-icon" onClick={()=>handleDeleteMember(oi)} title="Delete" style={{width:28,height:28,color:'var(--red)'}}><Icon name="trash" size={13}/></button></div></td></tr>)})}
+      </tbody></table></div><div style={{padding:'10px 14px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',fontSize:11.5,color:'var(--text3)'}}><span>Showing {filtered.length} of {data.length}</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>Synced: {lastSync}</span></div></div>
     </main>
     {showAddLeave&&<AddLeaveModal onClose={()=>{setShowAddLeave(false);setEditingIdx(null)}} onSave={handleSaveLeave} existingNames={allNames} editData={editingIdx!==null?data[editingIdx]:null}/>}
     {showUserPicker&&<UserPickerModal names={allNames} selected={selectedUsers} onClose={()=>setShowUserPicker(false)} onApply={sel=>{setSelectedUsers(sel);setShowUserPicker(false)}}/>}
@@ -302,39 +316,36 @@ function App(){
 
 function AddLeaveModal({onClose,onSave,existingNames,editData}){
   const[name,setName]=useState(editData?editData.name:'');const[isNew,setIsNew]=useState(false);const[type,setType]=useState(editData?editData.type:'PTO');
-  const[dates,setDates]=useState(editData?[...editData.dates]:[]);const[dateInput,setDateInput]=useState('');
-  const[backup,setBackup]=useState(editData?editData.backup:'');
+  const[dates,setDates]=useState(editData?[...editData.dates]:[]);const[dateInput,setDateInput]=useState('');const[backup,setBackup]=useState(editData?editData.backup:'');
   const addDate=()=>{if(dateInput&&!dates.includes(dateInput)){setDates(d=>[...d,dateInput].sort());setDateInput('')}};
   const removeDate=d=>setDates(ds=>ds.filter(x=>x!==d));
-  const handleSave=()=>{if(!name.trim())return;onSave({name:name.trim(),type,dates,backup})};
   return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:520}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}><h3 style={{fontSize:17,fontWeight:600}}>{editData?'Edit Leave':'Add Leave'}</h3><button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button></div>
     <label style={{fontSize:12,color:'var(--text2)',marginBottom:4,display:'block'}}>Team Member</label>
-    {isNew?<div style={{display:'flex',gap:8,marginBottom:14}}><input className="input" placeholder="Enter full name" value={name} onChange={e=>setName(e.target.value)} autoFocus/><button className="btn btn-sm btn-secondary" onClick={()=>setIsNew(false)}>Cancel</button></div>:
-    <div style={{display:'flex',gap:8,marginBottom:14}}><select className="input" value={name} onChange={e=>setName(e.target.value)} disabled={!!editData}><option value="">Select member...</option>{existingNames.map(n=><option key={n}>{n}</option>)}</select>{!editData&&<button className="btn btn-sm btn-secondary" onClick={()=>{setIsNew(true);setName('')}}><Icon name="plus" size={14}/> New</button>}</div>}
+    {isNew?<div style={{display:'flex',gap:8,marginBottom:14}}><input className="input" placeholder="Full name" value={name} onChange={e=>setName(e.target.value)} autoFocus/><button className="btn btn-sm btn-secondary" onClick={()=>setIsNew(false)}>Cancel</button></div>:
+    <div style={{display:'flex',gap:8,marginBottom:14}}><select className="input" value={name} onChange={e=>setName(e.target.value)} disabled={!!editData}><option value="">Select...</option>{existingNames.map(n=><option key={n}>{n}</option>)}</select>{!editData&&<button className="btn btn-sm btn-secondary" onClick={()=>{setIsNew(true);setName('')}}><Icon name="plus" size={14}/></button>}</div>}
     <label style={{fontSize:12,color:'var(--text2)',marginBottom:4,display:'block'}}>Leave Type</label>
-    <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>{['PTO','Sick','Business Travel','Mixed','Other'].map(t=>(<button key={t} onClick={()=>setType(t)} style={{padding:'5px 14px',borderRadius:999,fontSize:12,fontWeight:500,border:'1px solid',borderColor:type===t?'var(--accent)':'var(--border)',background:type===t?'var(--accent-light)':'transparent',color:type===t?'var(--accent)':'var(--text2)',cursor:'pointer',transition:'all .15s'}}>{t}</button>))}</div>
+    <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>{['PTO','Sick','Business Travel','Mixed','Other'].map(t=>(<button key={t} onClick={()=>setType(t)} style={{padding:'5px 14px',borderRadius:999,fontSize:12,fontWeight:500,border:'1px solid',borderColor:type===t?'var(--accent)':'var(--border)',background:type===t?'var(--accent-light)':'transparent',color:type===t?'var(--accent)':'var(--text2)',cursor:'pointer'}}>{t}</button>))}</div>
     <label style={{fontSize:12,color:'var(--text2)',marginBottom:4,display:'block'}}>Leave Dates</label>
     <div style={{display:'flex',gap:8,marginBottom:8}}><input type="date" className="input" value={dateInput} onChange={e=>setDateInput(e.target.value)} style={{flex:1}}/><button className="btn btn-sm btn-primary" onClick={addDate}>Add</button></div>
     <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:14,minHeight:24}}>{dates.map(d=>(<span key={d} className="chip chip-future" style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)} <span style={{cursor:'pointer',marginLeft:2,opacity:.6}} onClick={()=>removeDate(d)}>\u00d7</span></span>))}</div>
     <label style={{fontSize:12,color:'var(--text2)',marginBottom:4,display:'block'}}>Named Backup</label>
-    <textarea className="input" rows={3} placeholder="e.g. ProjectA - PersonB&#10;ProjectC - PersonD" value={backup} onChange={e=>setBackup(e.target.value)} style={{resize:'vertical',marginBottom:14}}/>
-    <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={handleSave}>{editData?'Update':'Save'}</button></div>
+    <textarea className="input" rows={3} placeholder="ProjectA - PersonB" value={backup} onChange={e=>setBackup(e.target.value)} style={{resize:'vertical',marginBottom:14}}/>
+    <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={()=>{if(!name.trim())return;onSave({name:name.trim(),type,dates,backup})}}>{editData?'Update':'Save'}</button></div>
   </div></div>);
 }
 
 function UserPickerModal({names,selected,onClose,onApply}){
   const[sel,setSel]=useState(new Set(selected));const[q,setQ]=useState('');
   const toggle=n=>{const ns=new Set(sel);if(ns.has(n))ns.delete(n);else ns.add(n);setSel(ns)};
-  const filteredNames=q?names.filter(n=>n.toLowerCase().includes(q.toLowerCase())):names;
+  const fn=q?names.filter(n=>n.toLowerCase().includes(q.toLowerCase())):names;
   return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:380}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}><h3 style={{fontSize:16,fontWeight:600}}>Select Members</h3><button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button></div>
     <input className="input" placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)} style={{marginBottom:10}}/>
-    <div style={{maxHeight:280,overflowY:'auto',display:'flex',flexDirection:'column',gap:2}}>{filteredNames.map(n=>(<label key={n} style={{display:'flex',alignItems:'center',gap:8,padding:'5px 8px',borderRadius:6,cursor:'pointer',background:sel.has(n)?'var(--accent-light)':'transparent',transition:'background .15s'}}><input type="checkbox" checked={sel.has(n)} onChange={()=>toggle(n)} style={{accentColor:'var(--accent)'}}/><span style={{fontSize:13}}>{n}</span></label>))}</div>
-    <div style={{display:'flex',gap:8,marginTop:14,justifyContent:'space-between'}}><button className="btn btn-sm btn-secondary" onClick={()=>setSel(new Set())}>Clear All</button><div style={{display:'flex',gap:8}}><button className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button><button className="btn btn-primary btn-sm" onClick={()=>onApply([...sel])}>Apply ({sel.size})</button></div></div>
+    <div style={{maxHeight:280,overflowY:'auto',display:'flex',flexDirection:'column',gap:2}}>{fn.map(n=>(<label key={n} style={{display:'flex',alignItems:'center',gap:8,padding:'5px 8px',borderRadius:6,cursor:'pointer',background:sel.has(n)?'var(--accent-light)':'transparent'}}><input type="checkbox" checked={sel.has(n)} onChange={()=>toggle(n)} style={{accentColor:'var(--accent)'}}/><span style={{fontSize:13}}>{n}</span></label>))}</div>
+    <div style={{display:'flex',gap:8,marginTop:14,justifyContent:'space-between'}}><button className="btn btn-sm btn-secondary" onClick={()=>setSel(new Set())}>Clear</button><div style={{display:'flex',gap:8}}><button className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button><button className="btn btn-primary btn-sm" onClick={()=>onApply([...sel])}>Apply ({sel.size})</button></div></div>
   </div></div>);
 }
-
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
