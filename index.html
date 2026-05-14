@@ -366,17 +366,50 @@ function AddLeaveModal({onClose,onSave,existingNames,editData}){
     if(!backupStr)return[{project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}];
     const lines=backupStr.split('\n').filter(l=>l.trim());
     if(lines.length===0)return[{project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}];
+    // Build a set of known names (lowercase) for matching
+    const knownNames=existingNames.map(n=>n.toLowerCase());
+    const splitPersons=(str)=>{
+      if(!str)return[];
+      // First split on commas, &, " and ", " / "
+      const rough=str.split(/\s*[,&\/]\s*|\s+and\s+/i).map(s=>s.trim()).filter(Boolean);
+      const result=[];
+      for(const chunk of rough){
+        // Check if this chunk is a known name directly
+        if(knownNames.includes(chunk.toLowerCase())){result.push(chunk);continue}
+        // Check if it matches a known name (case-insensitive partial)
+        const exactMatch=existingNames.find(n=>n.toLowerCase()===chunk.toLowerCase());
+        if(exactMatch){result.push(exactMatch);continue}
+        // Try to find multiple known names within the chunk (e.g. "Vigneswaran Nancy")
+        let remaining=chunk;
+        let foundAny=false;
+        // Sort known names by length descending so longer names match first
+        const sortedNames=[...existingNames].sort((a,b)=>b.length-a.length);
+        for(const kn of sortedNames){
+          const regex=new RegExp('\\b'+kn.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i');
+          if(regex.test(remaining)){
+            result.push(kn);
+            remaining=remaining.replace(regex,'').trim();
+            foundAny=true;
+          }
+        }
+        // If nothing matched, keep the whole chunk as-is (e.g. "Day 41 team")
+        if(!foundAny&&remaining.trim()){result.push(remaining.trim())}
+        else if(remaining.trim()&&remaining.trim()!==chunk.trim()){
+          // Leftover text after extracting names (e.g. "Day 41 team")
+          result.push(remaining.trim());
+        }
+      }
+      return result.filter(Boolean);
+    };
     return lines.map(line=>{
       let project='',personStr='',agenda='';
-      // Check for agenda after |
       const pipeParts=line.split('|').map(s=>s.trim());
       const mainPart=pipeParts[0]||'';
       agenda=(pipeParts[1]||'').replace(/^Agenda:\s*/i,'');
-      // Split by - for project and person
       const dashIdx=mainPart.indexOf(' - ');
       if(dashIdx>-1){project=mainPart.substring(0,dashIdx).trim();personStr=mainPart.substring(dashIdx+3).trim()}
       else{const colonIdx=mainPart.indexOf(':');if(colonIdx>-1){project=mainPart.substring(0,colonIdx).trim();personStr=mainPart.substring(colonIdx+1).trim()}else personStr=mainPart}
-      const persons=personStr?personStr.split(/[,&]/).map(p=>p.trim()).filter(Boolean):[];
+      const persons=splitPersons(personStr);
       return{project,persons,newPerson:'',agenda,showPicker:false,pickerQ:''};
     });
   };
