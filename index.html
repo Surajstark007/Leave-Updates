@@ -124,45 +124,22 @@ function parseCanvasMarkdown(md){
   return members;
 }
 
-// ─── SYNC: Anthropic API → Slack MCP → read canvas → write to Supabase ───
+// ─── SYNC: Edge Function reads from Supabase cache ───
+// To update the cache with live Slack data, tell Claude "sync the canvas" in chat.
+// Claude reads the live canvas via Slack MCP and writes to Supabase.
+// Then this Sync button pulls the latest from Supabase instantly.
 async function liveSync(onProgress){
-  onProgress('Reading live canvas from Slack...');
-  // Step 1: Call Anthropic API with Slack MCP to read the canvas
-  const apiResp=await fetch("https://api.anthropic.com/v1/messages",{
-    method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      model:"claude-sonnet-4-20250514",max_tokens:16000,
-      messages:[{role:"user",content:"Use the slack_read_canvas tool to read canvas_id F09LAPUPJH1. Return ONLY the markdown_content field value as plain text. No explanation, no code fences, just the raw markdown."}],
-      mcp_servers:[{type:"url",url:SLACK_MCP_URL,name:"slack"}]
-    })
+  onProgress('Fetching latest data...');
+  const r=await fetch(SB_URL+'/functions/v1/slack-proxy',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'read_canvas',canvas_id:CANVAS_ID})
   });
-  if(!apiResp.ok){const t=await apiResp.text();throw new Error('API '+apiResp.status+': '+t.substring(0,200))}
-  const apiData=await apiResp.json();
-  // Extract markdown from response
-  let markdown='';
-  for(const block of (apiData.content||[])){
-    if(block.type==='text')markdown+=block.text+'\n';
-    if(block.type==='mcp_tool_result'&&block.content)
-      for(const sub of block.content)if(sub.text)markdown+=sub.text+'\n';
-  }
-  if(!markdown.includes('|'))throw new Error('No table found in canvas response');
-  onProgress('Writing to database...');
-  // Step 2: Write to Supabase
-  const sbResp=await fetch(SB_URL+'/rest/v1/lt_canvas_cache?canvas_id=eq.'+CANVAS_ID,{
-    method:'PATCH',
-    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
-    body:JSON.stringify({markdown_content:markdown,updated_at:new Date().toISOString()})
-  });
-  if(!sbResp.ok){
-    // If no row to update, insert
-    const insResp=await fetch(SB_URL+'/rest/v1/lt_canvas_cache',{
-      method:'POST',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
-      body:JSON.stringify({canvas_id:CANVAS_ID,markdown_content:markdown,updated_at:new Date().toISOString()})
-    });
-  }
+  if(!r.ok)throw new Error('Sync request failed: '+r.status);
+  const data=await r.json();
+  if(!data.ok)throw new Error(data.error||'Unknown error');
   onProgress('Parsing data...');
-  return{markdown,updated_at:new Date().toISOString()};
+  return{markdown:data.markdown,updated_at:data.updated_at};
 }
 
 // Fallback: read from Supabase cache
@@ -175,12 +152,71 @@ async function readCache(){
   return data&&data[0]?{markdown:data[0].markdown_content,updated_at:data[0].updated_at}:null;
 }
 
+// ─── USER-ADDED LEAVES (persisted in Supabase lt_leaves) ───
+async function fetchUserLeaves(){
+  const r=await fetch(SB_URL+'/rest/v1/lt_leaves?deleted=eq.false&order=created_at.desc',{
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+  });
+  if(!r.ok)return[];
+  return r.json();
+}
+async function upsertLeave(entry,addedBy){
+  // Check if entry already exists by name (case-insensitive)
+  const existing=await fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(entry.name)+'&deleted=eq.false&limit=1',{
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+  });
+  const existingData=await existing.json();
+  if(existingData&&existingData.length>0){
+    // Update existing
+    return fetch(SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingData[0].id,{
+      method:'PATCH',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify({type:entry.type,dates:JSON.stringify(entry.dates),backup:entry.backup,updated_at:new Date().toISOString(),added_by:addedBy})
+    });
+  }
+  // Insert new
+  return fetch(SB_URL+'/rest/v1/lt_leaves',{
+    method:'POST',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify({name:entry.name,type:entry.type,dates:JSON.stringify(entry.dates),backup:entry.backup,added_by:addedBy})
+  });
+}
+async function softDeleteLeave(name){
+  // Mark as deleted by name
+  return fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(name)+'&deleted=eq.false',{
+    method:'PATCH',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify({deleted:true,updated_at:new Date().toISOString()})
+  });
+}
+
+// Merge canvas data with user-added leaves (user entries override canvas for same name)
+function mergeCanvasAndUserLeaves(canvasMembers,userLeaves){
+  const merged=[...canvasMembers];
+  const deletedNames=new Set();
+  for(const ul of userLeaves){
+    if(ul.deleted){deletedNames.add(ul.name.toLowerCase());continue}
+    let dates=[];
+    try{dates=typeof ul.dates==='string'?JSON.parse(ul.dates):ul.dates||[]}catch{dates=[]}
+    const idx=merged.findIndex(m=>m.name.toLowerCase()===ul.name.toLowerCase());
+    if(idx>=0){
+      // Merge dates and backup
+      const existingDates=new Set(merged[idx].dates);
+      dates.forEach(d=>existingDates.add(d));
+      merged[idx]={...merged[idx],dates:[...existingDates].filter(d=>d>=todayStr()).sort(),backup:ul.backup||merged[idx].backup,type:ul.type||merged[idx].type};
+    }else{
+      merged.push({name:ul.name,dates:dates.filter(d=>d>=todayStr()).sort(),backup:ul.backup||'',type:ul.type||'PTO',raw:''});
+    }
+  }
+  return merged.filter(m=>!deletedNames.has(m.name.toLowerCase()));
+}
+
 // Supabase user auth
 async function sbFetch(path,opts={}){const r=await fetch(SB_URL+'/rest/v1/'+path,{...opts,headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})}});if(!r.ok)throw new Error(await r.text());const t=await r.text();return t?JSON.parse(t):null}
 async function logAction(email,name,action){return sbFetch('lt_user_logs',{method:'POST',body:JSON.stringify({email,name,action,last_activity:new Date().toISOString()})})}
 async function findUser(email){const d=await sbFetch('lt_user_logs?email=eq.'+encodeURIComponent(email)+'&action=eq.register&order=created_at.desc&limit=1');return d&&d.length>0?d[0]:null}
 
-const Icon=({name,size=16})=>{const p={width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round',viewBox:'0 0 24 24'};const icons={search:<svg {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,sync:<svg {...p}><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>,plus:<svg {...p}><path d="M12 5v14M5 12h14"/></svg>,x:<svg {...p}><path d="M18 6 6 18M6 6l12 12"/></svg>,edit:<svg {...p}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>,trash:<svg {...p}><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,chevL:<svg {...p}><path d="m15 18-6-6 6-6"/></svg>,chevR:<svg {...p}><path d="m9 18 6-6-6-6"/></svg>,users:<svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,save:<svg {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,logout:<svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>};return<span style={{display:'inline-flex',alignItems:'center'}}>{icons[name]||null}</span>};
+const Icon=({name,size=16})=>{const p={width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round',viewBox:'0 0 24 24'};const icons={search:<svg {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,sync:<svg {...p}><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>,plus:<svg {...p}><path d="M12 5v14M5 12h14"/></svg>,x:<svg {...p}><path d="M18 6 6 18M6 6l12 12"/></svg>,edit:<svg {...p}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>,trash:<svg {...p}><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,chevL:<svg {...p}><path d="m15 18-6-6 6-6"/></svg>,chevR:<svg {...p}><path d="m9 18 6-6-6-6"/></svg>,users:<svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,save:<svg {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,logout:<svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>,refresh:<svg {...p}><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64"/><path d="M3 21v-5h5"/></svg>};return<span style={{display:'inline-flex',alignItems:'center'}}>{icons[name]||null}</span>};
 function ToastContainer({toasts,remove}){return<div className="toast-container">{toasts.map(t=><div key={t.id} className={'toast toast-'+t.type} onClick={()=>remove(t.id)}>{t.type==='success'?'\u2713':t.type==='error'?'\u2717':'\u2139'} {t.msg}</div>)}</div>}
 
 function LoginScreen({onLogin}){
@@ -208,13 +244,21 @@ function App(){
   const[toasts,setToasts]=useState([]);const[editingIdx,setEditingIdx]=useState(null);
   const toast=(msg,type='info')=>{const id=Date.now();setToasts(t=>[...t,{id,msg,type}]);setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),4000)};
 
-  // Load from Supabase cache on mount
-  useEffect(()=>{
-    readCache().then(r=>{
-      if(r){setData(parseCanvasMarkdown(r.markdown));setLastSync(new Date(r.updated_at).toLocaleString())}
-      else setLastSync('No cached data')
-    }).catch(()=>setLastSync('Cache read failed'));
-  },[]);
+  // Load merged data: canvas cache + user-added leaves
+  const loadAllData=async()=>{
+    let canvasMembers=[];
+    try{const c=await readCache();if(c){canvasMembers=parseCanvasMarkdown(c.markdown);setLastSync(new Date(c.updated_at).toLocaleString())}}catch{}
+    try{const ul=await fetchUserLeaves();const merged=mergeCanvasAndUserLeaves(canvasMembers,ul);setData(merged)}catch{setData(canvasMembers)}
+  };
+  useEffect(()=>{loadAllData()},[]);
+
+  const[refreshing,setRefreshing]=useState(false);
+  const handleRefresh=async()=>{
+    setRefreshing(true);
+    try{await loadAllData();toast('Refreshed with latest data','success')}
+    catch(e){toast('Refresh failed: '+e.message,'error')}
+    setRefreshing(false);
+  };
 
   const allNames=useMemo(()=>data.map(m=>m.name).sort(),[data]);
   const filtered=useMemo(()=>{let r=data;if(view==='today')r=r.filter(m=>m.dates.some(isToday));else if(view==='upcoming')r=r.filter(m=>m.dates.length>0);else if(view==='week')r=r.filter(m=>m.dates.some(d=>inWeek(d,weekDate)));if(typeFilter!=='All')r=r.filter(m=>m.type===typeFilter);if(selectedUsers.length>0)r=r.filter(m=>selectedUsers.includes(m.name));if(search.trim()){const q=search.toLowerCase();r=r.filter(m=>m.name.toLowerCase().includes(q)||m.backup.toLowerCase().includes(q)||m.dates.some(d=>d.includes(q)))}return r},[data,view,weekDate,typeFilter,selectedUsers,search]);
@@ -224,20 +268,47 @@ function App(){
     setSyncing(true);setSyncStatus('Starting...');
     try{
       const result=await liveSync(msg=>setSyncStatus(msg));
-      const parsed=parseCanvasMarkdown(result.markdown);
-      if(parsed.length>0){setData(parsed);setLastSync(new Date().toLocaleString());toast('Synced '+parsed.length+' members from live Slack canvas!','success')}
-      else toast('Parsed 0 rows from canvas','error');
+      const canvasMembers=parseCanvasMarkdown(result.markdown);
+      if(canvasMembers.length>0){
+        const ul=await fetchUserLeaves();
+        const merged=mergeCanvasAndUserLeaves(canvasMembers,ul);
+        setData(merged);setLastSync(new Date().toLocaleString());
+        toast('Synced '+merged.length+' members (canvas + app data)','success');
+      }else toast('Parsed 0 rows from canvas','error');
     }catch(e){
       console.error('Live sync failed:',e);
-      toast('Live sync failed: '+e.message+'. Loading cache...','error');
-      try{const c=await readCache();if(c){setData(parseCanvasMarkdown(c.markdown));setLastSync(new Date(c.updated_at).toLocaleString()+' (cache)')}}catch{}
+      toast('Sync failed: '+e.message+'. Refreshing...','error');
+      await loadAllData();
     }
     setSyncing(false);setSyncStatus('');
   };
 
   const clearFilters=()=>{setView('upcoming');setTypeFilter('All');setSearch('');setSelectedUsers([])};
-  const handleDeleteMember=idx=>{if(confirm('Remove?')){setData(d=>d.filter((_,i)=>i!==idx));toast('Removed','success')}};
-  const handleSaveLeave=entry=>{if(editingIdx!==null){setData(d=>d.map((m,i)=>i===editingIdx?{...m,...entry,dates:entry.dates.filter(isFuture).sort()}:m));setEditingIdx(null);toast('Updated','success')}else{const ei=data.findIndex(m=>m.name.toLowerCase()===entry.name.toLowerCase());if(ei>=0){setData(d=>d.map((m,i)=>{if(i!==ei)return m;const mg=new Set([...m.dates,...entry.dates]);return{...m,dates:[...mg].filter(isFuture).sort(),backup:m.backup?(m.backup+'\n'+entry.backup):entry.backup,type:entry.type||m.type}}))}else setData(d=>[...d,{name:entry.name,dates:entry.dates.filter(isFuture).sort(),backup:entry.backup,type:entry.type,raw:''}]);toast('Leave added','success')}setShowAddLeave(false)};
+  const handleDeleteMember=async(idx)=>{
+    if(!confirm('Remove this member?'))return;
+    const member=data[idx];
+    setData(d=>d.filter((_,i)=>i!==idx));
+    try{await softDeleteLeave(member.name);toast('Removed & saved','success')}
+    catch{toast('Removed locally (save failed)','error')}
+  };
+  const handleSaveLeave=async(entry)=>{
+    if(editingIdx!==null){
+      setData(d=>d.map((m,i)=>i===editingIdx?{...m,...entry,dates:entry.dates.filter(isFuture).sort()}:m));
+      setEditingIdx(null);
+      try{await upsertLeave({...entry,dates:entry.dates.filter(isFuture).sort()},user?.email||'');toast('Updated & saved','success')}
+      catch{toast('Updated locally (save failed)','error')}
+    }else{
+      const ei=data.findIndex(m=>m.name.toLowerCase()===entry.name.toLowerCase());
+      if(ei>=0){
+        setData(d=>d.map((m,i)=>{if(i!==ei)return m;const mg=new Set([...m.dates,...entry.dates]);return{...m,dates:[...mg].filter(isFuture).sort(),backup:entry.backup||m.backup,type:entry.type||m.type}}));
+      }else{
+        setData(d=>[...d,{name:entry.name,dates:entry.dates.filter(isFuture).sort(),backup:entry.backup,type:entry.type,raw:''}]);
+      }
+      try{await upsertLeave({...entry,dates:entry.dates.filter(isFuture).sort()},user?.email||'');toast('Leave added & saved','success')}
+      catch{toast('Added locally (save failed)','error')}
+    }
+    setShowAddLeave(false);
+  };
 
   if(!user)return<LoginScreen onLogin={setUser}/>;
   const tbc={PTO:'badge-pto',Sick:'badge-sick',Mixed:'badge-mixed','Business Travel':'badge-bt',Other:'badge-other'};
@@ -247,7 +318,10 @@ function App(){
       <div style={{display:'flex',alignItems:'center',gap:10}}><div style={{width:32,height:32,borderRadius:8,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'#fff',fontWeight:700}}>CX</div><span style={{fontSize:17,fontWeight:700}}>Leave Tracker</span></div>
       <div style={{display:'flex',alignItems:'center',gap:8}}>
         <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end'}}>
-          <button className="btn btn-secondary btn-sm" onClick={handleSync} disabled={syncing}><span className={syncing?'spin':''} style={{display:'inline-flex'}}><Icon name="sync" size={14}/></span> {syncing?'Syncing...':'Sync from Slack'}</button>
+          <div style={{display:'flex',gap:6}}>
+            <button className="btn btn-secondary btn-sm" onClick={handleRefresh} disabled={refreshing} title="Pull latest data from all users"><span className={refreshing?'spin':''} style={{display:'inline-flex'}}><Icon name="refresh" size={14}/></span> {refreshing?'Refreshing...':'Refresh'}</button>
+            <button className="btn btn-secondary btn-sm" onClick={handleSync} disabled={syncing} title="Sync from Slack canvas cache"><span className={syncing?'spin':''} style={{display:'inline-flex'}}><Icon name="sync" size={14}/></span> {syncing?'Syncing...':'Sync Slack'}</button>
+          </div>
           {syncStatus&&<div className="sync-progress">{syncStatus}</div>}
         </div>
         <button className="btn btn-primary btn-sm" onClick={()=>{setEditingIdx(null);setShowAddLeave(true)}}><Icon name="plus" size={14}/> Add</button>
@@ -281,21 +355,130 @@ function App(){
 }
 
 function AddLeaveModal({onClose,onSave,existingNames,editData}){
-  const[name,setName]=useState(editData?editData.name:'');const[isNew,setIsNew]=useState(false);const[type,setType]=useState(editData?editData.type:'PTO');
-  const[dates,setDates]=useState(editData?[...editData.dates]:[]);const[dateInput,setDateInput]=useState('');const[backup,setBackup]=useState(editData?editData.backup:'');
-  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:520}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}><h3 style={{fontSize:17,fontWeight:600}}>{editData?'Edit Leave':'Add Leave'}</h3><button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button></div>
-    <label style={{fontSize:12,color:'var(--text2)',marginBottom:4,display:'block'}}>Team Member</label>
+  const[name,setName]=useState(editData?editData.name:'');
+  const[isNew,setIsNew]=useState(false);
+  const[type,setType]=useState(editData?editData.type:'PTO');
+  const[dates,setDates]=useState(editData?[...editData.dates]:[]);
+  const[dateInput,setDateInput]=useState('');
+
+  // Parse existing backup into structured entries
+  const parseBackupEntries=(backupStr)=>{
+    if(!backupStr)return[{project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}];
+    const lines=backupStr.split('\n').filter(l=>l.trim());
+    if(lines.length===0)return[{project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}];
+    return lines.map(line=>{
+      let project='',personStr='',agenda='';
+      // Check for agenda after |
+      const pipeParts=line.split('|').map(s=>s.trim());
+      const mainPart=pipeParts[0]||'';
+      agenda=(pipeParts[1]||'').replace(/^Agenda:\s*/i,'');
+      // Split by - for project and person
+      const dashIdx=mainPart.indexOf(' - ');
+      if(dashIdx>-1){project=mainPart.substring(0,dashIdx).trim();personStr=mainPart.substring(dashIdx+3).trim()}
+      else{const colonIdx=mainPart.indexOf(':');if(colonIdx>-1){project=mainPart.substring(0,colonIdx).trim();personStr=mainPart.substring(colonIdx+1).trim()}else personStr=mainPart}
+      const persons=personStr?personStr.split(/[,&]/).map(p=>p.trim()).filter(Boolean):[];
+      return{project,persons,newPerson:'',agenda,showPicker:false,pickerQ:''};
+    });
+  };
+  const[entries,setEntries]=useState(()=>parseBackupEntries(editData?editData.backup:''));
+
+  const updateEntry=(idx,field,val)=>setEntries(e=>e.map((x,i)=>i===idx?{...x,[field]:val}:x));
+  const addEntry=()=>setEntries(e=>[...e,{project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}]);
+  const removeEntry=idx=>setEntries(e=>e.filter((_,i)=>i!==idx));
+  const addPersonToEntry=(idx,person)=>{
+    setEntries(e=>e.map((x,i)=>{
+      if(i!==idx)return x;
+      if(x.persons.includes(person))return x;
+      return{...x,persons:[...x.persons,person],showPicker:false,pickerQ:''};
+    }));
+  };
+  const removePersonFromEntry=(idx,person)=>{
+    setEntries(e=>e.map((x,i)=>i===idx?{...x,persons:x.persons.filter(p=>p!==person)}:x));
+  };
+  const addNewPersonToEntry=(idx)=>{
+    setEntries(e=>e.map((x,i)=>{
+      if(i!==idx||!x.newPerson.trim())return x;
+      const np=x.newPerson.trim();
+      if(x.persons.includes(np))return{...x,newPerson:''};
+      return{...x,persons:[...x.persons,np],newPerson:''};
+    }));
+  };
+
+  const buildBackupString=()=>{
+    return entries.filter(e=>e.project||e.persons.length>0).map(e=>{
+      let s='';
+      if(e.project){s+=e.project;if(e.persons.length>0)s+=' - '+e.persons.join(', ')}
+      else if(e.persons.length>0)s+=e.persons.join(', ');
+      if(e.agenda)s+=' | Agenda: '+e.agenda;
+      return s;
+    }).join('\n');
+  };
+
+  const lbl={fontSize:12,color:'var(--text2)',marginBottom:4,display:'block',fontWeight:500};
+  const subLbl={fontSize:11,color:'var(--text3)',marginBottom:3,display:'block'};
+
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:580}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+      <h3 style={{fontSize:17,fontWeight:600}}>{editData?'Edit Leave':'Add Leave'}</h3>
+      <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
+    </div>
+
+    <label style={lbl}>Team Member</label>
     {isNew?<div style={{display:'flex',gap:8,marginBottom:14}}><input className="input" placeholder="Full name" value={name} onChange={e=>setName(e.target.value)} autoFocus/><button className="btn btn-sm btn-secondary" onClick={()=>setIsNew(false)}>Cancel</button></div>:
-    <div style={{display:'flex',gap:8,marginBottom:14}}><select className="input" value={name} onChange={e=>setName(e.target.value)} disabled={!!editData}><option value="">Select...</option>{existingNames.map(n=><option key={n}>{n}</option>)}</select>{!editData&&<button className="btn btn-sm btn-secondary" onClick={()=>{setIsNew(true);setName('')}}><Icon name="plus" size={14}/></button>}</div>}
-    <label style={{fontSize:12,color:'var(--text2)',marginBottom:4,display:'block'}}>Leave Type</label>
-    <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>{['PTO','Sick','Business Travel','Mixed','Other'].map(t=>(<button key={t} onClick={()=>setType(t)} style={{padding:'5px 14px',borderRadius:999,fontSize:12,fontWeight:500,border:'1px solid',borderColor:type===t?'var(--accent)':'var(--border)',background:type===t?'var(--accent-light)':'transparent',color:type===t?'var(--accent)':'var(--text2)',cursor:'pointer'}}>{t}</button>))}</div>
-    <label style={{fontSize:12,color:'var(--text2)',marginBottom:4,display:'block'}}>Leave Dates</label>
+    <div style={{display:'flex',gap:8,marginBottom:14}}><select className="input" value={name} onChange={e=>setName(e.target.value)} disabled={!!editData}><option value="">Select member...</option>{existingNames.map(n=><option key={n}>{n}</option>)}</select>{!editData&&<button className="btn btn-sm btn-secondary" onClick={()=>{setIsNew(true);setName('')}}><Icon name="plus" size={14}/> New</button>}</div>}
+
+    <label style={lbl}>Leave Type</label>
+    <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>{['PTO','Sick','Business Travel','Mixed','Other'].map(t=>(<button key={t} onClick={()=>setType(t)} style={{padding:'5px 14px',borderRadius:999,fontSize:12,fontWeight:500,border:'1px solid',borderColor:type===t?'var(--accent)':'var(--border)',background:type===t?'var(--accent-light)':'transparent',color:type===t?'var(--accent)':'var(--text2)',cursor:'pointer',transition:'all .15s'}}>{t}</button>))}</div>
+
+    <label style={lbl}>Leave Dates</label>
     <div style={{display:'flex',gap:8,marginBottom:8}}><input type="date" className="input" value={dateInput} onChange={e=>setDateInput(e.target.value)} style={{flex:1}}/><button className="btn btn-sm btn-primary" onClick={()=>{if(dateInput&&!dates.includes(dateInput)){setDates(d=>[...d,dateInput].sort());setDateInput('')}}}>Add</button></div>
     <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:14,minHeight:24}}>{dates.map(d=>(<span key={d} className="chip chip-future" style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)} <span style={{cursor:'pointer',marginLeft:2,opacity:.6}} onClick={()=>setDates(ds=>ds.filter(x=>x!==d))}>{'\u00d7'}</span></span>))}</div>
-    <label style={{fontSize:12,color:'var(--text2)',marginBottom:4,display:'block'}}>Named Backup</label>
-    <textarea className="input" rows={3} placeholder="ProjectA - PersonB" value={backup} onChange={e=>setBackup(e.target.value)} style={{resize:'vertical',marginBottom:14}}/>
-    <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={()=>{if(!name.trim())return;onSave({name:name.trim(),type,dates,backup})}}>{editData?'Update':'Save'}</button></div>
+
+    <div style={{borderTop:'1px solid var(--border)',paddingTop:14}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+        <label style={{...lbl,marginBottom:0}}>Backup & Agenda Details</label>
+        <button className="btn btn-sm btn-secondary" onClick={addEntry}><Icon name="plus" size={12}/> Add Project</button>
+      </div>
+
+      {entries.map((entry,idx)=>(<div key={idx} className="fade-in" style={{background:'var(--surface2)',borderRadius:10,padding:12,marginBottom:8,border:'1px solid var(--border)'}}>
+        <div style={{display:'flex',gap:8,marginBottom:8}}>
+          <div style={{flex:1}}>
+            <label style={subLbl}>Project Name</label>
+            <input className="input" placeholder="e.g. Shield Roofing" value={entry.project} onChange={e=>updateEntry(idx,'project',e.target.value)} style={{fontSize:13}}/>
+          </div>
+          {entries.length>1&&<button className="btn-icon" onClick={()=>removeEntry(idx)} title="Remove" style={{width:28,height:28,color:'var(--red)',marginTop:18,flexShrink:0}}><Icon name="trash" size={13}/></button>}
+        </div>
+
+        <label style={subLbl}>Backup Person(s)</label>
+        <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:6,minHeight:26}}>
+          {entry.persons.map(p=>(<span key={p} className="chip chip-future" style={{fontSize:11}}>{p} <span style={{cursor:'pointer',marginLeft:2,opacity:.6}} onClick={()=>removePersonFromEntry(idx,p)}>{'\u00d7'}</span></span>))}
+          <button className="btn btn-sm btn-secondary" onClick={()=>updateEntry(idx,'showPicker',!entry.showPicker)} style={{fontSize:11,padding:'2px 8px',borderRadius:999}}>
+            <Icon name="plus" size={11}/> {entry.showPicker?'Close':'Add'}
+          </button>
+        </div>
+
+        {entry.showPicker&&<div className="fade-in" style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,padding:8,marginBottom:8}}>
+          <input className="input" placeholder="Search team members..." value={entry.pickerQ} onChange={e=>updateEntry(idx,'pickerQ',e.target.value)} style={{fontSize:12,marginBottom:6,padding:'5px 10px'}}/>
+          <div style={{maxHeight:120,overflowY:'auto',display:'flex',flexDirection:'column',gap:1}}>
+            {existingNames.filter(n=>!entry.persons.includes(n)&&(!entry.pickerQ||n.toLowerCase().includes(entry.pickerQ.toLowerCase()))).map(n=>(
+              <div key={n} onClick={()=>addPersonToEntry(idx,n)} style={{padding:'4px 8px',borderRadius:4,fontSize:12,cursor:'pointer',background:'transparent',transition:'background .1s'}} onMouseOver={e=>e.currentTarget.style.background='var(--accent-light)'} onMouseOut={e=>e.currentTarget.style.background='transparent'}>{n}</div>
+            ))}
+          </div>
+          <div style={{display:'flex',gap:6,marginTop:6,borderTop:'1px solid var(--border)',paddingTop:6}}>
+            <input className="input" placeholder="Or type new name..." value={entry.newPerson} onChange={e=>updateEntry(idx,'newPerson',e.target.value)} onKeyDown={e=>e.key==='Enter'&&addNewPersonToEntry(idx)} style={{fontSize:12,padding:'4px 8px',flex:1}}/>
+            <button className="btn btn-sm btn-primary" onClick={()=>addNewPersonToEntry(idx)} style={{fontSize:11,padding:'3px 10px'}}>Add</button>
+          </div>
+        </div>}
+
+        <label style={subLbl}>Agenda / Notes</label>
+        <input className="input" placeholder="Meeting agenda, handoff notes..." value={entry.agenda} onChange={e=>updateEntry(idx,'agenda',e.target.value)} style={{fontSize:13}}/>
+      </div>))}
+    </div>
+
+    <div style={{display:'flex',gap:8,marginTop:18,justifyContent:'flex-end'}}>
+      <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+      <button className="btn btn-primary" onClick={()=>{if(!name.trim())return;onSave({name:name.trim(),type,dates,backup:buildBackupString()})}}>{editData?'Update':'Save'}</button>
+    </div>
   </div></div>);
 }
 
