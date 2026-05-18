@@ -292,23 +292,30 @@ function App(){
     catch{toast('Removed locally (save failed)','error')}
   };
   const handleSaveLeave=async(entry)=>{
+    const savedDates=entry.dates.filter(isFuture).sort();
     if(editingIdx!==null){
-      setData(d=>d.map((m,i)=>i===editingIdx?{...m,...entry,dates:entry.dates.filter(isFuture).sort()}:m));
+      setData(d=>d.map((m,i)=>i===editingIdx?{...m,...entry,dates:savedDates}:m));
       setEditingIdx(null);
-      try{await upsertLeave({...entry,dates:entry.dates.filter(isFuture).sort()},user?.email||'');toast('Updated & saved','success')}
+      try{await upsertLeave({...entry,dates:savedDates},user?.email||'');toast('Updated & saved','success')}
       catch{toast('Updated locally (save failed)','error')}
     }else{
       const ei=data.findIndex(m=>m.name.toLowerCase()===entry.name.toLowerCase());
       if(ei>=0){
         setData(d=>d.map((m,i)=>{if(i!==ei)return m;const mg=new Set([...m.dates,...entry.dates]);return{...m,dates:[...mg].filter(isFuture).sort(),backup:entry.backup||m.backup,type:entry.type||m.type}}));
       }else{
-        setData(d=>[...d,{name:entry.name,dates:entry.dates.filter(isFuture).sort(),backup:entry.backup,type:entry.type,raw:''}]);
+        setData(d=>[...d,{name:entry.name,dates:savedDates,backup:entry.backup,type:entry.type,raw:''}]);
       }
-      try{await upsertLeave({...entry,dates:entry.dates.filter(isFuture).sort()},user?.email||'');toast('Leave added & saved','success')}
+      try{await upsertLeave({...entry,dates:savedDates},user?.email||'');toast('Leave added & saved','success')}
       catch{toast('Added locally (save failed)','error')}
     }
     setShowAddLeave(false);
+    // Show OOO actions modal
+    if(savedDates.length>0){setOooData({name:entry.name,dates:savedDates});setShowOoo(true)}
   };
+
+  // ─── OOO ACTIONS STATE ───
+  const[showOoo,setShowOoo]=useState(false);
+  const[oooData,setOooData]=useState(null);
 
   if(!user)return<LoginScreen onLogin={setUser}/>;
   const tbc={PTO:'badge-pto',Sick:'badge-sick',Mixed:'badge-mixed','Business Travel':'badge-bt',Other:'badge-other'};
@@ -351,6 +358,7 @@ function App(){
     </main>
     {showAddLeave&&<AddLeaveModal onClose={()=>{setShowAddLeave(false);setEditingIdx(null)}} onSave={handleSaveLeave} existingNames={allNames} editData={editingIdx!==null?data[editingIdx]:null}/>}
     {showUserPicker&&<UserPickerModal names={allNames} selected={selectedUsers} onClose={()=>setShowUserPicker(false)} onApply={sel=>{setSelectedUsers(sel);setShowUserPicker(false)}}/>}
+    {showOoo&&oooData&&<OooActionsModal name={oooData.name} dates={oooData.dates} onClose={()=>{setShowOoo(false);setOooData(null)}}/>}
   </div>);
 }
 
@@ -511,6 +519,143 @@ function AddLeaveModal({onClose,onSave,existingNames,editData}){
     <div style={{display:'flex',gap:8,marginTop:18,justifyContent:'flex-end'}}>
       <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
       <button className="btn btn-primary" onClick={()=>{if(!name.trim())return;onSave({name:name.trim(),type,dates,backup:buildBackupString()})}}>{editData?'Update':'Save'}</button>
+    </div>
+  </div></div>);
+}
+
+// ─── ICS FILE GENERATION ───
+function generateICS(name,dates){
+  const sortedDates=[...dates].sort();
+  // Group consecutive dates into ranges
+  const ranges=[];let rangeStart=sortedDates[0];let rangePrev=sortedDates[0];
+  for(let i=1;i<sortedDates.length;i++){
+    const prev=new Date(rangePrev);const cur=new Date(sortedDates[i]);
+    const diffDays=(cur-prev)/(1000*60*60*24);
+    if(diffDays<=1){rangePrev=sortedDates[i]}
+    else{ranges.push([rangeStart,rangePrev]);rangeStart=sortedDates[i];rangePrev=sortedDates[i]}
+  }
+  ranges.push([rangeStart,rangePrev]);
+
+  const fmtICS=d=>d.replace(/-/g,'');
+  const nextDay=d=>{const nd=new Date(d);nd.setDate(nd.getDate()+1);return nd.getFullYear()+String(nd.getMonth()+1).padStart(2,'0')+String(nd.getDate()).padStart(2,'0')};
+  const uid=()=>Math.random().toString(36).substring(2)+Date.now().toString(36);
+  const now=new Date();const stamp=now.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
+
+  let events='';
+  for(const[start,end] of ranges){
+    const startFmt=fmtICS(start);
+    const endFmt=nextDay(end);
+    const startLabel=new Date(start).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const endLabel=new Date(end).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const summary=start===end?'OOO - '+name:'OOO - '+name+' ('+startLabel+' - '+endLabel+')';
+    events+='BEGIN:VEVENT\r\nUID:'+uid()+'@cxleave\r\nDTSTAMP:'+stamp+'\r\nDTSTART;VALUE=DATE:'+startFmt+'\r\nDTEND;VALUE=DATE:'+endFmt+'\r\nSUMMARY:'+summary+'\r\nDESCRIPTION:Out of Office - '+name+'\r\nSTATUS:CONFIRMED\r\nTRANSP:OPAQUE\r\nX-MICROSOFT-CDO-BUSYSTATUS:OOF\r\nEND:VEVENT\r\n';
+  }
+  return'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//CX Leave Tracker//EN\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\n'+events+'END:VCALENDAR';
+}
+
+function downloadICS(name,dates){
+  const ics=generateICS(name,dates);
+  const blob=new Blob([ics],{type:'text/calendar;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='OOO_'+name.replace(/\s+/g,'_')+'.ics';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function getAutoReplyText(name,dates){
+  const sorted=[...dates].sort();
+  const lastDate=sorted[sorted.length-1];
+  const returnDate=new Date(lastDate);returnDate.setDate(returnDate.getDate()+1);
+  const returnStr=returnDate.toLocaleDateString('en-US',{day:'numeric',month:'long',year:'numeric'});
+  const isMultiple=sorted.length>1;
+  const firstDate=new Date(sorted[0]);
+  const firstStr=firstDate.toLocaleDateString('en-US',{day:'numeric',month:'long'});
+  const lastStr=new Date(lastDate).toLocaleDateString('en-US',{day:'numeric',month:'long'});
+  const dateRange=isMultiple?firstStr+' to '+lastStr:firstStr;
+  return`Hello,
+
+Thank you for your email. I am out of office ${isMultiple?'from '+dateRange:'today'} and will be back on ${returnStr}.
+
+I have limited access to my mail and will respond to your email as soon as possible upon my return.
+
+Thank you for your understanding.
+
+Best regards,
+${name}`;
+}
+
+// ─── OOO ACTIONS MODAL ───
+function OooActionsModal({name,dates,onClose}){
+  const[copied,setCopied]=useState(false);
+  const[icsDownloaded,setIcsDownloaded]=useState(false);
+  const autoReply=getAutoReplyText(name,dates);
+  const sorted=[...dates].sort();
+  const lastDate=sorted[sorted.length-1];
+  const returnDate=new Date(lastDate);returnDate.setDate(returnDate.getDate()+1);
+  const returnStr=returnDate.toLocaleDateString('en-US',{day:'numeric',month:'long',year:'numeric'});
+
+  const handleCopy=async()=>{
+    try{await navigator.clipboard.writeText(autoReply);setCopied(true);setTimeout(()=>setCopied(false),2500)}
+    catch{/* fallback */const ta=document.createElement('textarea');ta.value=autoReply;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);setCopied(true);setTimeout(()=>setCopied(false),2500)}
+  };
+  const handleICS=()=>{downloadICS(name,dates);setIcsDownloaded(true)};
+  const outlookAutoReplyURL='https://outlook.office.com/mail/options/mail/automaticReplies';
+
+  const stepStyle={display:'flex',gap:12,padding:14,background:'var(--surface2)',borderRadius:10,border:'1px solid var(--border)',marginBottom:10};
+  const numStyle={width:28,height:28,borderRadius:'50%',background:'var(--accent)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,flexShrink:0};
+  const sLbl={fontSize:13,fontWeight:600,marginBottom:4};
+  const sDesc={fontSize:12,color:'var(--text2)',lineHeight:1.5};
+
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:560}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+      <h3 style={{fontSize:17,fontWeight:600}}>Set Up Out of Office</h3>
+      <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
+    </div>
+    <p style={{fontSize:12.5,color:'var(--text2)',marginBottom:16}}>Leave saved for <strong>{name}</strong> ({sorted.length} day{sorted.length>1?'s':''}). Complete these steps to set up your OOO:</p>
+
+    {/* Step 1: Download ICS */}
+    <div style={stepStyle}>
+      <div style={numStyle}>1</div>
+      <div style={{flex:1}}>
+        <div style={sLbl}>Add OOO to Calendar</div>
+        <div style={sDesc}>Download a calendar file and double-click it to add an OOO block to Outlook. This marks you as "Out of Office" for {sorted.length>1?fmtDate(sorted[0])+' – '+fmtDate(sorted[sorted.length-1]):fmtDate(sorted[0])}.</div>
+        <button className={'btn btn-sm '+(icsDownloaded?'btn-secondary':'btn-primary')} onClick={handleICS} style={{marginTop:8}}>
+          {icsDownloaded?'\u2713 Downloaded — open the .ics file':'Download .ics Calendar File'}
+        </button>
+      </div>
+    </div>
+
+    {/* Step 2: Open Outlook Auto-Reply Settings */}
+    <div style={stepStyle}>
+      <div style={numStyle}>2</div>
+      <div style={{flex:1}}>
+        <div style={sLbl}>Turn On Automatic Replies</div>
+        <div style={sDesc}>Open Outlook's automatic replies settings page. Toggle "Automatic replies" to <strong>On</strong>, set the date range, and paste the message from Step 3.</div>
+        <a href={outlookAutoReplyURL} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary" style={{marginTop:8,textDecoration:'none'}}>
+          Open Outlook Auto-Reply Settings \u2197
+        </a>
+      </div>
+    </div>
+
+    {/* Step 3: Copy Auto-Reply Message */}
+    <div style={stepStyle}>
+      <div style={numStyle}>3</div>
+      <div style={{flex:1}}>
+        <div style={sLbl}>Copy Auto-Reply Message</div>
+        <div style={sDesc}>Copy this message and paste it into the Outlook auto-reply body:</div>
+        <div style={{marginTop:8,background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:8,padding:12,fontSize:12.5,lineHeight:1.6,whiteSpace:'pre-wrap',color:'var(--text)',fontFamily:"'DM Sans',sans-serif",maxHeight:180,overflowY:'auto'}}>
+          <div style={{fontWeight:600,marginBottom:4,fontSize:11,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.5px'}}>Subject: OOO</div>
+          {autoReply}
+        </div>
+        <button className={'btn btn-sm '+(copied?'btn-secondary':'btn-primary')} onClick={handleCopy} style={{marginTop:8}}>
+          {copied?'\u2713 Copied to clipboard!':'Copy Message'}
+        </button>
+      </div>
+    </div>
+
+    <div style={{display:'flex',justifyContent:'flex-end',marginTop:6}}>
+      <button className="btn btn-secondary" onClick={onClose}>Done</button>
     </div>
   </div></div>);
 }
