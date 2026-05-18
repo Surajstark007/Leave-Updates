@@ -284,17 +284,22 @@ function App(){
   };
 
   const clearFilters=()=>{setView('upcoming');setTypeFilter('All');setSearch('');setSelectedUsers([])};
-  const handleDeleteMember=async(idx)=>{
-    if(!confirm('Remove this member?'))return;
+  // ─── DELETE CONFIRMATION ───
+  const[showDeleteConfirm,setShowDeleteConfirm]=useState(null);
+  const handleDeleteMember=idx=>{setShowDeleteConfirm(idx)};
+  const confirmDelete=async()=>{
+    const idx=showDeleteConfirm;
     const member=data[idx];
     setData(d=>d.filter((_,i)=>i!==idx));
-    try{await softDeleteLeave(member.name);toast('Removed & saved','success')}
+    setShowDeleteConfirm(null);
+    try{await softDeleteLeave(member.name);toast(member.name+' removed & saved','success')}
     catch{toast('Removed locally (save failed)','error')}
   };
   const handleSaveLeave=async(entry)=>{
     const savedDates=entry.dates.filter(isFuture).sort();
-    if(editingIdx!==null){
-      setData(d=>d.map((m,i)=>i===editingIdx?{...m,...entry,dates:savedDates}:m));
+    const wasEditing=editingIdx!==null;
+    if(wasEditing){
+      setData(d=>d.map((m,i)=>i===editingIdx?{...m,name:entry.name,type:entry.type,dates:savedDates,backup:entry.backup}:m));
       setEditingIdx(null);
       try{await upsertLeave({...entry,dates:savedDates},user?.email||'');toast('Updated & saved','success')}
       catch{toast('Updated locally (save failed)','error')}
@@ -309,8 +314,11 @@ function App(){
       catch{toast('Added locally (save failed)','error')}
     }
     setShowAddLeave(false);
-    // Show OOO actions modal
-    if(savedDates.length>0){setOooData({name:entry.name,dates:savedDates});setShowOoo(true)}
+    // Always show OOO actions modal after saving if there are dates
+    if(savedDates.length>0){
+      // Use setTimeout to ensure AddLeave modal is fully closed before opening OOO modal
+      setTimeout(()=>{setOooData({name:entry.name,dates:savedDates});setShowOoo(true)},150);
+    }
   };
 
   // ─── OOO ACTIONS STATE ───
@@ -359,6 +367,23 @@ function App(){
     {showAddLeave&&<AddLeaveModal onClose={()=>{setShowAddLeave(false);setEditingIdx(null)}} onSave={handleSaveLeave} existingNames={allNames} editData={editingIdx!==null?data[editingIdx]:null}/>}
     {showUserPicker&&<UserPickerModal names={allNames} selected={selectedUsers} onClose={()=>setShowUserPicker(false)} onApply={sel=>{setSelectedUsers(sel);setShowUserPicker(false)}}/>}
     {showOoo&&oooData&&<OooActionsModal name={oooData.name} dates={oooData.dates} onClose={()=>{setShowOoo(false);setOooData(null)}}/>}
+    {showDeleteConfirm!==null&&data[showDeleteConfirm]&&<div className="overlay" onClick={()=>setShowDeleteConfirm(null)}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:420}}>
+      <h3 style={{fontSize:17,fontWeight:600,marginBottom:12,color:'var(--red)'}}>Delete Leave Record</h3>
+      <p style={{fontSize:13.5,color:'var(--text)',marginBottom:8}}>Are you sure you want to remove <strong>{data[showDeleteConfirm].name}</strong>?</p>
+      {data[showDeleteConfirm].dates.length>0&&<div style={{marginBottom:12}}>
+        <div style={{fontSize:12,color:'var(--text2)',marginBottom:6}}>This will remove {data[showDeleteConfirm].dates.length} leave date{data[showDeleteConfirm].dates.length>1?'s':''}:</div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:4}}>{data[showDeleteConfirm].dates.slice(0,8).map(d=>(<span key={d} className="chip chip-future" style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)}</span>))}{data[showDeleteConfirm].dates.length>8&&<span className="chip chip-gray" style={{fontSize:10}}>+{data[showDeleteConfirm].dates.length-8} more</span>}</div>
+      </div>}
+      {data[showDeleteConfirm].backup&&<div style={{marginBottom:12}}>
+        <div style={{fontSize:12,color:'var(--text2)',marginBottom:4}}>Backup info will also be removed:</div>
+        <div style={{fontSize:12,color:'var(--text3)',background:'var(--surface2)',padding:8,borderRadius:6,whiteSpace:'pre-wrap',maxHeight:80,overflowY:'auto'}}>{data[showDeleteConfirm].backup}</div>
+      </div>}
+      <p style={{fontSize:12,color:'var(--text3)',marginBottom:14}}>This action is saved to the database and visible to all users.</p>
+      <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+        <button className="btn btn-secondary" onClick={()=>setShowDeleteConfirm(null)}>Cancel</button>
+        <button className="btn btn-danger" onClick={confirmDelete} style={{background:'var(--red)',color:'#fff',border:'none'}}>Delete</button>
+      </div>
+    </div></div>}
   </div>);
 }
 
@@ -459,10 +484,11 @@ function AddLeaveModal({onClose,onSave,existingNames,editData}){
   const subLbl={fontSize:11,color:'var(--text3)',marginBottom:3,display:'block'};
 
   return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:580}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
       <h3 style={{fontSize:17,fontWeight:600}}>{editData?'Edit Leave':'Add Leave'}</h3>
       <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
     </div>
+    {editData&&<div style={{fontSize:12,color:'var(--text2)',marginBottom:14,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)'}}>Editing leave for <strong>{editData.name}</strong> — modify dates, backup, or agenda below. Remove individual dates by clicking the <strong>×</strong> on each chip.</div>}
 
     <label style={lbl}>Team Member</label>
     {isNew?<div style={{display:'flex',gap:8,marginBottom:14}}><input className="input" placeholder="Full name" value={name} onChange={e=>setName(e.target.value)} autoFocus/><button className="btn btn-sm btn-secondary" onClick={()=>setIsNew(false)}>Cancel</button></div>:
@@ -471,9 +497,9 @@ function AddLeaveModal({onClose,onSave,existingNames,editData}){
     <label style={lbl}>Leave Type</label>
     <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>{['PTO','Sick','Business Travel','Mixed','Other'].map(t=>(<button key={t} onClick={()=>setType(t)} style={{padding:'5px 14px',borderRadius:999,fontSize:12,fontWeight:500,border:'1px solid',borderColor:type===t?'var(--accent)':'var(--border)',background:type===t?'var(--accent-light)':'transparent',color:type===t?'var(--accent)':'var(--text2)',cursor:'pointer',transition:'all .15s'}}>{t}</button>))}</div>
 
-    <label style={lbl}>Leave Dates</label>
-    <div style={{display:'flex',gap:8,marginBottom:8}}><input type="date" className="input" value={dateInput} onChange={e=>setDateInput(e.target.value)} style={{flex:1}}/><button className="btn btn-sm btn-primary" onClick={()=>{if(dateInput&&!dates.includes(dateInput)){setDates(d=>[...d,dateInput].sort());setDateInput('')}}}>Add</button></div>
-    <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:14,minHeight:24}}>{dates.map(d=>(<span key={d} className="chip chip-future" style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)} <span style={{cursor:'pointer',marginLeft:2,opacity:.6}} onClick={()=>setDates(ds=>ds.filter(x=>x!==d))}>{'\u00d7'}</span></span>))}</div>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><label style={lbl}>Leave Dates</label>{dates.length>0&&<button className="btn btn-sm btn-danger" onClick={()=>setDates([])} style={{fontSize:10,padding:'2px 8px'}}>Clear all ({dates.length})</button>}</div>
+    <div style={{display:'flex',gap:8,marginBottom:8}}><input type="date" className="input" value={dateInput} onChange={e=>setDateInput(e.target.value)} style={{flex:1}} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();if(dateInput&&!dates.includes(dateInput)){setDates(d=>[...d,dateInput].sort());setDateInput('')}}}} /><button className="btn btn-sm btn-primary" onClick={()=>{if(dateInput&&!dates.includes(dateInput)){setDates(d=>[...d,dateInput].sort());setDateInput('')}}}>Add</button></div>
+    <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:14,minHeight:24}}>{dates.length===0?<span style={{fontSize:12,color:'var(--text3)',fontStyle:'italic'}}>No dates added yet</span>:dates.map(d=>(<span key={d} className="chip chip-future" style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)} <span style={{cursor:'pointer',marginLeft:2,opacity:.6}} onClick={()=>setDates(ds=>ds.filter(x=>x!==d))} title="Remove this date">{'\u00d7'}</span></span>))}</div>
 
     <div style={{borderTop:'1px solid var(--border)',paddingTop:14}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
@@ -487,7 +513,7 @@ function AddLeaveModal({onClose,onSave,existingNames,editData}){
             <label style={subLbl}>Project Name</label>
             <input className="input" placeholder="e.g. Shield Roofing" value={entry.project} onChange={e=>updateEntry(idx,'project',e.target.value)} style={{fontSize:13}}/>
           </div>
-          {entries.length>1&&<button className="btn-icon" onClick={()=>removeEntry(idx)} title="Remove" style={{width:28,height:28,color:'var(--red)',marginTop:18,flexShrink:0}}><Icon name="trash" size={13}/></button>}
+          <button className="btn-icon" onClick={()=>removeEntry(idx)} title="Remove this project" style={{width:28,height:28,color:'var(--red)',marginTop:18,flexShrink:0}}><Icon name="trash" size={13}/></button>
         </div>
 
         <label style={subLbl}>Backup Person(s)</label>
