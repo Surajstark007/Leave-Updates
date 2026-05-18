@@ -339,7 +339,7 @@ function App(){
           </div>
           {syncStatus&&<div className="sync-progress">{syncStatus}</div>}
         </div>
-        <button className="btn btn-primary btn-sm" onClick={()=>{setEditingIdx(null);setShowAddLeave(true)}}><Icon name="plus" size={14}/> Add</button>
+        <button className="btn btn-primary btn-sm" onClick={()=>{setEditingIdx(null);setShowAddLeave(true)}}><Icon name="plus" size={14}/> Add My Leave</button>
         <button className="theme-toggle" onClick={()=>setTheme(t=>t==='light'?'dark':'light')}/>
         <div style={{display:'flex',alignItems:'center',gap:6,marginLeft:4,paddingLeft:8,borderLeft:'1px solid var(--border)'}}><span style={{fontSize:12,color:'var(--text2)',maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name}</span><button className="btn-icon" title="Logout" onClick={()=>{localStorage.removeItem('cx_lt_session');setUser(null)}} style={{width:28,height:28}}><Icon name="logout" size={14}/></button></div>
       </div>
@@ -360,11 +360,58 @@ function App(){
           <button className="btn btn-sm btn-danger" onClick={clearFilters} style={{fontSize:11}}>Clear</button>
         </div>
       </div>
-      <div className="card responsive-table" style={{overflow:'hidden'}}><div style={{overflowX:'auto'}}><table><thead><tr><th>Name</th><th>Type</th><th>Leave Dates</th><th className="desktop-only">Named Backup</th><th>Days</th><th style={{width:72}}>Actions</th></tr></thead><tbody>
-        {filtered.length===0?<tr><td colSpan={6} style={{textAlign:'center',padding:40,color:'var(--text3)'}}>No matching records</td></tr>:filtered.map((m,i)=>{const oi=data.indexOf(m);const dc=m.dates.length;return(<tr key={m.name+i} className="fade-in"><td style={{fontWeight:600,whiteSpace:'nowrap',fontSize:13.5}}>{m.name}</td><td><span className={'badge '+(tbc[m.type]||'badge-none')}>{m.type}</span></td><td style={{maxWidth:300}}><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{dc===0?<span style={{color:'var(--text3)',fontSize:12}}>No upcoming</span>:m.dates.slice(0,10).map(d=>(<span key={d} className={'chip '+(isToday(d)?'chip-today pulse':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)}</span>))}{dc>10&&<span className="chip chip-gray" style={{fontSize:10}}>+{dc-10}</span>}</div></td><td className="desktop-only" style={{maxWidth:260,whiteSpace:'pre-wrap',fontSize:12,color:'var(--text2)',lineHeight:1.55}}>{m.backup||<span style={{color:'var(--text3)'}}>{'\u2014'}</span>}</td><td style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,fontSize:14,textAlign:'center'}}><span style={dc>5?{color:'var(--amber)',background:'var(--amber-bg)',padding:'2px 8px',borderRadius:6}:{}}>{dc}</span></td><td><div style={{display:'flex',gap:4}}><button className="btn-icon" onClick={()=>{setEditingIdx(oi);setShowAddLeave(true)}} title="Edit" style={{width:28,height:28}}><Icon name="edit" size={13}/></button><button className="btn-icon" onClick={()=>handleDeleteMember(oi)} title="Delete" style={{width:28,height:28,color:'var(--red)'}}><Icon name="trash" size={13}/></button></div></td></tr>)})}
+      <div className="card responsive-table" style={{overflow:'hidden'}}><div style={{overflowX:'auto'}}><table><thead><tr>
+        <th>Name</th><th>Type</th><th>Leave Dates</th><th>Days</th>
+        <th className="desktop-only">Project</th><th className="desktop-only">Backup</th><th className="desktop-only">Agenda</th>
+        <th style={{width:60}}>Actions</th>
+      </tr></thead><tbody>
+        {filtered.length===0?<tr><td colSpan={8} style={{textAlign:'center',padding:40,color:'var(--text3)'}}>No matching records</td></tr>:filtered.map((m,i)=>{
+          const oi=data.indexOf(m);const dc=m.dates.length;
+          const isMe=user&&m.name.toLowerCase()===user.name.toLowerCase();
+          // Parse backup into project rows
+          const backupLines=(m.backup||'').split('\n').filter(l=>l.trim());
+          const projects=backupLines.map(line=>{
+            let project='',persons='',agenda='';
+            const pipeParts=line.split('|').map(s=>s.trim());
+            const mainPart=pipeParts[0]||'';
+            agenda=(pipeParts[1]||'').replace(/^Agenda:\s*/i,'');
+            const dashIdx=mainPart.indexOf(' - ');
+            if(dashIdx>-1){project=mainPart.substring(0,dashIdx).trim();persons=mainPart.substring(dashIdx+3).trim()}
+            else{const colonIdx=mainPart.indexOf(':');if(colonIdx>-1){project=mainPart.substring(0,colonIdx).trim();persons=mainPart.substring(colonIdx+1).trim()}else persons=mainPart}
+            return{project,persons,agenda};
+          }).filter(p=>p.project||p.persons);
+          const rowSpan=Math.max(projects.length,1);
+          return(<React.Fragment key={m.name+i}>
+            {/* First row with Name, Type, Dates, Days + first project */}
+            <tr className="fade-in">
+              <td rowSpan={rowSpan} style={{fontWeight:600,whiteSpace:'nowrap',fontSize:13.5,verticalAlign:'top'}}>{m.name}{isMe&&<span style={{fontSize:10,color:'var(--accent)',marginLeft:4}}>(you)</span>}</td>
+              <td rowSpan={rowSpan} style={{verticalAlign:'top'}}><span className={'badge '+(tbc[m.type]||'badge-none')}>{m.type}</span></td>
+              <td rowSpan={rowSpan} style={{maxWidth:280,verticalAlign:'top'}}><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{dc===0?<span style={{color:'var(--text3)',fontSize:12}}>No upcoming</span>:m.dates.slice(0,10).map(d=>(<span key={d} className={'chip '+(isToday(d)?'chip-today pulse':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)}</span>))}{dc>10&&<span className="chip chip-gray" style={{fontSize:10}}>+{dc-10}</span>}</div></td>
+              <td rowSpan={rowSpan} style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,fontSize:14,textAlign:'center',verticalAlign:'top'}}><span style={dc>5?{color:'var(--amber)',background:'var(--amber-bg)',padding:'2px 8px',borderRadius:6}:{}}>{dc}</span></td>
+              <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].project||'\u2014':'\u2014'}</td>
+              <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].persons||'\u2014':'\u2014'}</td>
+              <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',fontStyle:projects[0]&&projects[0].agenda?'normal':'italic'}}>{projects[0]&&projects[0].agenda?projects[0].agenda:'\u2014'}</td>
+              <td rowSpan={rowSpan} style={{verticalAlign:'top'}}>
+                {isMe?<div style={{display:'flex',gap:4}}>
+                  <button className="btn-icon" onClick={()=>{setEditingIdx(oi);setShowAddLeave(true)}} title="Edit" style={{width:28,height:28}}><Icon name="edit" size={13}/></button>
+                  <button className="btn-icon" onClick={()=>handleDeleteMember(oi)} title="Delete" style={{width:28,height:28,color:'var(--red)'}}><Icon name="trash" size={13}/></button>
+                </div>:<span style={{color:'var(--text3)',fontSize:11}}>\u2014</span>}
+              </td>
+            </tr>
+            {/* Additional rows for remaining projects */}
+            {projects.slice(1).map((p,pi)=>(
+              <tr key={m.name+'-proj-'+pi} className="fade-in">
+                <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.project||'\u2014'}</td>
+                <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.persons||'\u2014'}</td>
+                <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',fontStyle:p.agenda?'normal':'italic'}}>{p.agenda||'\u2014'}</td>
+              </tr>
+            ))}
+          </React.Fragment>);
+        })}
+      </tbody></table></div>
       </tbody></table></div><div style={{padding:'10px 14px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',fontSize:11.5,color:'var(--text3)'}}><span>Showing {filtered.length} of {data.length}</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>Last sync: {lastSync}</span></div></div>
     </main>
-    {showAddLeave&&<AddLeaveModal onClose={()=>{setShowAddLeave(false);setEditingIdx(null)}} onSave={handleSaveLeave} existingNames={allNames} editData={editingIdx!==null?data[editingIdx]:null}/>}
+    {showAddLeave&&<AddLeaveModal onClose={()=>{setShowAddLeave(false);setEditingIdx(null)}} onSave={handleSaveLeave} existingNames={allNames} editData={editingIdx!==null?data[editingIdx]:null} userName={user.name}/>}
     {showUserPicker&&<UserPickerModal names={allNames} selected={selectedUsers} onClose={()=>setShowUserPicker(false)} onApply={sel=>{setSelectedUsers(sel);setShowUserPicker(false)}}/>}
     {showOoo&&oooData&&<OooActionsModal name={oooData.name} dates={oooData.dates} onClose={()=>{setShowOoo(false);setOooData(null)}}/>}
     {showDeleteConfirm!==null&&data[showDeleteConfirm]&&<div className="overlay" onClick={()=>setShowDeleteConfirm(null)}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:420}}>
@@ -387,8 +434,8 @@ function App(){
   </div>);
 }
 
-function AddLeaveModal({onClose,onSave,existingNames,editData}){
-  const[name,setName]=useState(editData?editData.name:'');
+function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
+  const[name,setName]=useState(editData?editData.name:(userName||''));
   const[isNew,setIsNew]=useState(false);
   const[type,setType]=useState(editData?editData.type:'PTO');
   const[dates,setDates]=useState(editData?[...editData.dates]:[]);
@@ -491,8 +538,7 @@ function AddLeaveModal({onClose,onSave,existingNames,editData}){
     {editData&&<div style={{fontSize:12,color:'var(--text2)',marginBottom:14,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)'}}>Editing leave for <strong>{editData.name}</strong> — modify dates, backup, or agenda below. Remove individual dates by clicking the <strong>×</strong> on each chip.</div>}
 
     <label style={lbl}>Team Member</label>
-    {isNew?<div style={{display:'flex',gap:8,marginBottom:14}}><input className="input" placeholder="Full name" value={name} onChange={e=>setName(e.target.value)} autoFocus/><button className="btn btn-sm btn-secondary" onClick={()=>setIsNew(false)}>Cancel</button></div>:
-    <div style={{display:'flex',gap:8,marginBottom:14}}><select className="input" value={name} onChange={e=>setName(e.target.value)} disabled={!!editData}><option value="">Select member...</option>{existingNames.map(n=><option key={n}>{n}</option>)}</select>{!editData&&<button className="btn btn-sm btn-secondary" onClick={()=>{setIsNew(true);setName('')}}><Icon name="plus" size={14}/> New</button>}</div>}
+    <div style={{marginBottom:14,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)',fontSize:14,fontWeight:600,color:'var(--text)'}}>{name||userName||'You'}</div>
 
     <label style={lbl}>Leave Type</label>
     <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>{['PTO','Sick','Business Travel','Mixed','Other'].map(t=>(<button key={t} onClick={()=>setType(t)} style={{padding:'5px 14px',borderRadius:999,fontSize:12,fontWeight:500,border:'1px solid',borderColor:type===t?'var(--accent)':'var(--border)',background:type===t?'var(--accent-light)':'transparent',color:type===t?'var(--accent)':'var(--text2)',cursor:'pointer',transition:'all .15s'}}>{t}</button>))}</div>
