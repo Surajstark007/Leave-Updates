@@ -408,7 +408,6 @@ function App(){
             ))}
           </React.Fragment>);
         })}
-      </tbody></table></div>
       </tbody></table></div><div style={{padding:'10px 14px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',fontSize:11.5,color:'var(--text3)'}}><span>Showing {filtered.length} of {data.length}</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>Last sync: {lastSync}</span></div></div>
     </main>
     {showAddLeave&&<AddLeaveModal onClose={()=>{setShowAddLeave(false);setEditingIdx(null)}} onSave={handleSaveLeave} existingNames={allNames} editData={editingIdx!==null?data[editingIdx]:null} userName={user.name}/>}
