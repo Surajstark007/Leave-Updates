@@ -550,45 +550,25 @@ function AddLeaveModal({onClose,onSave,existingNames,editData}){
 }
 
 // ─── ICS FILE GENERATION ───
-function generateICS(name,dates){
-  const sortedDates=[...dates].sort();
-  const fmtICS=d=>d.replace(/-/g,'');
-  const nextDay=ds=>{const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+1);return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')};
-  const now=new Date();const stamp=now.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
-  // Create one event per date for easy deletion later
-  let events='';
-  for(const dt of sortedDates){
-    const startFmt=fmtICS(dt);
-    const endFmt=nextDay(dt);
-    const label=new Date(dt+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-    const uid='ooo-'+name.replace(/\s+/g,'-').toLowerCase()+'-'+dt+'@cxleave';
-    events+='BEGIN:VEVENT\r\n';
-    events+='UID:'+uid+'\r\n';
-    events+='DTSTAMP:'+stamp+'\r\n';
-    events+='DTSTART;VALUE=DATE:'+startFmt+'\r\n';
-    events+='DTEND;VALUE=DATE:'+endFmt+'\r\n';
-    events+='SUMMARY:OOO - '+name+'\r\n';
-    events+='DESCRIPTION:Out of Office - '+name+' ('+label+')\r\n';
-    events+='STATUS:CONFIRMED\r\n';
-    events+='TRANSP:OPAQUE\r\n';
-    events+='X-MICROSOFT-CDO-BUSYSTATUS:OOF\r\n';
-    events+='X-MICROSOFT-CDO-ALLDAYEVENT:TRUE\r\n';
-    events+='END:VEVENT\r\n';
-  }
-  return'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//CX Leave Tracker//EN\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\nX-WR-CALNAME:OOO - '+name+'\r\n'+events+'END:VCALENDAR';
-}
-
-function downloadICS(name,dates){
-  const ics=generateICS(name,dates);
-  // Use data URI approach which works more reliably across browsers
-  const dataUri='data:text/calendar;charset=utf-8,'+encodeURIComponent(ics);
-  const a=document.createElement('a');
-  a.href=dataUri;
-  a.download='OOO_'+name.replace(/\s+/g,'_')+'.ics';
-  a.style.display='none';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(()=>document.body.removeChild(a),500);
+// ─── OUTLOOK CALENDAR DEEPLINKS ───
+function buildOutlookEventLinks(name,dates){
+  const sorted=[...dates].sort();
+  return sorted.map(dt=>{
+    const d=new Date(dt+'T00:00:00');
+    const nextD=new Date(d);nextD.setDate(nextD.getDate()+1);
+    const fmt=dd=>dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')+'-'+String(dd.getDate()).padStart(2,'0');
+    const label=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+    const params=new URLSearchParams({
+      allday:'true',
+      startdt:fmt(d)+'T00:00:00',
+      enddt:fmt(nextD)+'T00:00:00',
+      subject:'OOO - '+name,
+      body:'Out of Office - '+name,
+      path:'/calendar/action/compose',
+      rru:'addevent'
+    });
+    return{date:dt,label:label,url:'https://outlook.office.com/calendar/0/deeplink/compose?'+params.toString()};
+  });
 }
 
 // Calculate the next working day (skip weekends)
@@ -662,49 +642,49 @@ ${name}`;
 // ─── OOO ACTIONS MODAL ───
 function OooActionsModal({name,dates,onClose}){
   const[copied,setCopied]=useState(false);
-  const[icsDownloaded,setIcsDownloaded]=useState(false);
+  const[addedDates,setAddedDates]=useState(new Set());
   const sorted=[...dates].sort();
   const ranges=groupConsecutiveDates(sorted);
   const returnDay=getNextWorkingDay(ranges[ranges.length-1].end);
   const returnStr=returnDay.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const autoReply=getAutoReplyText(name,dates);
+  const eventLinks=buildOutlookEventLinks(name,dates);
 
   const handleCopy=async()=>{
     try{await navigator.clipboard.writeText(autoReply);setCopied(true);setTimeout(()=>setCopied(false),2500)}
     catch{const ta=document.createElement('textarea');ta.value=autoReply;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);setCopied(true);setTimeout(()=>setCopied(false),2500)}
   };
-  const handleICS=()=>{downloadICS(name,dates);setIcsDownloaded(true)};
+  const handleAddAll=()=>{eventLinks.forEach((el,i)=>{setTimeout(()=>{window.open(el.url,'_blank');setAddedDates(s=>{const ns=new Set(s);ns.add(el.date);return ns})},i*800)})};
 
   const stepStyle={display:'flex',gap:12,padding:14,background:'var(--surface2)',borderRadius:10,border:'1px solid var(--border)',marginBottom:10};
   const numStyle={width:28,height:28,borderRadius:'50%',background:'var(--accent)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,flexShrink:0};
   const sLbl={fontSize:13,fontWeight:600,marginBottom:4};
   const sDesc={fontSize:12,color:'var(--text2)',lineHeight:1.5};
+  const startDateStr=new Date(sorted[0]+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  const endDateStr=new Date(sorted[sorted.length-1]+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 
   return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:580}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
       <h3 style={{fontSize:17,fontWeight:600}}>Set Up Out of Office</h3>
       <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
     </div>
-    <p style={{fontSize:12.5,color:'var(--text2)',marginBottom:10}}>Leave saved for <strong>{name}</strong> — {sorted.length} day{sorted.length>1?'s':''}, returning <strong>{returnStr}</strong>.</p>
+    <p style={{fontSize:12.5,color:'var(--text2)',marginBottom:14}}>Leave saved for <strong>{name}</strong> \u2014 {sorted.length} day{sorted.length>1?'s':''}, returning <strong>{returnStr}</strong>.</p>
 
-    {/* Show dates summary */}
-    <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:14}}>
-      {sorted.map(d=>(<span key={d} className="chip chip-future" style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5}}>{new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</span>))}
-    </div>
-
-    {/* Step 1: Download ICS */}
+    {/* Step 1: Add OOO events via Outlook deeplinks */}
     <div style={stepStyle}>
       <div style={numStyle}>1</div>
       <div style={{flex:1}}>
-        <div style={sLbl}>Add OOO to Outlook Calendar</div>
-        <div style={sDesc}>Downloads {sorted.length} calendar event{sorted.length>1?'s':''} (one per day). Open the downloaded <strong>.ics</strong> file — Outlook will prompt you to add the events. Each event marks you as "Out of Office" for the full day.</div>
-        <div style={{display:'flex',gap:8,marginTop:8,flexWrap:'wrap'}}>
-          <button className={'btn btn-sm '+(icsDownloaded?'btn-secondary':'btn-primary')} onClick={handleICS}>
-            {icsDownloaded?'\u2713 Downloaded — open the .ics file':'Download .ics Calendar File'}
-          </button>
+        <div style={sLbl}>Add OOO Events to Outlook Calendar</div>
+        <div style={sDesc}>Click each date below to open Outlook and create an all-day OOO event. Click "Save" in Outlook after each one.</div>
+        <div style={{marginTop:8,display:'flex',flexWrap:'wrap',gap:6}}>
+          {eventLinks.map(el=>(<a key={el.date} href={el.url} target="_blank" rel="noopener noreferrer" onClick={()=>setAddedDates(s=>{const ns=new Set(s);ns.add(el.date);return ns})} className={'btn btn-sm '+(addedDates.has(el.date)?'btn-secondary':'btn-primary')} style={{textDecoration:'none',fontSize:11.5,padding:'4px 10px'}}>
+            {addedDates.has(el.date)?'\u2713 ':''}{el.label}
+          </a>))}
         </div>
-        {icsDownloaded&&<div style={{fontSize:11,color:'var(--accent)',marginTop:6}}>Check your downloads folder for <strong>OOO_{name.replace(/\s+/g,'_')}.ics</strong> and open it. Outlook will ask to import the events.</div>}
-        <div style={{fontSize:11,color:'var(--text3)',marginTop:4}}>If you later edit dates, re-download the file — Outlook will update events with matching IDs.</div>
+        {sorted.length>1&&<button className="btn btn-sm btn-primary" onClick={handleAddAll} style={{marginTop:8,fontSize:11.5}}>
+          Open all {sorted.length} events in Outlook
+        </button>}
+        <div style={{fontSize:11,color:'var(--text3)',marginTop:6}}>Each link opens Outlook with a pre-filled "OOO" event. Click Save in each tab.</div>
       </div>
     </div>
 
@@ -713,7 +693,7 @@ function OooActionsModal({name,dates,onClose}){
       <div style={numStyle}>2</div>
       <div style={{flex:1}}>
         <div style={sLbl}>Turn On Automatic Replies in Outlook</div>
-        <div style={sDesc}>Open your Outlook settings, go to <strong>Accounts → Automatic replies</strong>, toggle it <strong>On</strong>, check "Send replies only during a time period", set start to <strong>{new Date(sorted[0]+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</strong> and end to <strong>{new Date(sorted[sorted.length-1]+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</strong>, then paste the message from Step 3.</div>
+        <div style={sDesc}>Open Outlook Settings \u2192 <strong>Accounts \u2192 Automatic replies</strong>. Toggle <strong>On</strong>, check "Send replies only during a time period", set start: <strong>{startDateStr}</strong>, end: <strong>{endDateStr}</strong>. Paste the message from Step 3.</div>
         <div style={{display:'flex',gap:6,marginTop:8,flexWrap:'wrap'}}>
           <a href="https://outlook.office.com/mail/options/accounts/automaticReplies" target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary" style={{textDecoration:'none'}}>
             Open Automatic Replies \u2197
@@ -722,7 +702,7 @@ function OooActionsModal({name,dates,onClose}){
             Alternative link \u2197
           </a>
         </div>
-        <div style={{fontSize:11,color:'var(--text3)',marginTop:6}}>If the link doesn't open the right page, go to Outlook → Settings (gear icon) → Accounts → Automatic replies.</div>
+        <div style={{fontSize:11,color:'var(--text3)',marginTop:6}}>If links don\u2019t work: Outlook \u2192 Settings (gear) \u2192 Accounts \u2192 Automatic replies.</div>
       </div>
     </div>
 
