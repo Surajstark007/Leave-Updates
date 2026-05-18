@@ -580,15 +580,15 @@ function generateICS(name,dates){
 
 function downloadICS(name,dates){
   const ics=generateICS(name,dates);
-  const blob=new Blob([ics],{type:'text/calendar'});
-  const url=URL.createObjectURL(blob);
+  // Use data URI approach which works more reliably across browsers
+  const dataUri='data:text/calendar;charset=utf-8,'+encodeURIComponent(ics);
   const a=document.createElement('a');
-  a.href=url;
+  a.href=dataUri;
   a.download='OOO_'+name.replace(/\s+/g,'_')+'.ics';
   a.style.display='none';
   document.body.appendChild(a);
   a.click();
-  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url)},1000);
+  setTimeout(()=>document.body.removeChild(a),500);
 }
 
 // Calculate the next working day (skip weekends)
@@ -674,7 +674,6 @@ function OooActionsModal({name,dates,onClose}){
     catch{const ta=document.createElement('textarea');ta.value=autoReply;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);setCopied(true);setTimeout(()=>setCopied(false),2500)}
   };
   const handleICS=()=>{downloadICS(name,dates);setIcsDownloaded(true)};
-  const outlookAutoReplyURL='https://outlook.office.com/mail/options/mail/automaticReplies';
 
   const stepStyle={display:'flex',gap:12,padding:14,background:'var(--surface2)',borderRadius:10,border:'1px solid var(--border)',marginBottom:10};
   const numStyle={width:28,height:28,borderRadius:'50%',background:'var(--accent)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,flexShrink:0};
@@ -698,14 +697,14 @@ function OooActionsModal({name,dates,onClose}){
       <div style={numStyle}>1</div>
       <div style={{flex:1}}>
         <div style={sLbl}>Add OOO to Outlook Calendar</div>
-        <div style={sDesc}>Downloads {sorted.length} calendar event{sorted.length>1?'s':''} (one per day). Double-click the downloaded file to import into Outlook. Each event marks you as "Out of Office" for the full day.</div>
+        <div style={sDesc}>Downloads {sorted.length} calendar event{sorted.length>1?'s':''} (one per day). Open the downloaded <strong>.ics</strong> file — Outlook will prompt you to add the events. Each event marks you as "Out of Office" for the full day.</div>
         <div style={{display:'flex',gap:8,marginTop:8,flexWrap:'wrap'}}>
           <button className={'btn btn-sm '+(icsDownloaded?'btn-secondary':'btn-primary')} onClick={handleICS}>
             {icsDownloaded?'\u2713 Downloaded — open the .ics file':'Download .ics Calendar File'}
           </button>
         </div>
-        {icsDownloaded&&<div style={{fontSize:11,color:'var(--accent)',marginTop:6}}>Check your downloads folder and double-click the .ics file to add events to Outlook.</div>}
-        <div style={{fontSize:11,color:'var(--text3)',marginTop:4}}>If you later remove dates, download a new .ics — Outlook will update the events automatically (same UIDs).</div>
+        {icsDownloaded&&<div style={{fontSize:11,color:'var(--accent)',marginTop:6}}>Check your downloads folder for <strong>OOO_{name.replace(/\s+/g,'_')}.ics</strong> and open it. Outlook will ask to import the events.</div>}
+        <div style={{fontSize:11,color:'var(--text3)',marginTop:4}}>If you later edit dates, re-download the file — Outlook will update events with matching IDs.</div>
       </div>
     </div>
 
@@ -714,10 +713,16 @@ function OooActionsModal({name,dates,onClose}){
       <div style={numStyle}>2</div>
       <div style={{flex:1}}>
         <div style={sLbl}>Turn On Automatic Replies in Outlook</div>
-        <div style={sDesc}>Opens your Outlook Automatic Replies settings. Toggle it <strong>On</strong>, check "Send replies only during a time period", set start to <strong>{new Date(sorted[0]+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</strong> and end to <strong>{new Date(sorted[sorted.length-1]+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</strong>, then paste the message from Step 3.</div>
-        <a href={outlookAutoReplyURL} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary" style={{marginTop:8,textDecoration:'none'}}>
-          Open Outlook Automatic Replies \u2197
-        </a>
+        <div style={sDesc}>Open your Outlook settings, go to <strong>Accounts → Automatic replies</strong>, toggle it <strong>On</strong>, check "Send replies only during a time period", set start to <strong>{new Date(sorted[0]+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</strong> and end to <strong>{new Date(sorted[sorted.length-1]+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</strong>, then paste the message from Step 3.</div>
+        <div style={{display:'flex',gap:6,marginTop:8,flexWrap:'wrap'}}>
+          <a href="https://outlook.office.com/mail/options/accounts/automaticReplies" target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary" style={{textDecoration:'none'}}>
+            Open Automatic Replies \u2197
+          </a>
+          <a href="https://outlook.office365.com/mail/options/mail/automaticReplies" target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-secondary" style={{textDecoration:'none',fontSize:11}}>
+            Alternative link \u2197
+          </a>
+        </div>
+        <div style={{fontSize:11,color:'var(--text3)',marginTop:6}}>If the link doesn't open the right page, go to Outlook → Settings (gear icon) → Accounts → Automatic replies.</div>
       </div>
     </div>
 
@@ -726,7 +731,7 @@ function OooActionsModal({name,dates,onClose}){
       <div style={numStyle}>3</div>
       <div style={{flex:1}}>
         <div style={sLbl}>Copy Auto-Reply Message</div>
-        <div style={sDesc}>Paste this into the message box in Outlook auto-reply settings:</div>
+        <div style={sDesc}>Paste this into the auto-reply message box in Outlook:</div>
         <div style={{marginTop:8,background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:8,padding:12,fontSize:12.5,lineHeight:1.65,whiteSpace:'pre-wrap',color:'var(--text)',maxHeight:200,overflowY:'auto'}}>
           {autoReply}
         </div>
