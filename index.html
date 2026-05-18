@@ -552,56 +552,104 @@ function AddLeaveModal({onClose,onSave,existingNames,editData}){
 // ─── ICS FILE GENERATION ───
 function generateICS(name,dates){
   const sortedDates=[...dates].sort();
-  // Group consecutive dates into ranges
-  const ranges=[];let rangeStart=sortedDates[0];let rangePrev=sortedDates[0];
-  for(let i=1;i<sortedDates.length;i++){
-    const prev=new Date(rangePrev);const cur=new Date(sortedDates[i]);
-    const diffDays=(cur-prev)/(1000*60*60*24);
-    if(diffDays<=1){rangePrev=sortedDates[i]}
-    else{ranges.push([rangeStart,rangePrev]);rangeStart=sortedDates[i];rangePrev=sortedDates[i]}
-  }
-  ranges.push([rangeStart,rangePrev]);
-
   const fmtICS=d=>d.replace(/-/g,'');
-  const nextDay=d=>{const nd=new Date(d);nd.setDate(nd.getDate()+1);return nd.getFullYear()+String(nd.getMonth()+1).padStart(2,'0')+String(nd.getDate()).padStart(2,'0')};
-  const uid=()=>Math.random().toString(36).substring(2)+Date.now().toString(36);
+  const nextDay=ds=>{const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+1);return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')};
   const now=new Date();const stamp=now.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
-
+  // Create one event per date for easy deletion later
   let events='';
-  for(const[start,end] of ranges){
-    const startFmt=fmtICS(start);
-    const endFmt=nextDay(end);
-    const startLabel=new Date(start).toLocaleDateString('en-US',{month:'short',day:'numeric'});
-    const endLabel=new Date(end).toLocaleDateString('en-US',{month:'short',day:'numeric'});
-    const summary=start===end?'OOO - '+name:'OOO - '+name+' ('+startLabel+' - '+endLabel+')';
-    events+='BEGIN:VEVENT\r\nUID:'+uid()+'@cxleave\r\nDTSTAMP:'+stamp+'\r\nDTSTART;VALUE=DATE:'+startFmt+'\r\nDTEND;VALUE=DATE:'+endFmt+'\r\nSUMMARY:'+summary+'\r\nDESCRIPTION:Out of Office - '+name+'\r\nSTATUS:CONFIRMED\r\nTRANSP:OPAQUE\r\nX-MICROSOFT-CDO-BUSYSTATUS:OOF\r\nEND:VEVENT\r\n';
+  for(const dt of sortedDates){
+    const startFmt=fmtICS(dt);
+    const endFmt=nextDay(dt);
+    const label=new Date(dt+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+    const uid='ooo-'+name.replace(/\s+/g,'-').toLowerCase()+'-'+dt+'@cxleave';
+    events+='BEGIN:VEVENT\r\n';
+    events+='UID:'+uid+'\r\n';
+    events+='DTSTAMP:'+stamp+'\r\n';
+    events+='DTSTART;VALUE=DATE:'+startFmt+'\r\n';
+    events+='DTEND;VALUE=DATE:'+endFmt+'\r\n';
+    events+='SUMMARY:OOO - '+name+'\r\n';
+    events+='DESCRIPTION:Out of Office - '+name+' ('+label+')\r\n';
+    events+='STATUS:CONFIRMED\r\n';
+    events+='TRANSP:OPAQUE\r\n';
+    events+='X-MICROSOFT-CDO-BUSYSTATUS:OOF\r\n';
+    events+='X-MICROSOFT-CDO-ALLDAYEVENT:TRUE\r\n';
+    events+='END:VEVENT\r\n';
   }
-  return'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//CX Leave Tracker//EN\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\n'+events+'END:VCALENDAR';
+  return'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//CX Leave Tracker//EN\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\nX-WR-CALNAME:OOO - '+name+'\r\n'+events+'END:VCALENDAR';
 }
 
 function downloadICS(name,dates){
   const ics=generateICS(name,dates);
-  const blob=new Blob([ics],{type:'text/calendar;charset=utf-8'});
+  const blob=new Blob([ics],{type:'text/calendar'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=url;a.download='OOO_'+name.replace(/\s+/g,'_')+'.ics';
-  document.body.appendChild(a);a.click();document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  a.href=url;
+  a.download='OOO_'+name.replace(/\s+/g,'_')+'.ics';
+  a.style.display='none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url)},1000);
+}
+
+// Calculate the next working day (skip weekends)
+function getNextWorkingDay(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  d.setDate(d.getDate()+1);
+  // 0=Sun, 6=Sat
+  while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()+1);
+  return d;
+}
+
+// Group dates into consecutive ranges (accounting for weekends bridging)
+function groupConsecutiveDates(dates){
+  const sorted=[...dates].sort();
+  if(sorted.length===0)return[];
+  const ranges=[];
+  let rangeStart=sorted[0];
+  let rangePrev=sorted[0];
+  for(let i=1;i<sorted.length;i++){
+    const prev=new Date(rangePrev+'T00:00:00');
+    const cur=new Date(sorted[i]+'T00:00:00');
+    // Check if dates are consecutive (allow weekends in between)
+    let expected=new Date(prev);expected.setDate(expected.getDate()+1);
+    // Skip weekends
+    while(expected.getDay()===0||expected.getDay()===6)expected.setDate(expected.getDate()+1);
+    const diffDays=Math.round((cur-prev)/(1000*60*60*24));
+    if(diffDays<=1||(cur.getTime()===expected.getTime())){
+      rangePrev=sorted[i];
+    }else{
+      ranges.push({start:rangeStart,end:rangePrev});
+      rangeStart=sorted[i];rangePrev=sorted[i];
+    }
+  }
+  ranges.push({start:rangeStart,end:rangePrev});
+  return ranges;
 }
 
 function getAutoReplyText(name,dates){
   const sorted=[...dates].sort();
-  const lastDate=sorted[sorted.length-1];
-  const returnDate=new Date(lastDate);returnDate.setDate(returnDate.getDate()+1);
-  const returnStr=returnDate.toLocaleDateString('en-US',{day:'numeric',month:'long',year:'numeric'});
-  const isMultiple=sorted.length>1;
-  const firstDate=new Date(sorted[0]);
-  const firstStr=firstDate.toLocaleDateString('en-US',{day:'numeric',month:'long'});
-  const lastStr=new Date(lastDate).toLocaleDateString('en-US',{day:'numeric',month:'long'});
-  const dateRange=isMultiple?firstStr+' to '+lastStr:firstStr;
+  const ranges=groupConsecutiveDates(sorted);
+  // Find the range that contains the latest date (most relevant for the auto-reply)
+  const latestRange=ranges[ranges.length-1];
+  const returnDay=getNextWorkingDay(latestRange.end);
+  const returnStr=returnDay.toLocaleDateString('en-US',{day:'numeric',month:'long',year:'numeric'});
+  // Build date description
+  let dateDesc='';
+  if(ranges.length===1){
+    const r=ranges[0];
+    if(r.start===r.end){
+      dateDesc='on '+new Date(r.start+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'});
+    }else{
+      dateDesc='from '+new Date(r.start+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'})+' to '+new Date(r.end+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'});
+    }
+  }else{
+    const first=new Date(ranges[0].start+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'});
+    const last=new Date(ranges[ranges.length-1].end+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'});
+    dateDesc='from '+first+' to '+last;
+  }
   return`Hello,
 
-Thank you for your email. I am out of office ${isMultiple?'from '+dateRange:'today'} and will be back on ${returnStr}.
+Thank you for your email. I am out of office ${dateDesc} and will be back on ${returnStr}.
 
 I have limited access to my mail and will respond to your email as soon as possible upon my return.
 
@@ -615,15 +663,15 @@ ${name}`;
 function OooActionsModal({name,dates,onClose}){
   const[copied,setCopied]=useState(false);
   const[icsDownloaded,setIcsDownloaded]=useState(false);
-  const autoReply=getAutoReplyText(name,dates);
   const sorted=[...dates].sort();
-  const lastDate=sorted[sorted.length-1];
-  const returnDate=new Date(lastDate);returnDate.setDate(returnDate.getDate()+1);
-  const returnStr=returnDate.toLocaleDateString('en-US',{day:'numeric',month:'long',year:'numeric'});
+  const ranges=groupConsecutiveDates(sorted);
+  const returnDay=getNextWorkingDay(ranges[ranges.length-1].end);
+  const returnStr=returnDay.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const autoReply=getAutoReplyText(name,dates);
 
   const handleCopy=async()=>{
     try{await navigator.clipboard.writeText(autoReply);setCopied(true);setTimeout(()=>setCopied(false),2500)}
-    catch{/* fallback */const ta=document.createElement('textarea');ta.value=autoReply;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);setCopied(true);setTimeout(()=>setCopied(false),2500)}
+    catch{const ta=document.createElement('textarea');ta.value=autoReply;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);setCopied(true);setTimeout(()=>setCopied(false),2500)}
   };
   const handleICS=()=>{downloadICS(name,dates);setIcsDownloaded(true)};
   const outlookAutoReplyURL='https://outlook.office.com/mail/options/mail/automaticReplies';
@@ -633,22 +681,31 @@ function OooActionsModal({name,dates,onClose}){
   const sLbl={fontSize:13,fontWeight:600,marginBottom:4};
   const sDesc={fontSize:12,color:'var(--text2)',lineHeight:1.5};
 
-  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:560}}>
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:580}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
       <h3 style={{fontSize:17,fontWeight:600}}>Set Up Out of Office</h3>
       <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
     </div>
-    <p style={{fontSize:12.5,color:'var(--text2)',marginBottom:16}}>Leave saved for <strong>{name}</strong> ({sorted.length} day{sorted.length>1?'s':''}). Complete these steps to set up your OOO:</p>
+    <p style={{fontSize:12.5,color:'var(--text2)',marginBottom:10}}>Leave saved for <strong>{name}</strong> — {sorted.length} day{sorted.length>1?'s':''}, returning <strong>{returnStr}</strong>.</p>
+
+    {/* Show dates summary */}
+    <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:14}}>
+      {sorted.map(d=>(<span key={d} className="chip chip-future" style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5}}>{new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</span>))}
+    </div>
 
     {/* Step 1: Download ICS */}
     <div style={stepStyle}>
       <div style={numStyle}>1</div>
       <div style={{flex:1}}>
-        <div style={sLbl}>Add OOO to Calendar</div>
-        <div style={sDesc}>Download a calendar file and double-click it to add an OOO block to Outlook. This marks you as "Out of Office" for {sorted.length>1?fmtDate(sorted[0])+' – '+fmtDate(sorted[sorted.length-1]):fmtDate(sorted[0])}.</div>
-        <button className={'btn btn-sm '+(icsDownloaded?'btn-secondary':'btn-primary')} onClick={handleICS} style={{marginTop:8}}>
-          {icsDownloaded?'\u2713 Downloaded — open the .ics file':'Download .ics Calendar File'}
-        </button>
+        <div style={sLbl}>Add OOO to Outlook Calendar</div>
+        <div style={sDesc}>Downloads {sorted.length} calendar event{sorted.length>1?'s':''} (one per day). Double-click the downloaded file to import into Outlook. Each event marks you as "Out of Office" for the full day.</div>
+        <div style={{display:'flex',gap:8,marginTop:8,flexWrap:'wrap'}}>
+          <button className={'btn btn-sm '+(icsDownloaded?'btn-secondary':'btn-primary')} onClick={handleICS}>
+            {icsDownloaded?'\u2713 Downloaded — open the .ics file':'Download .ics Calendar File'}
+          </button>
+        </div>
+        {icsDownloaded&&<div style={{fontSize:11,color:'var(--accent)',marginTop:6}}>Check your downloads folder and double-click the .ics file to add events to Outlook.</div>}
+        <div style={{fontSize:11,color:'var(--text3)',marginTop:4}}>If you later remove dates, download a new .ics — Outlook will update the events automatically (same UIDs).</div>
       </div>
     </div>
 
@@ -656,10 +713,10 @@ function OooActionsModal({name,dates,onClose}){
     <div style={stepStyle}>
       <div style={numStyle}>2</div>
       <div style={{flex:1}}>
-        <div style={sLbl}>Turn On Automatic Replies</div>
-        <div style={sDesc}>Open Outlook's automatic replies settings page. Toggle "Automatic replies" to <strong>On</strong>, set the date range, and paste the message from Step 3.</div>
+        <div style={sLbl}>Turn On Automatic Replies in Outlook</div>
+        <div style={sDesc}>Opens your Outlook Automatic Replies settings. Toggle it <strong>On</strong>, check "Send replies only during a time period", set start to <strong>{new Date(sorted[0]+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</strong> and end to <strong>{new Date(sorted[sorted.length-1]+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</strong>, then paste the message from Step 3.</div>
         <a href={outlookAutoReplyURL} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary" style={{marginTop:8,textDecoration:'none'}}>
-          Open Outlook Auto-Reply Settings \u2197
+          Open Outlook Automatic Replies \u2197
         </a>
       </div>
     </div>
@@ -669,9 +726,8 @@ function OooActionsModal({name,dates,onClose}){
       <div style={numStyle}>3</div>
       <div style={{flex:1}}>
         <div style={sLbl}>Copy Auto-Reply Message</div>
-        <div style={sDesc}>Copy this message and paste it into the Outlook auto-reply body:</div>
-        <div style={{marginTop:8,background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:8,padding:12,fontSize:12.5,lineHeight:1.6,whiteSpace:'pre-wrap',color:'var(--text)',fontFamily:"'DM Sans',sans-serif",maxHeight:180,overflowY:'auto'}}>
-          <div style={{fontWeight:600,marginBottom:4,fontSize:11,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.5px'}}>Subject: OOO</div>
+        <div style={sDesc}>Paste this into the message box in Outlook auto-reply settings:</div>
+        <div style={{marginTop:8,background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:8,padding:12,fontSize:12.5,lineHeight:1.65,whiteSpace:'pre-wrap',color:'var(--text)',maxHeight:200,overflowY:'auto'}}>
           {autoReply}
         </div>
         <button className={'btn btn-sm '+(copied?'btn-secondary':'btn-primary')} onClick={handleCopy} style={{marginTop:8}}>
