@@ -701,7 +701,7 @@ function OooActionsModal({name,dates,onClose}){
     catch{const ta=document.createElement('textarea');ta.value=autoReply;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);setCopied(true);setTimeout(()=>setCopied(false),2500)}
   };
   const handleOpen=()=>{
-    window.open('https://outlook.office.com/mail/options/accounts/automaticReplies','_blank');
+    window.open('https://outlook.cloud.microsoft/mail/options/accounts-category/automaticReply','_blank');
     setOpened(true);
   };
 
