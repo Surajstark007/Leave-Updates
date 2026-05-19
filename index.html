@@ -687,86 +687,82 @@ ${name}`;
 // ─── OOO ACTIONS MODAL ───
 function OooActionsModal({name,dates,onClose}){
   const[copied,setCopied]=useState(false);
-  const[addedDates,setAddedDates]=useState(new Set());
+  const[opened,setOpened]=useState(false);
   const sorted=[...dates].sort();
   const ranges=groupConsecutiveDates(sorted);
   const returnDay=getNextWorkingDay(ranges[ranges.length-1].end);
   const returnStr=returnDay.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const startDateStr=new Date(sorted[0]+'T00:00:00').toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const endDateStr=new Date(sorted[sorted.length-1]+'T00:00:00').toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const autoReply=getAutoReplyText(name,dates);
-  const eventLinks=buildOutlookEventLinks(name,dates);
 
   const handleCopy=async()=>{
     try{await navigator.clipboard.writeText(autoReply);setCopied(true);setTimeout(()=>setCopied(false),2500)}
     catch{const ta=document.createElement('textarea');ta.value=autoReply;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);setCopied(true);setTimeout(()=>setCopied(false),2500)}
   };
-  const handleAddAll=()=>{eventLinks.forEach((el,i)=>{setTimeout(()=>{window.open(el.url,'_blank');setAddedDates(s=>{const ns=new Set(s);ns.add(el.date);return ns})},i*800)})};
+  const handleOpen=()=>{
+    window.open('https://outlook.office.com/mail/options/accounts/automaticReplies','_blank');
+    setOpened(true);
+  };
 
-  const stepStyle={display:'flex',gap:12,padding:14,background:'var(--surface2)',borderRadius:10,border:'1px solid var(--border)',marginBottom:10};
-  const numStyle={width:28,height:28,borderRadius:'50%',background:'var(--accent)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,flexShrink:0};
-  const sLbl={fontSize:13,fontWeight:600,marginBottom:4};
-  const sDesc={fontSize:12,color:'var(--text2)',lineHeight:1.5};
-  const startDateStr=new Date(sorted[0]+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-  const endDateStr=new Date(sorted[sorted.length-1]+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  const checkItem=(done,text)=>(
+    <div style={{display:'flex',alignItems:'flex-start',gap:8,padding:'6px 0',borderBottom:'1px solid var(--border)'}}>
+      <div style={{width:20,height:20,borderRadius:'50%',border:'2px solid',borderColor:done?'var(--green)':'var(--border)',background:done?'var(--green)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:1,transition:'all .2s'}}>
+        {done&&<span style={{color:'#fff',fontSize:11,fontWeight:700}}>✓</span>}
+      </div>
+      <span style={{fontSize:12.5,color:'var(--text)',lineHeight:1.5}}>{text}</span>
+    </div>
+  );
 
-  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:580}}>
+  const stepStyle={display:'flex',gap:12,padding:16,background:'var(--surface2)',borderRadius:10,border:'1px solid var(--border)',marginBottom:10};
+  const numStyle={width:28,height:28,borderRadius:'50%',background:'var(--accent)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,flexShrink:0,marginTop:1};
+
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:560}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
       <h3 style={{fontSize:17,fontWeight:600}}>Set Up Out of Office</h3>
       <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
     </div>
-    <p style={{fontSize:12.5,color:'var(--text2)',marginBottom:14}}>Leave saved for <strong>{name}</strong> \u2014 {sorted.length} day{sorted.length>1?'s':''}, returning <strong>{returnStr}</strong>.</p>
+    <div style={{padding:'10px 14px',background:'var(--accent-light)',border:'1px solid var(--accent-border)',borderRadius:8,marginBottom:14,fontSize:13}}>
+      <strong>{name}</strong> &nbsp;&middot;&nbsp; {sorted.length} day{sorted.length>1?'s':''} &nbsp;&middot;&nbsp; Returns <strong>{returnStr}</strong>
+    </div>
 
-    {/* Step 1: Add OOO events via Outlook deeplinks */}
+    {/* Step 1: Open Automatic Replies */}
     <div style={stepStyle}>
       <div style={numStyle}>1</div>
       <div style={{flex:1}}>
-        <div style={sLbl}>Add OOO Events to Outlook Calendar</div>
-        <div style={sDesc}>Click each date below to open Outlook and create an all-day OOO event. Click "Save" in Outlook after each one.</div>
-        <div style={{marginTop:8,display:'flex',flexWrap:'wrap',gap:6}}>
-          {eventLinks.map(el=>(<a key={el.date} href={el.url} target="_blank" rel="noopener noreferrer" onClick={()=>setAddedDates(s=>{const ns=new Set(s);ns.add(el.date);return ns})} className={'btn btn-sm '+(addedDates.has(el.date)?'btn-secondary':'btn-primary')} style={{textDecoration:'none',fontSize:11.5,padding:'4px 10px'}}>
-            {addedDates.has(el.date)?'\u2713 ':''}{el.label}
-          </a>))}
+        <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>Open Outlook Automatic Replies</div>
+        <button className={'btn btn-sm '+(opened?'btn-secondary':'btn-primary')} onClick={handleOpen} style={{marginBottom:12}}>
+          {opened?'Opened \u2014 switch to that tab':'Open Automatic Replies \u2197'}
+        </button>
+        <div style={{fontSize:12,color:'var(--text2)',fontWeight:600,marginBottom:6}}>Once open, set it up like this:</div>
+        <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,padding:'4px 12px'}}>
+          {checkItem(false,<>Toggle <strong>Turn on automatic replies</strong> → <strong>On</strong></>)}
+          {checkItem(false,<>Check <strong>"Send replies only during a time period"</strong></>)}
+          {checkItem(false,<>Set <strong>Start time</strong> to: <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11.5,color:'var(--accent)'}}>{startDateStr}</span></>)}
+          {checkItem(false,<>Set <strong>End time</strong> to: <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11.5,color:'var(--accent)'}}>{endDateStr}</span></>)}
+          {checkItem(false,<>Paste the reply message from Step 2 below into the message box</>)}
+          {checkItem(false,<>Click <strong>Save</strong></>)}
         </div>
-        {sorted.length>1&&<button className="btn btn-sm btn-primary" onClick={handleAddAll} style={{marginTop:8,fontSize:11.5}}>
-          Open all {sorted.length} events in Outlook
-        </button>}
-        <div style={{fontSize:11,color:'var(--text3)',marginTop:6}}>Each link opens Outlook with a pre-filled "OOO" event. Click Save in each tab.</div>
+        {!opened&&<div style={{fontSize:11,color:'var(--text3)',marginTop:8}}>If the link doesn't open the right page: Outlook → Settings (gear icon) → Accounts → Automatic replies</div>}
       </div>
     </div>
 
-    {/* Step 2: Open Outlook Auto-Reply Settings */}
+    {/* Step 2: Copy auto-reply message */}
     <div style={stepStyle}>
       <div style={numStyle}>2</div>
       <div style={{flex:1}}>
-        <div style={sLbl}>Turn On Automatic Replies in Outlook</div>
-        <div style={sDesc}>Open Outlook Settings \u2192 <strong>Accounts \u2192 Automatic replies</strong>. Toggle <strong>On</strong>, check "Send replies only during a time period", set start: <strong>{startDateStr}</strong>, end: <strong>{endDateStr}</strong>. Paste the message from Step 3.</div>
-        <div style={{display:'flex',gap:6,marginTop:8,flexWrap:'wrap'}}>
-          <a href="https://outlook.office.com/mail/options/accounts/automaticReplies" target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary" style={{textDecoration:'none'}}>
-            Open Automatic Replies \u2197
-          </a>
-          <a href="https://outlook.office365.com/mail/options/mail/automaticReplies" target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-secondary" style={{textDecoration:'none',fontSize:11}}>
-            Alternative link \u2197
-          </a>
-        </div>
-        <div style={{fontSize:11,color:'var(--text3)',marginTop:6}}>If links don\u2019t work: Outlook \u2192 Settings (gear) \u2192 Accounts \u2192 Automatic replies.</div>
-      </div>
-    </div>
-
-    {/* Step 3: Copy Auto-Reply Message */}
-    <div style={stepStyle}>
-      <div style={numStyle}>3</div>
-      <div style={{flex:1}}>
-        <div style={sLbl}>Copy Auto-Reply Message</div>
-        <div style={sDesc}>Paste this into the auto-reply message box in Outlook:</div>
-        <div style={{marginTop:8,background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:8,padding:12,fontSize:12.5,lineHeight:1.65,whiteSpace:'pre-wrap',color:'var(--text)',maxHeight:200,overflowY:'auto'}}>
+        <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>Copy Auto-Reply Message</div>
+        <div style={{fontSize:12,color:'var(--text2)',marginBottom:8}}>Copy this and paste it into the message box in Outlook:</div>
+        <div style={{background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:8,padding:12,fontSize:12.5,lineHeight:1.65,whiteSpace:'pre-wrap',color:'var(--text)',maxHeight:190,overflowY:'auto',marginBottom:8}}>
           {autoReply}
         </div>
-        <button className={'btn btn-sm '+(copied?'btn-secondary':'btn-primary')} onClick={handleCopy} style={{marginTop:8}}>
+        <button className={'btn btn-sm '+(copied?'btn-secondary':'btn-primary')} onClick={handleCopy}>
           {copied?'\u2713 Copied to clipboard!':'Copy Message'}
         </button>
       </div>
     </div>
 
-    <div style={{display:'flex',justifyContent:'flex-end',marginTop:6}}>
+    <div style={{display:'flex',justifyContent:'flex-end',marginTop:4}}>
       <button className="btn btn-secondary" onClick={onClose}>Done</button>
     </div>
   </div></div>);
