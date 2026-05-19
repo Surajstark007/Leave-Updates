@@ -261,7 +261,9 @@ function App(){
   };
 
   const allNames=useMemo(()=>data.map(m=>m.name).sort(),[data]);
-  const filtered=useMemo(()=>{let r=data;if(view==='today')r=r.filter(m=>m.dates.some(isToday));else if(view==='upcoming')r=r.filter(m=>m.dates.length>0);else if(view==='week')r=r.filter(m=>m.dates.some(d=>inWeek(d,weekDate)));if(typeFilter!=='All')r=r.filter(m=>m.type===typeFilter);if(selectedUsers.length>0)r=r.filter(m=>selectedUsers.includes(m.name));if(search.trim()){const q=search.toLowerCase();r=r.filter(m=>m.name.toLowerCase().includes(q)||m.backup.toLowerCase().includes(q)||m.dates.some(d=>d.includes(q)))}return r},[data,view,weekDate,typeFilter,selectedUsers,search]);
+  const filtered=useMemo(()=>{let r=data;if(view==='today')r=r.filter(m=>m.dates.some(isToday));else if(view==='upcoming')r=r.filter(m=>m.dates.length>0);else if(view==='week')r=r.filter(m=>m.dates.some(d=>inWeek(d,weekDate)));if(typeFilter!=='All')r=r.filter(m=>m.type===typeFilter);if(selectedUsers.length>0)r=r.filter(m=>selectedUsers.includes(m.name));if(search.trim()){const q=search.toLowerCase();r=r.filter(m=>m.name.toLowerCase().includes(q)||m.backup.toLowerCase().includes(q)||m.dates.some(d=>d.includes(q)))}
+  // Sort: logged-in user first, then alphabetically
+  return[...r].sort((a,b)=>{const aMe=user&&a.name.toLowerCase()===user.name.toLowerCase();const bMe=user&&b.name.toLowerCase()===user.name.toLowerCase();if(aMe&&!bMe)return-1;if(!aMe&&bMe)return 1;return a.name.localeCompare(b.name)});},[data,view,weekDate,typeFilter,selectedUsers,search,user]);
   const stats=useMemo(()=>({total:data.length,today:data.filter(m=>m.dates.some(isToday)).length,week:data.filter(m=>m.dates.some(d=>inWeek(d,new Date()))).length,upcoming:data.filter(m=>m.dates.length>0).length}),[data]);
 
   const handleSync=async()=>{
@@ -335,9 +337,7 @@ function App(){
         <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end'}}>
           <div style={{display:'flex',gap:6}}>
             <button className="btn btn-secondary btn-sm" onClick={handleRefresh} disabled={refreshing} title="Pull latest data from all users"><span className={refreshing?'spin':''} style={{display:'inline-flex'}}><Icon name="refresh" size={14}/></span> {refreshing?'Refreshing...':'Refresh'}</button>
-            <button className="btn btn-secondary btn-sm" onClick={handleSync} disabled={syncing} title="Sync from Slack canvas cache"><span className={syncing?'spin':''} style={{display:'inline-flex'}}><Icon name="sync" size={14}/></span> {syncing?'Syncing...':'Sync Slack'}</button>
           </div>
-          {syncStatus&&<div className="sync-progress">{syncStatus}</div>}
         </div>
         <button className="btn btn-primary btn-sm" onClick={()=>{setEditingIdx(null);setShowAddLeave(true)}}><Icon name="plus" size={14}/> Add My Leave</button>
         <button className="theme-toggle" onClick={()=>setTheme(t=>t==='light'?'dark':'light')}/>
@@ -388,22 +388,22 @@ function App(){
               <td rowSpan={rowSpan} style={{verticalAlign:'top'}}><span className={'badge '+(tbc[m.type]||'badge-none')}>{m.type}</span></td>
               <td rowSpan={rowSpan} style={{maxWidth:280,verticalAlign:'top'}}><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{dc===0?<span style={{color:'var(--text3)',fontSize:12}}>No upcoming</span>:m.dates.slice(0,10).map(d=>(<span key={d} className={'chip '+(isToday(d)?'chip-today pulse':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)}</span>))}{dc>10&&<span className="chip chip-gray" style={{fontSize:10}}>+{dc-10}</span>}</div></td>
               <td rowSpan={rowSpan} style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,fontSize:14,textAlign:'center',verticalAlign:'top'}}><span style={dc>5?{color:'var(--amber)',background:'var(--amber-bg)',padding:'2px 8px',borderRadius:6}:{}}>{dc}</span></td>
-              <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].project||'\u2014':'\u2014'}</td>
-              <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].persons||'\u2014':'\u2014'}</td>
-              <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',fontStyle:projects[0]&&projects[0].agenda?'normal':'italic'}}>{projects[0]&&projects[0].agenda?projects[0].agenda:'\u2014'}</td>
+              <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].project||'':''}</td>
+              <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].persons||'':''}</td>
+              <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',fontStyle:projects[0]&&projects[0].agenda?'normal':'italic'}}>{projects[0]&&projects[0].agenda?projects[0].agenda:''}</td>
               <td rowSpan={rowSpan} style={{verticalAlign:'top'}}>
                 {isMe?<div style={{display:'flex',gap:4}}>
                   <button className="btn-icon" onClick={()=>{setEditingIdx(oi);setShowAddLeave(true)}} title="Edit" style={{width:28,height:28}}><Icon name="edit" size={13}/></button>
                   <button className="btn-icon" onClick={()=>handleDeleteMember(oi)} title="Delete" style={{width:28,height:28,color:'var(--red)'}}><Icon name="trash" size={13}/></button>
-                </div>:<span style={{color:'var(--text3)',fontSize:11}}>\u2014</span>}
+                </div>:<span/>}
               </td>
             </tr>
             {/* Additional rows for remaining projects */}
             {projects.slice(1).map((p,pi)=>(
               <tr key={m.name+'-proj-'+pi} className="fade-in">
-                <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.project||'\u2014'}</td>
-                <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.persons||'\u2014'}</td>
-                <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',fontStyle:p.agenda?'normal':'italic'}}>{p.agenda||'\u2014'}</td>
+                <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.project||''}</td>
+                <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.persons||''}</td>
+                <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',fontStyle:p.agenda?'normal':'italic'}}>{p.agenda||''}</td>
               </tr>
             ))}
           </React.Fragment>);
@@ -495,7 +495,7 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
   const[entries,setEntries]=useState(()=>parseBackupEntries(editData?editData.backup:''));
 
   const updateEntry=(idx,field,val)=>setEntries(e=>e.map((x,i)=>i===idx?{...x,[field]:val}:x));
-  const addEntry=()=>setEntries(e=>[...e,{project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}]);
+  const addEntry=()=>{setEntries(e=>[...e,{project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}]);setTimeout(()=>{const els=document.querySelectorAll('.backup-entry');if(els.length)els[els.length-1].scrollIntoView({behavior:'smooth',block:'start'})},50)};
   const removeEntry=idx=>setEntries(e=>e.filter((_,i)=>i!==idx));
   const addPersonToEntry=(idx,person)=>{
     setEntries(e=>e.map((x,i)=>{
@@ -552,7 +552,7 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
         <button className="btn btn-sm btn-secondary" onClick={addEntry}><Icon name="plus" size={12}/> Add Project</button>
       </div>
 
-      {entries.map((entry,idx)=>(<div key={idx} className="fade-in" style={{background:'var(--surface2)',borderRadius:10,padding:12,marginBottom:8,border:'1px solid var(--border)'}}>
+      {entries.map((entry,idx)=>(<div key={idx} className="fade-in backup-entry" style={{background:'var(--surface2)',borderRadius:10,padding:12,marginBottom:8,border:'1px solid var(--border)'}}>
         <div style={{display:'flex',gap:8,marginBottom:8}}>
           <div style={{flex:1}}>
             <label style={subLbl}>Project Name</label>
