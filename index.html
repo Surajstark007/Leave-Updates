@@ -31,11 +31,13 @@ body{min-height:100vh;background:var(--bg)}input,select,textarea,button{font-fam
 .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent2)}
 .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{background:var(--surface3)}
 .btn-danger{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.btn-green{background:var(--green-bg);color:var(--green);border:1px solid rgba(43,138,62,.25)}
 .btn-sm{padding:5px 12px;font-size:12px;border-radius:8px}
 .btn-icon{width:32px;height:32px;padding:0;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);display:inline-flex;align-items:center;justify-content:center;transition:all .15s}
 .btn-icon:hover{color:var(--accent);border-color:var(--accent-border);background:var(--accent-light)}
 .input{width:100%;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13.5px;outline:none;transition:border-color .15s}
 .input:focus{border-color:var(--accent)}.input::placeholder{color:var(--text3)}
+.input-error{border-color:var(--red)!important}
 select.input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239a8576'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
 .overlay{position:fixed;inset:0;background:var(--overlay-bg);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center}
 .modal{background:var(--modal-bg);border:1px solid var(--border);border-radius:16px;padding:24px;width:90%;max-width:560px;max-height:85vh;overflow-y:auto;animation:fadeIn .2s ease-out;box-shadow:var(--shadow-lg)}
@@ -52,37 +54,32 @@ tr:hover td{background:var(--accent-light)}
 .stat-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 .stat-card .value{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;line-height:1}
 .stat-card .label{font-size:11.5px;color:var(--text2);margin-top:3px;font-weight:500}
-.view-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border-radius:999px;font-size:11.5px;background:var(--accent-light);color:var(--accent);border:1px solid var(--accent-border);cursor:pointer;font-weight:500}
 .theme-toggle{width:44px;height:24px;border-radius:12px;background:var(--toggle-bg);border:none;position:relative;cursor:pointer;transition:background .2s;padding:0}
 .theme-toggle::after{content:'';position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:3px;left:3px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
 [data-theme="dark"] .theme-toggle{background:var(--accent)}[data-theme="dark"] .theme-toggle::after{transform:translateX(20px)}
-.sync-progress{font-size:11px;color:var(--text2);padding:4px 0}
-/* Date range picker styles */
-.date-range-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .day-entry-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px}
 .day-entry-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
 .day-label{font-size:12px;font-weight:600;color:var(--accent);font-family:'JetBrains Mono',monospace}
-/* Export styles */
-@media print{.no-print{display:none!important}.print-only{display:block!important}}
-.print-only{display:none}
-.export-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:16px}
+.date-validation-hint{font-size:11px;color:var(--red);margin-top:4px;display:flex;align-items:center;gap:4px}
+@media print{.no-print{display:none!important}}
 @media(max-width:768px){.desktop-only{display:none!important}.responsive-table{overflow-x:auto}.stat-grid{grid-template-columns:1fr 1fr!important}.filter-row{flex-wrap:wrap}.modal{width:95%;padding:18px}}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const{useState,useEffect,useMemo,useRef,useCallback}=React;
+const{useState,useEffect,useMemo,useRef}=React;
 const SB_URL='https://wplarfdgdwhbbtjrgjrw.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndwbGFyZmRnZHdoYmJ0anJnanJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTk5MzYsImV4cCI6MjA5MzczNTkzNn0._6Ot3hk6u419alzt9ruLnDKD0CyevcIlBdPT7wZYCh0';
 const CANVAS_ID='F09LAPUPJH1';
 
 const SU={'U076358T0Q5':'Dinesh MS','U037YB1SD6Y':'Sundeep','U072FRECZ41':'Balaje','U0A3GTQANUT':'Kari','U04S03L5EC9':'Suraj Pillai','U08JL5H9GSG':'Nancy','U8JPFF83Y':'Ramya','U08MX6QKNUQ':'Vigneswaran','U01QUJKDDRP':'Preetha','U07CZN255CP':'Rakul','U06AK5LTU4B':'Sateesh Babu','U02CFDXAHV2':'Devi','U0A8VJU90NQ':'Unknown','U065H6E5940':'Unknown','U05338G3Q7M':'Samuel J','U07662DHBS6':'Unknown','U03Q0AH8PGW':'Manjusha','U04RERW24F8':'Vignesh P','U08CELR2E05':'Radhika','U07CKR6FG92':'Madhu','U03E0G6UCH0':'Sai Kishan T','U04M46PN9RC':'Johnkamesh','U07CWKK62TA':'Jahanwi Shree','U06BZA0EWQM':'Jacob','U07235UJSSW':'Ajit','U071WGRMX62':'Unknown','U07V18B4SQP':'Unknown','U02HN9RC3DM':'Archanaa','U03BWDXKPU5':'Karunambika','U079W3Q6ZB9':'Thanveer','U099LL9097X':'Shanthosh','U06S2QPP0S1':'Unknown','U02JTAK36TX':'Unknown','U02A8N46ZV5':'Unknown','U04M7S27J13':'Unknown','U04078U5RE3':'Deepak','URZHXB6QL':'Unknown','U4RQ6868Y':'Vijay','U08KNEUM7HD':'Unknown','U08KNEWE6G7':'Unknown','U06PU003J1Y':'Unknown','U03CE9S8685':'Abiramy','U0768GE2SH2':'Unknown'};
 
+// ─── HELPERS ───
 const todayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const parseDate=s=>{if(!s)return null;const m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?new Date(+m[1],+m[2]-1,+m[3]):null};
 const fmtDate=ds=>{const d=parseDate(ds);return d?d.toLocaleDateString('en-US',{month:'short',day:'numeric'}):'?'};
-const fmtDateLong=ds=>{const d=parseDate(ds);return d?d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}):'?'};
+const fmtDateFull=ds=>{const d=parseDate(ds);return d?d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}):'?'};
 const isToday=ds=>ds===todayStr();
 const isFuture=ds=>ds>=todayStr();
 const isWeekday=ds=>{const d=parseDate(ds);if(!d)return false;return d.getDay()!==0&&d.getDay()!==6};
@@ -91,7 +88,22 @@ function inWeek(ds,wd){const[ws,we]=getWeekRange(wd);return ds>=ws&&ds<=we}
 function shiftWeek(d,n){const nd=new Date(d);nd.setDate(nd.getDate()+7*n);return nd}
 function expandDateRange(s,e){const dates=[];const sd=new Date(s+'T00:00:00');const ed=new Date(e+'T00:00:00');for(let d=new Date(sd);d<=ed;d.setDate(d.getDate()+1)){const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');dates.push(ds)}return dates}
 function getWeekdaysInRange(start,end){return expandDateRange(start,end).filter(isWeekday)}
+function groupConsecutiveDates(dates){
+  const sorted=[...dates].sort();if(sorted.length===0)return[];
+  const ranges=[];let rangeStart=sorted[0];let rangePrev=sorted[0];
+  for(let i=1;i<sorted.length;i++){
+    const prev=new Date(rangePrev+'T00:00:00');const cur=new Date(sorted[i]+'T00:00:00');
+    let expected=new Date(prev);expected.setDate(expected.getDate()+1);
+    while(expected.getDay()===0||expected.getDay()===6)expected.setDate(expected.getDate()+1);
+    const diffDays=Math.round((cur-prev)/(1000*60*60*24));
+    if(diffDays<=1||(cur.getTime()===expected.getTime())){rangePrev=sorted[i]}
+    else{ranges.push({start:rangeStart,end:rangePrev});rangeStart=sorted[i];rangePrev=sorted[i]}
+  }
+  ranges.push({start:rangeStart,end:rangePrev});return ranges;
+}
+function getNextWorkingDay(dateStr){const d=new Date(dateStr+'T00:00:00');d.setDate(d.getDate()+1);while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()+1);return d}
 
+// ─── DATA PARSING ───
 function parseDatesFromCell(raw){
   if(!raw||!raw.trim())return[];const dates=new Set();const year=new Date().getFullYear();
   [...raw.matchAll(/!\[\]\(slack_date:(\d{4}-\d{2}-\d{2})\)/g)].forEach(m=>dates.add(m[1]));
@@ -106,15 +118,12 @@ function parseDatesFromCell(raw){
   while((rm=mrp.exec(cl))!==null){const m1=mm[rm[1].toLowerCase()];const m2=rm[3]?mm[rm[3].toLowerCase()]:m1;if(m1&&m2)expandDateRange(year+'-'+m1+'-'+String(rm[2]).padStart(2,'0'),year+'-'+m2+'-'+String(rm[4]).padStart(2,'0')).forEach(d=>dates.add(d))}
   const mdp=/\b(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|october|oct|november|nov|december|dec)\s+(\d{1,2})(?:st|nd|rd|th)?\b/gi;
   while((rm=mdp.exec(cl))!==null){const mn=mm[rm[1].toLowerCase()];if(mn)dates.add(year+'-'+mn+'-'+String(rm[2]).padStart(2,'0'))}
-  const dmp=/(\d{1,2})(?:st|nd|rd|th)\s+(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|october|oct|november|nov|december|dec)/gi;
-  while((rm=dmp.exec(cl))!==null){const mn=mm[rm[2].toLowerCase()];if(mn)dates.add(year+'-'+mn+'-'+String(rm[1]).padStart(2,'0'))}
   const ur=/(\d{2})\/(\d{2})\/(\d{4})\s*to\s*(\d{2})\/(\d{2})\/(\d{4})/g;
   while((rm=ur.exec(cl))!==null)expandDateRange(rm[3]+'-'+rm[1]+'-'+rm[2],rm[6]+'-'+rm[4]+'-'+rm[5]).forEach(d=>dates.add(d));
   return[...dates].filter(d=>d.match(/^\d{4}-\d{2}-\d{2}$/)).sort();
 }
 function cleanBackup(raw){if(!raw)return'';return raw.replace(/<@(\w+)>/g,(_,u)=>SU[u]||u).replace(/<br\s*\/?>/gi,'\n').replace(/!\[\]\(@\w+\)/g,'').replace(/\*\*/g,'').replace(/\\/g,'').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').trim()}
 function detectLeaveType(dc){if(!dc)return'PTO';const t=dc.toLowerCase();if(t.includes('sick')&&t.includes('planned'))return'Mixed';if(t.includes('sick'))return'Sick';if(t.includes('business travel'))return'Business Travel';return'PTO'}
-
 function parseCanvasMarkdown(md){
   const lines=md.split('\n');const members=[];let hp=false;
   for(const line of lines){const tr=line.trim();if(!tr.startsWith('|'))continue;
@@ -132,194 +141,10 @@ function parseCanvasMarkdown(md){
   }
   return members;
 }
-
-async function liveSync(onProgress){
-  onProgress('Fetching latest data...');
-  const r=await fetch(SB_URL+'/functions/v1/slack-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'read_canvas',canvas_id:CANVAS_ID})});
-  if(!r.ok)throw new Error('Sync request failed: '+r.status);
-  const data=await r.json();
-  if(!data.ok)throw new Error(data.error||'Unknown error');
-  onProgress('Parsing data...');
-  return{markdown:data.markdown,updated_at:data.updated_at};
-}
-
-async function readCache(){
-  const r=await fetch(SB_URL+'/rest/v1/lt_canvas_cache?canvas_id=eq.'+CANVAS_ID+'&order=updated_at.desc&limit=1',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
-  if(!r.ok)return null;
-  const data=await r.json();
-  return data&&data[0]?{markdown:data[0].markdown_content,updated_at:data[0].updated_at}:null;
-}
-
-// ─── USER-ADDED LEAVES (persisted in Supabase lt_leaves) ───
-async function fetchUserLeaves(){
-  const r=await fetch(SB_URL+'/rest/v1/lt_leaves?deleted=eq.false&order=created_at.desc',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
-  if(!r.ok)return[];
-  return r.json();
-}
-async function upsertLeave(entry,addedBy){
-  const existing=await fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(entry.name)+'&deleted=eq.false&limit=1',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
-  const existingData=await existing.json();
-  if(existingData&&existingData.length>0){
-    return fetch(SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingData[0].id,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({type:entry.type,dates:JSON.stringify(entry.dates),backup:entry.backup,updated_at:new Date().toISOString(),added_by:addedBy})});
-  }
-  return fetch(SB_URL+'/rest/v1/lt_leaves',{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({name:entry.name,type:entry.type,dates:JSON.stringify(entry.dates),backup:entry.backup,added_by:addedBy})});
-}
-async function softDeleteLeave(name){
-  return fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(name)+'&deleted=eq.false',{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({deleted:true,updated_at:new Date().toISOString()})});
-}
-
-function mergeCanvasAndUserLeaves(canvasMembers,userLeaves){
-  const merged=[...canvasMembers];
-  const deletedNames=new Set();
-  for(const ul of userLeaves){
-    if(ul.deleted){deletedNames.add(ul.name.toLowerCase());continue}
-    let dates=[];
-    try{dates=typeof ul.dates==='string'?JSON.parse(ul.dates):ul.dates||[]}catch{dates=[]}
-    const idx=merged.findIndex(m=>m.name.toLowerCase()===ul.name.toLowerCase());
-    if(idx>=0){
-      const existingDates=new Set(merged[idx].dates);
-      dates.forEach(d=>existingDates.add(d));
-      merged[idx]={...merged[idx],dates:[...existingDates].filter(d=>d>=todayStr()).sort(),backup:ul.backup||merged[idx].backup,type:ul.type||merged[idx].type};
-    }else{
-      merged.push({name:ul.name,dates:dates.filter(d=>d>=todayStr()).sort(),backup:ul.backup||'',type:ul.type||'PTO',raw:''});
-    }
-  }
-  return merged.filter(m=>!deletedNames.has(m.name.toLowerCase()));
-}
-
-async function sbFetch(path,opts={}){const r=await fetch(SB_URL+'/rest/v1/'+path,{...opts,headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})}});if(!r.ok)throw new Error(await r.text());const t=await r.text();return t?JSON.parse(t):null}
-async function logAction(email,name,action){return sbFetch('lt_user_logs',{method:'POST',body:JSON.stringify({email,name,action,last_activity:new Date().toISOString()})})}
-async function findUser(email){const d=await sbFetch('lt_user_logs?email=eq.'+encodeURIComponent(email)+'&action=eq.register&order=created_at.desc&limit=1');return d&&d.length>0?d[0]:null}
-
-const Icon=({name,size=16})=>{const p={width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round',viewBox:'0 0 24 24'};const icons={search:<svg {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,sync:<svg {...p}><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>,plus:<svg {...p}><path d="M12 5v14M5 12h14"/></svg>,x:<svg {...p}><path d="M18 6 6 18M6 6l12 12"/></svg>,edit:<svg {...p}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>,trash:<svg {...p}><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,chevL:<svg {...p}><path d="m15 18-6-6 6-6"/></svg>,chevR:<svg {...p}><path d="m9 18 6-6-6-6"/></svg>,users:<svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,save:<svg {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,logout:<svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>,refresh:<svg {...p}><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64"/><path d="M3 21v-5h5"/></svg>,download:<svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,filter:<svg {...p}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,calendar:<svg {...p}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,share:<svg {...p}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>};return<span style={{display:'inline-flex',alignItems:'center'}}>{icons[name]||null}</span>};
-
-function ToastContainer({toasts,remove}){return<div className="toast-container">{toasts.map(t=><div key={t.id} className={'toast toast-'+t.type} onClick={()=>remove(t.id)}>{t.type==='success'?'✓':t.type==='error'?'✗':'ℹ'} {t.msg}</div>)}</div>}
-
-function LoginScreen({onLogin}){
-  const[email,setEmail]=useState('');const[name,setName]=useState('');const[step,setStep]=useState('email');const[err,setErr]=useState('');
-  const he=async()=>{if(!email||!email.includes('@')){setErr('Enter a valid email');return}setStep('loading');setErr('');try{const u=await findUser(email);if(u){await logAction(email,u.name,'login');const s={email,name:u.name};localStorage.setItem('cx_lt_session',JSON.stringify(s));onLogin(s)}else setStep('name')}catch{setErr('Network error');setStep('email')}};
-  const hn=async()=>{if(!name.trim()){setErr('Enter your name');return}setStep('loading');setErr('');try{await logAction(email,name.trim(),'register');const s={email,name:name.trim()};localStorage.setItem('cx_lt_session',JSON.stringify(s));onLogin(s)}catch{setErr('Failed');setStep('name')}};
-  return(<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:20,background:'var(--bg)'}}><div className="card fade-in" style={{padding:40,width:'100%',maxWidth:400,textAlign:'center'}}><div style={{width:56,height:56,borderRadius:16,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:24,color:'#fff',fontWeight:700}}>CX</div><div style={{fontSize:24,fontWeight:700,marginBottom:4}}>Leave Tracker</div><p style={{color:'var(--text2)',fontSize:13.5,marginBottom:28}}>Track team availability & backups</p>
-  {step==='email'&&<div><input className="input" placeholder="Enter your work email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&he()} autoFocus style={{marginBottom:12,textAlign:'center'}}/><button className="btn btn-primary" style={{width:'100%'}} onClick={he}>Continue</button></div>}
-  {step==='name'&&<div className="fade-in"><p style={{color:'var(--text2)',fontSize:13,marginBottom:12}}>Welcome! Set your name to get started.</p><input className="input" placeholder="Full Name" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&hn()} autoFocus style={{marginBottom:12,textAlign:'center'}}/><button className="btn btn-primary" style={{width:'100%'}} onClick={hn}>Register</button></div>}
-  {step==='loading'&&<div style={{padding:20}}><div className="spin" style={{width:32,height:32,border:'3px solid var(--border)',borderTopColor:'var(--accent)',borderRadius:'50%',margin:'0 auto'}}/></div>}
-  {err&&<p style={{color:'var(--red)',fontSize:13,marginTop:10}}>{err}</p>}</div></div>);
-}
-
-// ─── EXPORT MODAL ───
-function ExportModal({member,onClose}){
-  const printRef=useRef(null);
-  const ranges=groupConsecutiveDates(member.dates);
-  const dateRangeStr=ranges.map(r=>r.start===r.end?fmtDate(r.start):fmtDate(r.start)+' – '+fmtDate(r.end)).join(', ');
-  const projects=parseProjectEntries(member.backup||'');
-
-  const handleCopy=async()=>{
-    let text=`LEAVE PLAN — ${member.name}\n`;
-    text+=`${'─'.repeat(40)}\n`;
-    text+=`Employee: ${member.name}\n`;
-    text+=`Leave Type: ${member.type}\n`;
-    text+=`Dates: ${dateRangeStr}\n`;
-    text+=`Total Days: ${member.dates.length}\n\n`;
-    if(projects.length>0){
-      text+=`PROJECT ASSIGNMENTS\n${'─'.repeat(40)}\n`;
-      projects.forEach(p=>{
-        if(p.date)text+=`Date: ${fmtDate(p.date)}\n`;
-        if(p.project)text+=`Project: ${p.project}\n`;
-        if(p.persons.length>0)text+=`Backup: ${p.persons.join(', ')}\n`;
-        if(p.agenda)text+=`Agenda: ${p.agenda}\n`;
-        text+='\n';
-      });
-    }
-    await navigator.clipboard.writeText(text).catch(()=>{});
-  };
-
-  const handlePrint=()=>{
-    const content=printRef.current;
-    const w=window.open('','_blank');
-    w.document.write(`<html><head><title>Leave Plan - ${member.name}</title><style>
-      body{font-family:'DM Sans',sans-serif;padding:32px;color:#2c1810;font-size:14px;line-height:1.6}
-      h1{font-size:22px;font-weight:700;margin-bottom:4px}
-      h2{font-size:15px;font-weight:600;margin:20px 0 10px;padding-bottom:6px;border-bottom:2px solid #e8590c;color:#e8590c}
-      .meta{color:#6b5344;font-size:13px;margin-bottom:16px}
-      .badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600;background:#5c47e0;color:#fff;text-transform:uppercase;letter-spacing:.4px}
-      table{width:100%;border-collapse:collapse;margin-top:12px}
-      th{text-align:left;padding:8px 12px;background:#f7f3ee;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#9a8576;border-bottom:2px solid #e0d5c7}
-      td{padding:8px 12px;border-bottom:1px solid #e0d5c7;font-size:13px;vertical-align:top}
-      .dates{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
-      .chip{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;background:#ede9fe;color:#5c47e0;border:1px solid rgba(92,71,224,.3);font-family:monospace}
-      .footer{margin-top:40px;font-size:11px;color:#9a8576;border-top:1px solid #e0d5c7;padding-top:12px}
-    </style></head><body>${content.innerHTML}<div class="footer">Generated by CX Leave Tracker · ${new Date().toLocaleString()}</div></body></html>`);
-    w.document.close();
-    w.print();
-  };
-
-  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:640}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-      <h3 style={{fontSize:17,fontWeight:600}}>Export Leave Plan</h3>
-      <div style={{display:'flex',gap:8}}>
-        <button className="btn btn-sm btn-secondary" onClick={handleCopy}><Icon name="save" size={13}/> Copy Text</button>
-        <button className="btn btn-sm btn-primary" onClick={handlePrint}><Icon name="download" size={13}/> Print / Save PDF</button>
-        <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
-      </div>
-    </div>
-
-    <div ref={printRef}>
-      <div style={{background:'var(--accent-light)',border:'1px solid var(--accent-border)',borderRadius:10,padding:'16px 20px',marginBottom:16}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:8}}>
-          <div>
-            <h1 style={{fontSize:20,fontWeight:700,marginBottom:4}}>{member.name}</h1>
-            <div style={{fontSize:12.5,color:'var(--text2)'}}>Leave plan prepared for leadership review</div>
-          </div>
-          <span className={'badge badge-'+(member.type==='PTO'?'pto':member.type==='Sick'?'sick':member.type==='Business Travel'?'bt':member.type==='Mixed'?'mixed':'other')}>{member.type}</span>
-        </div>
-      </div>
-
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
-        {[{label:'Total Leave Days',val:member.dates.length},{label:'Date Range',val:dateRangeStr}].map(s=><div key={s.label} style={{background:'var(--surface2)',borderRadius:8,padding:'12px 16px',border:'1px solid var(--border)'}}>
-          <div style={{fontSize:11,color:'var(--text3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:4}}>{s.label}</div>
-          <div style={{fontSize:14,fontWeight:600,color:'var(--text)'}}>{s.val}</div>
-        </div>)}
-      </div>
-
-      <div style={{marginBottom:16}}>
-        <div style={{fontSize:11,color:'var(--text3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8}}>Leave Dates</div>
-        <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
-          {member.dates.map(d=><span key={d} className={'chip '+(isToday(d)?'chip-today':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)}</span>)}
-        </div>
-      </div>
-
-      {projects.length>0&&<div>
-        <div style={{fontSize:11,color:'var(--text3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8}}>Project Assignments & Handoffs</div>
-        <div style={{border:'1px solid var(--border)',borderRadius:10,overflow:'hidden'}}>
-          <table>
-            <thead><tr>
-              <th>Date</th><th>Project</th><th>Backup Owner</th><th>Agenda / Notes</th>
-            </tr></thead>
-            <tbody>
-              {projects.map((p,i)=><tr key={i}>
-                <td style={{whiteSpace:'nowrap',fontFamily:"'JetBrains Mono',monospace",fontSize:11.5}}>{p.date?fmtDate(p.date):'—'}</td>
-                <td style={{fontWeight:500}}>{p.project||'—'}</td>
-                <td>{p.persons.length>0?p.persons.join(', '):'—'}</td>
-                <td style={{color:'var(--text2)',fontStyle:p.agenda?'normal':'italic'}}>{p.agenda||'—'}</td>
-              </tr>)}
-            </tbody>
-          </table>
-        </div>
-      </div>}
-    </div>
-
-    <div style={{marginTop:14,paddingTop:12,borderTop:'1px solid var(--border)',fontSize:11.5,color:'var(--text3)',textAlign:'center'}}>
-      Generated by CX Leave Tracker · {new Date().toLocaleString()}
-    </div>
-  </div></div>);
-}
-
-// ─── PARSE PROJECT ENTRIES FROM BACKUP STRING ───
 function parseProjectEntries(backupStr){
   if(!backupStr)return[];
   return backupStr.split('\n').filter(l=>l.trim()).map(line=>{
     let project='',personStr='',agenda='',date='';
-    // Check for date prefix: [2025-01-15] Project - Person | Agenda
     const dateMatch=line.match(/^\[(\d{4}-\d{2}-\d{2})\]\s*/);
     if(dateMatch){date=dateMatch[1];line=line.slice(dateMatch[0].length)}
     const pipeParts=line.split('|').map(s=>s.trim());
@@ -332,8 +157,6 @@ function parseProjectEntries(backupStr){
     return{date,project,persons,agenda};
   }).filter(p=>p.project||p.persons.length>0);
 }
-
-// ─── BUILD BACKUP STRING ───
 function buildBackupString(entries){
   return entries.filter(e=>e.project||e.persons.length>0).map(e=>{
     let s='';
@@ -345,301 +168,297 @@ function buildBackupString(entries){
   }).join('\n');
 }
 
-// ─── DATE RANGE PICKER ───
-function DateRangePicker({startDate,endDate,onStartChange,onEndChange,dates,onDatesChange}){
-  const[rangeStart,setRangeStart]=useState('');
-  const[rangeEnd,setRangeEnd]=useState('');
+// ─── SUPABASE ───
+async function readCache(){
+  const r=await fetch(SB_URL+'/rest/v1/lt_canvas_cache?canvas_id=eq.'+CANVAS_ID+'&order=updated_at.desc&limit=1',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+  if(!r.ok)return null;const data=await r.json();
+  return data&&data[0]?{markdown:data[0].markdown_content,updated_at:data[0].updated_at}:null;
+}
+async function fetchUserLeaves(){
+  const r=await fetch(SB_URL+'/rest/v1/lt_leaves?deleted=eq.false&order=created_at.desc',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+  if(!r.ok)return[];return r.json();
+}
+async function upsertLeave(entry,addedBy){
+  const existing=await fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(entry.name)+'&deleted=eq.false&limit=1',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+  const existingData=await existing.json();
+  if(existingData&&existingData.length>0){
+    return fetch(SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingData[0].id,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({type:entry.type,dates:JSON.stringify(entry.dates),backup:entry.backup,updated_at:new Date().toISOString(),added_by:addedBy})});
+  }
+  return fetch(SB_URL+'/rest/v1/lt_leaves',{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({name:entry.name,type:entry.type,dates:JSON.stringify(entry.dates),backup:entry.backup,added_by:addedBy})});
+}
+async function softDeleteLeave(name){
+  return fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(name)+'&deleted=eq.false',{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({deleted:true,updated_at:new Date().toISOString()})});
+}
+function mergeCanvasAndUserLeaves(canvasMembers,userLeaves){
+  const merged=[...canvasMembers];const deletedNames=new Set();
+  for(const ul of userLeaves){
+    if(ul.deleted){deletedNames.add(ul.name.toLowerCase());continue}
+    let dates=[];try{dates=typeof ul.dates==='string'?JSON.parse(ul.dates):ul.dates||[]}catch{dates=[]}
+    const idx=merged.findIndex(m=>m.name.toLowerCase()===ul.name.toLowerCase());
+    if(idx>=0){const existingDates=new Set(merged[idx].dates);dates.forEach(d=>existingDates.add(d));merged[idx]={...merged[idx],dates:[...existingDates].filter(d=>d>=todayStr()).sort(),backup:ul.backup||merged[idx].backup,type:ul.type||merged[idx].type}}
+    else{merged.push({name:ul.name,dates:dates.filter(d=>d>=todayStr()).sort(),backup:ul.backup||'',type:ul.type||'PTO',raw:''})}
+  }
+  return merged.filter(m=>!deletedNames.has(m.name.toLowerCase()));
+}
+async function sbFetch(path,opts={}){const r=await fetch(SB_URL+'/rest/v1/'+path,{...opts,headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})}});if(!r.ok)throw new Error(await r.text());const t=await r.text();return t?JSON.parse(t):null}
+async function logAction(email,name,action){return sbFetch('lt_user_logs',{method:'POST',body:JSON.stringify({email,name,action,last_activity:new Date().toISOString()})})}
+async function findUser(email){const d=await sbFetch('lt_user_logs?email=eq.'+encodeURIComponent(email)+'&action=eq.register&order=created_at.desc&limit=1');return d&&d.length>0?d[0]:null}
 
-  const applyRange=()=>{
-    if(!rangeStart||!rangeEnd)return;
-    const s=rangeStart<=rangeEnd?rangeStart:rangeEnd;
-    const e=rangeStart<=rangeEnd?rangeEnd:rangeStart;
-    const allInRange=expandDateRange(s,e);
-    const newDates=new Set(dates);
-    allInRange.forEach(d=>newDates.add(d));
-    onDatesChange([...newDates].sort());
-    setRangeStart('');setRangeEnd('');
-  };
-
-  return(<div>
-    <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8,flexWrap:'wrap'}}>
-      <div style={{display:'flex',gap:6,alignItems:'center',flex:1}}>
-        <input type="date" className="input" value={rangeStart} onChange={e=>setRangeStart(e.target.value)} style={{flex:1}} placeholder="From"/>
-        <span style={{color:'var(--text3)',fontSize:13}}>→</span>
-        <input type="date" className="input" value={rangeEnd} onChange={e=>setRangeEnd(e.target.value)} style={{flex:1}} placeholder="To"/>
-      </div>
-      <button className="btn btn-sm btn-primary" onClick={applyRange} disabled={!rangeStart||!rangeEnd}>Add Range</button>
+// ─── EXPORT UTILITIES ───
+function buildPrintHtml(members,title,generatedAt){
+  const rows=[];
+  for(const m of members){
+    const ranges=groupConsecutiveDates(m.dates);
+    const dateRangeStr=ranges.map(r=>r.start===r.end?fmtDate(r.start):fmtDate(r.start)+' – '+fmtDate(r.end)).join(', ');
+    const projects=parseProjectEntries(m.backup||'');
+    if(projects.length===0){
+      rows.push(`<tr><td>${m.name}</td><td><span class="badge badge-${m.type.toLowerCase().replace(' ','-')}">${m.type}</span></td><td>${dateRangeStr}</td><td style="text-align:center">${m.dates.length}</td><td>—</td><td>—</td><td>—</td></tr>`);
+    } else {
+      projects.forEach((p,pi)=>{
+        rows.push(`<tr><td${pi>0?' style="border-top:none;color:#9a8576"':''}>${pi===0?m.name:''}</td><td${pi>0?' style="border-top:none"':''}>${pi===0?`<span class="badge badge-${m.type.toLowerCase().replace(' ','-')}">${m.type}</span>`:''}</td><td${pi>0?' style="border-top:none"':''}>${pi===0?dateRangeStr:''}</td><td${pi>0?' style="border-top:none"':''} style="text-align:center">${pi===0?m.dates.length:''}</td><td>${p.date?fmtDate(p.date):'—'}</td><td>${p.project||'—'}</td><td>${p.persons.join(', ')||'—'}</td></tr>`);
+      });
+    }
+  }
+  return`<!DOCTYPE html><html><head><title>${title}</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;padding:36px 40px;color:#2c1810;font-size:13px;line-height:1.6}
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:16px;border-bottom:3px solid #e8590c}
+.header h1{font-size:22px;font-weight:700;color:#2c1810}
+.header .meta{font-size:11px;color:#9a8576;margin-top:4px}
+.filters-used{background:#faf7f4;border:1px solid #e0d5c7;border-radius:8px;padding:10px 14px;margin-bottom:20px;font-size:12px;color:#6b5344}
+.filters-used strong{color:#e8590c}
+table{width:100%;border-collapse:collapse;margin-top:0}
+th{text-align:left;padding:9px 12px;background:#f7f3ee;font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:#9a8576;border-bottom:2px solid #e0d5c7;white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid #e0d5c7;vertical-align:top}
+tr:last-child td{border-bottom:none}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:#fff}
+.badge-pto{background:#5c47e0}.badge-sick{background:#e03131}.badge-mixed{background:#e67700}.badge-business-travel,.badge-bt{background:#0c8599}.badge-other{background:#c2255c}
+.footer{margin-top:28px;padding-top:12px;border-top:1px solid #e0d5c7;font-size:10px;color:#9a8576;display:flex;justify-content:space-between}
+.summary{display:flex;gap:24px;margin-bottom:20px}
+.summary-item{background:#f7f3ee;border:1px solid #e0d5c7;border-radius:8px;padding:10px 16px;text-align:center}
+.summary-item .val{font-size:22px;font-weight:700;color:#e8590c;font-family:monospace}
+.summary-item .lbl{font-size:10px;color:#9a8576;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+@media print{body{padding:20px 24px}.no-print{display:none}}
+</style></head><body>
+<div class="header">
+  <div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <div style="width:32px;height:32px;border-radius:8px;background:#e8590c;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;font-weight:700">CX</div>
+      <h1>${title}</h1>
     </div>
-    {rangeStart&&rangeEnd&&<div style={{fontSize:11.5,color:'var(--text2)',marginBottom:6,padding:'4px 8px',background:'var(--surface2)',borderRadius:6}}>
-      {expandDateRange(rangeStart<=rangeEnd?rangeStart:rangeEnd,rangeStart<=rangeEnd?rangeEnd:rangeStart).length} total days, {getWeekdaysInRange(rangeStart<=rangeEnd?rangeStart:rangeEnd,rangeStart<=rangeEnd?rangeEnd:rangeStart).length} weekdays
-    </div>}
-  </div>);
+    <div class="meta">CX Leave Tracker · Generated ${generatedAt}</div>
+  </div>
+  <button class="no-print" onclick="window.print()" style="padding:8px 16px;background:#e8590c;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500">Print / Save PDF</button>
+</div>
+<div class="summary">
+  <div class="summary-item"><div class="val">${members.length}</div><div class="lbl">Employees</div></div>
+  <div class="summary-item"><div class="val">${members.reduce((a,m)=>a+m.dates.length,0)}</div><div class="lbl">Total Leave Days</div></div>
+  <div class="summary-item"><div class="val">${members.filter(m=>m.dates.some(isToday)).length}</div><div class="lbl">On Leave Today</div></div>
+</div>
+<table>
+<thead><tr><th>Employee</th><th>Type</th><th>Leave Dates</th><th style="text-align:center">Days</th><th>Project Date</th><th>Project</th><th>Backup Owner</th></tr></thead>
+<tbody>${rows.join('')}</tbody>
+</table>
+<div class="footer">
+  <span>CX Leave Tracker</span>
+  <span>${generatedAt}</span>
+</div>
+</body></html>`;
 }
 
-// ─── ADD/EDIT LEAVE MODAL ───
-function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
-  const[name]=useState(editData?editData.name:(userName||''));
-  const[type,setType]=useState(editData?editData.type:'PTO');
-  const[dates,setDates]=useState(editData?[...editData.dates]:[]);
-  const[rangeStart,setRangeStart]=useState('');
-  const[rangeEnd,setRangeEnd]=useState('');
-  const[dateInput,setDateInput]=useState('');
-  // tab: 'dates' | 'projects'
-  const[tab,setTab]=useState('dates');
-  // filter for edit tab
-  const[editFilter,setEditFilter]=useState({date:'',project:''});
+function buildCsvContent(members){
+  const csvEscape=v=>{const s=String(v||'');return s.includes(',')||s.includes('"')||s.includes('\n')?'"'+s.replace(/"/g,'""')+'"':s};
+  const rows=[['Employee Name','Leave Type','Leave Date Range','Total Leave Days','Leave Dates (all)','Project Date','Project Name','Backup Owner(s)','Agenda / Notes']];
+  for(const m of members){
+    const ranges=groupConsecutiveDates(m.dates);
+    const dateRangeStr=ranges.map(r=>r.start===r.end?fmtDate(r.start):fmtDate(r.start)+' – '+fmtDate(r.end)).join(' | ');
+    const allDates=m.dates.map(fmtDate).join(', ');
+    const projects=parseProjectEntries(m.backup||'');
+    if(projects.length===0){
+      rows.push([m.name,m.type,dateRangeStr,m.dates.length,allDates,'','','','']);
+    } else {
+      projects.forEach((p,pi)=>{
+        rows.push([
+          pi===0?m.name:'',pi===0?m.type:'',pi===0?dateRangeStr:'',pi===0?m.dates.length:'',pi===0?allDates:'',
+          p.date?fmtDate(p.date):'',p.project||'',p.persons.join(', ')||'',p.agenda||''
+        ]);
+      });
+    }
+  }
+  return rows.map(r=>r.map(csvEscape).join(',')).join('\r\n');
+}
 
-  // entries: [{date, project, persons, newPerson, agenda, showPicker, pickerQ}]
-  const parseInitialEntries=()=>{
-    if(!editData?.backup)return[];
-    return parseProjectEntries(editData.backup).map(p=>({...p,newPerson:'',showPicker:false,pickerQ:''}));
+function downloadCsv(content,filename){
+  const blob=new Blob(['\uFEFF'+content],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');
+  a.href=url;a.download=filename;document.body.appendChild(a);a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url)},100);
+}
+
+// ─── ICON ───
+const Icon=({name,size=16})=>{const p={width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round',viewBox:'0 0 24 24'};const icons={search:<svg {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,plus:<svg {...p}><path d="M12 5v14M5 12h14"/></svg>,x:<svg {...p}><path d="M18 6 6 18M6 6l12 12"/></svg>,edit:<svg {...p}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>,trash:<svg {...p}><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,chevL:<svg {...p}><path d="m15 18-6-6 6-6"/></svg>,chevR:<svg {...p}><path d="m9 18 6-6-6-6"/></svg>,users:<svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,logout:<svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>,refresh:<svg {...p}><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64"/><path d="M3 21v-5h5"/></svg>,download:<svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,share:<svg {...p}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>,csv:<svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>,pdf:<svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15v-1h1.5a.5.5 0 0 1 0 1H9zm0 0v2m3-3v3m0-3h1.5a1.5 1.5 0 0 1 0 3H12"/></svg>,filter:<svg {...p}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,save:<svg {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,calendar:<svg {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>};return<span style={{display:'inline-flex',alignItems:'center'}}>{icons[name]||null}</span>};
+
+function ToastContainer({toasts,remove}){return<div className="toast-container">{toasts.map(t=><div key={t.id} className={'toast toast-'+t.type} onClick={()=>remove(t.id)}>{t.type==='success'?'✓':t.type==='error'?'✗':'ℹ'} {t.msg}</div>)}</div>}
+
+// ─── LOGIN ───
+function LoginScreen({onLogin}){
+  const[email,setEmail]=useState('');const[name,setName]=useState('');const[step,setStep]=useState('email');const[err,setErr]=useState('');
+  const he=async()=>{if(!email||!email.includes('@')){setErr('Enter a valid email');return}setStep('loading');setErr('');try{const u=await findUser(email);if(u){await logAction(email,u.name,'login');const s={email,name:u.name};localStorage.setItem('cx_lt_session',JSON.stringify(s));onLogin(s)}else setStep('name')}catch{setErr('Network error');setStep('email')}};
+  const hn=async()=>{if(!name.trim()){setErr('Enter your name');return}setStep('loading');setErr('');try{await logAction(email,name.trim(),'register');const s={email,name:name.trim()};localStorage.setItem('cx_lt_session',JSON.stringify(s));onLogin(s)}catch{setErr('Failed');setStep('name')}};
+  return(<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:20,background:'var(--bg)'}}><div className="card fade-in" style={{padding:40,width:'100%',maxWidth:400,textAlign:'center'}}><div style={{width:56,height:56,borderRadius:16,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:24,color:'#fff',fontWeight:700}}>CX</div><div style={{fontSize:24,fontWeight:700,marginBottom:4}}>Leave Tracker</div><p style={{color:'var(--text2)',fontSize:13.5,marginBottom:28}}>Track team availability & backups</p>
+  {step==='email'&&<div><input className="input" placeholder="Enter your work email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&he()} autoFocus style={{marginBottom:12,textAlign:'center'}}/><button className="btn btn-primary" style={{width:'100%'}} onClick={he}>Continue</button></div>}
+  {step==='name'&&<div className="fade-in"><p style={{color:'var(--text2)',fontSize:13,marginBottom:12}}>Welcome! Set your name to get started.</p><input className="input" placeholder="Full Name" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&hn()} autoFocus style={{marginBottom:12,textAlign:'center'}}/><button className="btn btn-primary" style={{width:'100%'}} onClick={hn}>Register</button></div>}
+  {step==='loading'&&<div style={{padding:20}}><div className="spin" style={{width:32,height:32,border:'3px solid var(--border)',borderTopColor:'var(--accent)',borderRadius:'50%',margin:'0 auto'}}/></div>}
+  {err&&<p style={{color:'var(--red)',fontSize:13,marginTop:10}}>{err}</p>}</div></div>);
+}
+
+// ─── SINGLE-MEMBER EXPORT MODAL ───
+function ExportModal({member,onClose}){
+  const printRef=useRef(null);
+  const ranges=groupConsecutiveDates(member.dates);
+  const dateRangeStr=ranges.map(r=>r.start===r.end?fmtDate(r.start):fmtDate(r.start)+' – '+fmtDate(r.end)).join(', ');
+  const projects=parseProjectEntries(member.backup||'');
+  const generatedAt=new Date().toLocaleString();
+
+  const handlePdf=()=>{
+    const w=window.open('','_blank');
+    w.document.write(buildPrintHtml([member],'Leave Plan — '+member.name,generatedAt));
+    w.document.close();
   };
-  const[entries,setEntries]=useState(parseInitialEntries);
-
-  const weekdays=useMemo(()=>{
-    if(dates.length===0)return[];
-    return dates.filter(isWeekday).sort();
-  },[dates]);
-
-  const updateEntry=(idx,field,val)=>setEntries(e=>e.map((x,i)=>i===idx?{...x,[field]:val}:x));
-  const removeEntry=idx=>setEntries(e=>e.filter((_,i)=>i!==idx));
-
-  const addPersonToEntry=(idx,person)=>{
-    setEntries(e=>e.map((x,i)=>{
-      if(i!==idx)return x;
-      if(x.persons.includes(person))return x;
-      return{...x,persons:[...x.persons,person],showPicker:false,pickerQ:''};
-    }));
+  const handleCsv=()=>{
+    const csv=buildCsvContent([member]);
+    downloadCsv(csv,'leave-plan-'+member.name.replace(/\s+/g,'-').toLowerCase()+'.csv');
   };
-  const removePersonFromEntry=(idx,person)=>{
-    setEntries(e=>e.map((x,i)=>i===idx?{...x,persons:x.persons.filter(p=>p!==person)}:x));
-  };
-  const addNewPersonToEntry=(idx)=>{
-    setEntries(e=>e.map((x,i)=>{
-      if(i!==idx||!x.newPerson.trim())return x;
-      const np=x.newPerson.trim();
-      if(x.persons.includes(np))return{...x,newPerson:''};
-      return{...x,persons:[...x.persons,np],newPerson:''};
-    }));
+  const handleCopyText=async()=>{
+    let text=`LEAVE PLAN — ${member.name}\n${'─'.repeat(40)}\nEmployee: ${member.name}\nLeave Type: ${member.type}\nDates: ${dateRangeStr}\nTotal Days: ${member.dates.length}\n\n`;
+    if(projects.length>0){text+=`PROJECT ASSIGNMENTS\n${'─'.repeat(40)}\n`;projects.forEach(p=>{if(p.date)text+=`Date: ${fmtDate(p.date)}\n`;if(p.project)text+=`Project: ${p.project}\n`;if(p.persons.length>0)text+=`Backup: ${p.persons.join(', ')}\n`;if(p.agenda)text+=`Agenda: ${p.agenda}\n`;text+='\n'})}
+    await navigator.clipboard.writeText(text).catch(()=>{});
   };
 
-  const addEntryForDay=(dateStr)=>{
-    setEntries(e=>[...e,{date:dateStr,project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}]);
-  };
-  const addBlankEntry=()=>{
-    setEntries(e=>[...e,{date:'',project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}]);
-  };
-
-  const applyRange=()=>{
-    if(!rangeStart||!rangeEnd)return;
-    const s=rangeStart<=rangeEnd?rangeStart:rangeEnd;
-    const e=rangeStart<=rangeEnd?rangeEnd:rangeStart;
-    const allInRange=expandDateRange(s,e);
-    const newDates=new Set(dates);
-    allInRange.forEach(d=>newDates.add(d));
-    setDates([...newDates].sort());
-    setRangeStart('');setRangeEnd('');
-  };
-
-  const deleteDateEntry=(dateStr)=>{
-    setDates(ds=>ds.filter(d=>d!==dateStr));
-    setEntries(e=>e.filter(en=>en.date!==dateStr));
-  };
-
-  const filteredEntries=useMemo(()=>{
-    let e=entries;
-    if(editFilter.date)e=e.filter(x=>x.date===editFilter.date);
-    if(editFilter.project)e=e.filter(x=>x.project.toLowerCase().includes(editFilter.project.toLowerCase()));
-    return e;
-  },[entries,editFilter]);
-
-  const lbl={fontSize:12,color:'var(--text2)',marginBottom:4,display:'block',fontWeight:500};
-  const subLbl={fontSize:11,color:'var(--text3)',marginBottom:3,display:'block'};
-
-  const rangePreviewCount=rangeStart&&rangeEnd?expandDateRange(rangeStart<=rangeEnd?rangeStart:rangeEnd,rangeStart<=rangeEnd?rangeEnd:rangeStart).length:0;
-  const weekdayPreviewCount=rangeStart&&rangeEnd?getWeekdaysInRange(rangeStart<=rangeEnd?rangeStart:rangeEnd,rangeStart<=rangeEnd?rangeEnd:rangeStart).length:0;
-
-  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:620}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-      <h3 style={{fontSize:17,fontWeight:600}}>{editData?'Edit Leave':'Add Leave'}</h3>
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:660}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+      <h3 style={{fontSize:17,fontWeight:600}}>Export — {member.name}</h3>
       <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
     </div>
-
-    {editData&&<div style={{fontSize:12,color:'var(--text2)',marginBottom:12,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)'}}>Editing leave for <strong>{editData.name}</strong></div>}
-
-    {/* Member display */}
-    <div style={{marginBottom:14,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)',fontSize:14,fontWeight:600,color:'var(--text)'}}>{name||userName||'You'}</div>
-
-    {/* Leave Type */}
-    <label style={lbl}>Leave Type</label>
-    <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
-      {['PTO','Sick','Business Travel','Mixed','Other'].map(t=>(<button key={t} onClick={()=>setType(t)} style={{padding:'5px 14px',borderRadius:999,fontSize:12,fontWeight:500,border:'1px solid',borderColor:type===t?'var(--accent)':'var(--border)',background:type===t?'var(--accent-light)':'transparent',color:type===t?'var(--accent)':'var(--text2)',cursor:'pointer',transition:'all .15s'}}>{t}</button>))}
+    <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
+      <button className="btn btn-sm btn-secondary" onClick={handleCopyText}><Icon name="save" size={13}/> Copy Text</button>
+      <button className="btn btn-sm btn-secondary" onClick={handleCsv}><Icon name="csv" size={13}/> Download CSV</button>
+      <button className="btn btn-sm btn-primary" onClick={handlePdf}><Icon name="pdf" size={13}/> Open PDF View</button>
     </div>
-
-    {/* Tab switcher */}
-    <div style={{display:'flex',gap:2,background:'var(--surface2)',borderRadius:8,padding:2,border:'1px solid var(--border)',marginBottom:14}}>
-      {[{k:'dates',label:'📅 Leave Dates'},{k:'projects',label:'📋 Projects & Backup'}].map(t=>(
-        <button key={t.k} onClick={()=>setTab(t.k)} style={{flex:1,padding:'6px 12px',borderRadius:6,fontSize:12.5,fontWeight:500,border:'none',background:tab===t.k?'var(--accent)':'transparent',color:tab===t.k?'#fff':'var(--text2)',cursor:'pointer',transition:'all .15s'}}>{t.label}</button>
-      ))}
-    </div>
-
-    {/* ── TAB: DATES ── */}
-    {tab==='dates'&&<div>
-      {/* Date range picker */}
-      <div style={{marginBottom:10,padding:'10px 12px',background:'var(--surface2)',borderRadius:10,border:'1px solid var(--border)'}}>
-        <label style={{...lbl,marginBottom:6}}>Add Date Range</label>
-        <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
-          <input type="date" className="input" value={rangeStart} onChange={e=>setRangeStart(e.target.value)} style={{flex:1,minWidth:130}}/>
-          <span style={{color:'var(--text3)',fontSize:13,flexShrink:0}}>to</span>
-          <input type="date" className="input" value={rangeEnd} onChange={e=>setRangeEnd(e.target.value)} style={{flex:1,minWidth:130}}/>
-          <button className="btn btn-sm btn-primary" onClick={applyRange} disabled={!rangeStart||!rangeEnd} style={{flexShrink:0}}>Add</button>
-        </div>
-        {rangeStart&&rangeEnd&&rangePreviewCount>0&&(
-          <div style={{fontSize:11,color:'var(--text2)',marginTop:6}}>
-            {rangePreviewCount} total days ({weekdayPreviewCount} weekdays) will be added
+    <div ref={printRef}>
+      <div style={{background:'var(--accent-light)',border:'1px solid var(--accent-border)',borderRadius:10,padding:'14px 18px',marginBottom:14}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:8}}>
+          <div>
+            <h1 style={{fontSize:18,fontWeight:700,marginBottom:4}}>{member.name}</h1>
+            <div style={{fontSize:12,color:'var(--text2)'}}>Leave plan · leadership view</div>
           </div>
-        )}
+          <span className={'badge badge-'+(member.type==='PTO'?'pto':member.type==='Sick'?'sick':member.type==='Business Travel'?'bt':member.type==='Mixed'?'mixed':'other')}>{member.type}</span>
+        </div>
       </div>
-
-      {/* Or add single date */}
-      <div style={{display:'flex',gap:8,marginBottom:8}}>
-        <input type="date" className="input" value={dateInput} onChange={e=>setDateInput(e.target.value)}
-          onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();if(dateInput&&!dates.includes(dateInput)){setDates(d=>[...d,dateInput].sort());setDateInput('')}}}}/>
-        <button className="btn btn-sm btn-secondary" onClick={()=>{if(dateInput&&!dates.includes(dateInput)){setDates(d=>[...d,dateInput].sort());setDateInput('')}}}>+ Single</button>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
+        {[{label:'Total Leave Days',val:member.dates.length},{label:'Date Range',val:dateRangeStr}].map(s=><div key={s.label} style={{background:'var(--surface2)',borderRadius:8,padding:'10px 14px',border:'1px solid var(--border)'}}>
+          <div style={{fontSize:10,color:'var(--text3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:3}}>{s.label}</div>
+          <div style={{fontSize:13.5,fontWeight:600,color:'var(--text)'}}>{s.val}</div>
+        </div>)}
       </div>
-
-      {/* Date chips with delete */}
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-        <span style={{fontSize:11.5,color:'var(--text2)',fontWeight:500}}>{dates.length} date{dates.length!==1?'s':''} selected</span>
-        {dates.length>0&&<button className="btn btn-sm btn-danger" onClick={()=>setDates([])} style={{fontSize:10,padding:'2px 8px'}}>Clear all</button>}
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:10,color:'var(--text3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:6}}>Leave Dates</div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+          {member.dates.map(d=><span key={d} className={'chip '+(isToday(d)?'chip-today':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5}}>{fmtDate(d)}</span>)}
+        </div>
       </div>
-      <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:6,minHeight:24}}>
-        {dates.length===0?<span style={{fontSize:12,color:'var(--text3)',fontStyle:'italic'}}>No dates added yet</span>:dates.map(d=>(
-          <span key={d} className={'chip '+(isToday(d)?'chip-today':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>
-            {fmtDate(d)}
-            {!isWeekday(d)&&<span style={{fontSize:9,color:'inherit',opacity:.6,marginLeft:2}}>(wknd)</span>}
-            <span style={{cursor:'pointer',marginLeft:3,opacity:.6}} onClick={()=>deleteDateEntry(d)} title="Remove">×</span>
-          </span>
-        ))}
-      </div>
-      {weekdays.length>0&&<div style={{fontSize:11,color:'var(--green)',marginTop:4}}>✓ {weekdays.length} weekday{weekdays.length!==1?'s':''} — ready for project assignment</div>}
-    </div>}
-
-    {/* ── TAB: PROJECTS ── */}
-    {tab==='projects'&&<div>
-      {weekdays.length===0&&<div style={{padding:'16px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)',textAlign:'center',marginBottom:12}}>
-        <div style={{fontSize:13,color:'var(--text2)',marginBottom:6}}>No weekdays selected yet</div>
-        <div style={{fontSize:12,color:'var(--text3)'}}>Go to the "Leave Dates" tab and add your leave range first. Project entries will show up per weekday.</div>
-      </div>}
-
-      {weekdays.length>0&&<div>
-        {/* Filter bar for edit mode */}
-        {editData&&<div style={{display:'flex',gap:8,marginBottom:10,flexWrap:'wrap'}}>
-          <select className="input" value={editFilter.date} onChange={e=>setEditFilter(f=>({...f,date:e.target.value}))} style={{flex:1,fontSize:12,padding:'5px 28px 5px 10px'}}>
-            <option value="">All dates</option>
-            {weekdays.map(d=><option key={d} value={d}>{fmtDate(d)}</option>)}
-          </select>
-          <input className="input" placeholder="Filter by project..." value={editFilter.project} onChange={e=>setEditFilter(f=>({...f,project:e.target.value}))} style={{flex:1,fontSize:12}}/>
-          {(editFilter.date||editFilter.project)&&<button className="btn btn-sm btn-secondary" onClick={()=>setEditFilter({date:'',project:''})} style={{fontSize:11}}>Clear</button>}
-        </div>}
-
-        {/* One section per weekday */}
-        {weekdays.map(dayStr=>{
-          const dayEntries=entries.map((e,i)=>({...e,_idx:i})).filter(e=>e.date===dayStr||(editData&&!e.date&&!editFilter.date));
-          const relevantEntries=editData?filteredEntries.map((e,i)=>({...e,_idx:entries.indexOf(e)})).filter(e=>e.date===dayStr||(!e.date&&!editFilter.date)):entries.map((e,i)=>({...e,_idx:i})).filter(e=>e.date===dayStr);
-
-          return(<div key={dayStr} className="day-entry-card">
-            <div className="day-entry-header">
-              <div style={{display:'flex',alignItems:'center',gap:8}}>
-                <span className="day-label">{fmtDate(dayStr)}</span>
-                <span style={{fontSize:11,color:'var(--text3)'}}>{new Date(dayStr+'T00:00:00').toLocaleDateString('en-US',{weekday:'long'})}</span>
-              </div>
-              <button className="btn btn-sm btn-secondary" onClick={()=>addEntryForDay(dayStr)} style={{fontSize:11,padding:'2px 8px'}}>
-                <Icon name="plus" size={11}/> Add Project
-              </button>
-            </div>
-
-            {relevantEntries.length===0&&<div style={{fontSize:12,color:'var(--text3)',fontStyle:'italic',padding:'4px 0'}}>No projects assigned — click "Add Project" above</div>}
-
-            {relevantEntries.map((entry)=>{
-              const idx=entry._idx;
-              return(<div key={idx} className="fade-in" style={{background:'var(--surface)',borderRadius:8,padding:10,marginTop:8,border:'1px solid var(--border)'}}>
-                <div style={{display:'flex',gap:8,marginBottom:6}}>
-                  <div style={{flex:1}}>
-                    <label style={subLbl}>Project Name</label>
-                    <input className="input" placeholder="e.g. Shield Roofing" value={entry.project} onChange={e=>updateEntry(idx,'project',e.target.value)} style={{fontSize:13}}/>
-                  </div>
-                  <button className="btn-icon" onClick={()=>removeEntry(idx)} title="Remove" style={{width:26,height:26,color:'var(--red)',marginTop:17,flexShrink:0}}><Icon name="trash" size={12}/></button>
-                </div>
-
-                <label style={subLbl}>Backup Person(s)</label>
-                <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:6,minHeight:26}}>
-                  {entry.persons.map(p=>(<span key={p} className="chip chip-future" style={{fontSize:11}}>{p} <span style={{cursor:'pointer',marginLeft:2,opacity:.6}} onClick={()=>removePersonFromEntry(idx,p)}>×</span></span>))}
-                  <button className="btn btn-sm btn-secondary" onClick={()=>updateEntry(idx,'showPicker',!entry.showPicker)} style={{fontSize:11,padding:'2px 8px',borderRadius:999}}>
-                    <Icon name="plus" size={11}/> {entry.showPicker?'Close':'Add'}
-                  </button>
-                </div>
-
-                {entry.showPicker&&<div className="fade-in" style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:8,marginBottom:8}}>
-                  <input className="input" placeholder="Search team members..." value={entry.pickerQ} onChange={e=>updateEntry(idx,'pickerQ',e.target.value)} style={{fontSize:12,marginBottom:6,padding:'5px 10px'}}/>
-                  <div style={{maxHeight:100,overflowY:'auto',display:'flex',flexDirection:'column',gap:1}}>
-                    {existingNames.filter(n=>!entry.persons.includes(n)&&(!entry.pickerQ||n.toLowerCase().includes(entry.pickerQ.toLowerCase()))).map(n=>(
-                      <div key={n} onClick={()=>addPersonToEntry(idx,n)} style={{padding:'4px 8px',borderRadius:4,fontSize:12,cursor:'pointer'}} onMouseOver={e=>e.currentTarget.style.background='var(--accent-light)'} onMouseOut={e=>e.currentTarget.style.background='transparent'}>{n}</div>
-                    ))}
-                  </div>
-                  <div style={{display:'flex',gap:6,marginTop:6,borderTop:'1px solid var(--border)',paddingTop:6}}>
-                    <input className="input" placeholder="Or type new name..." value={entry.newPerson} onChange={e=>updateEntry(idx,'newPerson',e.target.value)} onKeyDown={e=>e.key==='Enter'&&addNewPersonToEntry(idx)} style={{fontSize:12,padding:'4px 8px',flex:1}}/>
-                    <button className="btn btn-sm btn-primary" onClick={()=>addNewPersonToEntry(idx)} style={{fontSize:11,padding:'3px 10px'}}>Add</button>
-                  </div>
-                </div>}
-
-                <label style={subLbl}>Agenda / Notes</label>
-                <input className="input" placeholder="Meeting agenda, handoff notes..." value={entry.agenda} onChange={e=>updateEntry(idx,'agenda',e.target.value)} style={{fontSize:13}}/>
-              </div>);
-            })}
-          </div>);
-        })}
-
-        {/* Also allow blank entries that span multiple days */}
-        <div style={{marginTop:8,display:'flex',justifyContent:'center'}}>
-          <button className="btn btn-sm btn-secondary" onClick={addBlankEntry} style={{fontSize:12}}>
-            <Icon name="plus" size={12}/> Add multi-day project entry
-          </button>
+      {projects.length>0&&<div>
+        <div style={{fontSize:10,color:'var(--text3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:6}}>Project Assignments</div>
+        <div style={{border:'1px solid var(--border)',borderRadius:10,overflow:'hidden'}}>
+          <table><thead><tr><th>Date</th><th>Project</th><th>Backup Owner</th><th>Agenda</th></tr></thead>
+          <tbody>{projects.map((p,i)=><tr key={i}><td style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:'nowrap'}}>{p.date?fmtDate(p.date):'—'}</td><td style={{fontWeight:500}}>{p.project||'—'}</td><td>{p.persons.join(', ')||'—'}</td><td style={{color:'var(--text2)'}}>{p.agenda||'—'}</td></tr>)}</tbody>
+          </table>
         </div>
       </div>}
-    </div>}
-
-    <div style={{display:'flex',gap:8,marginTop:18,justifyContent:'space-between',alignItems:'center'}}>
-      <div style={{fontSize:11.5,color:'var(--text3)'}}>
-        {dates.length>0&&<span>{dates.length} date{dates.length!==1?'s':''} · {entries.filter(e=>e.project||e.persons.length>0).length} project entries</span>}
-      </div>
-      <div style={{display:'flex',gap:8}}>
-        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-        <button className="btn btn-primary" onClick={()=>{if(!name.trim())return;onSave({name:name.trim(),type,dates,backup:buildBackupString(entries)})}}>
-          {editData?'Update':'Save'}
-        </button>
-      </div>
+    </div>
+    <div style={{marginTop:12,paddingTop:10,borderTop:'1px solid var(--border)',fontSize:11,color:'var(--text3)',textAlign:'center'}}>
+      CX Leave Tracker · {generatedAt}
     </div>
   </div></div>);
 }
 
-// ─── HELPER FUNCTIONS ─────────────────────────────────
-function groupConsecutiveDates(dates){
-  const sorted=[...dates].sort();
-  if(sorted.length===0)return[];
-  const ranges=[];let rangeStart=sorted[0];let rangePrev=sorted[0];
-  for(let i=1;i<sorted.length;i++){
-    const prev=new Date(rangePrev+'T00:00:00');const cur=new Date(sorted[i]+'T00:00:00');
-    let expected=new Date(prev);expected.setDate(expected.getDate()+1);
-    while(expected.getDay()===0||expected.getDay()===6)expected.setDate(expected.getDate()+1);
-    const diffDays=Math.round((cur-prev)/(1000*60*60*24));
-    if(diffDays<=1||(cur.getTime()===expected.getTime())){rangePrev=sorted[i]}
-    else{ranges.push({start:rangeStart,end:rangePrev});rangeStart=sorted[i];rangePrev=sorted[i]}
-  }
-  ranges.push({start:rangeStart,end:rangePrev});
-  return ranges;
+// ─── BULK EXPORT MODAL ───
+function BulkExportModal({members,filterDesc,onClose}){
+  const generatedAt=new Date().toLocaleString();
+  const title='Team Leave Report';
+
+  const handlePdf=()=>{
+    const w=window.open('','_blank');
+    let html=buildPrintHtml(members,title,generatedAt);
+    if(filterDesc){
+      html=html.replace('<table>',`<div style="background:#faf7f4;border:1px solid #e0d5c7;border-radius:8px;padding:10px 14px;margin-bottom:20px;font-size:12px;color:#6b5344"><strong style="color:#e8590c">Filters applied:</strong> ${filterDesc}</div><table>`);
+    }
+    w.document.write(html);w.document.close();
+  };
+
+  const handleCsv=()=>{
+    const csv=buildCsvContent(members);
+    const slug=new Date().toISOString().slice(0,10);
+    downloadCsv(csv,'cx-leave-report-'+slug+'.csv');
+  };
+
+  const tbc={PTO:'badge-pto',Sick:'badge-sick',Mixed:'badge-mixed','Business Travel':'badge-bt',Other:'badge-other'};
+
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:760}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+      <div>
+        <h3 style={{fontSize:17,fontWeight:600}}>Export — {members.length} Members</h3>
+        {filterDesc&&<div style={{fontSize:11.5,color:'var(--text2)',marginTop:2}}><Icon name="filter" size={11}/> {filterDesc}</div>}
+      </div>
+      <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
+    </div>
+
+    <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
+      <button className="btn btn-sm btn-secondary" onClick={handleCsv}><Icon name="csv" size={13}/> Download CSV</button>
+      <button className="btn btn-sm btn-primary" onClick={handlePdf}><Icon name="pdf" size={13}/> Open PDF / Print</button>
+    </div>
+
+    {filterDesc&&<div style={{fontSize:12,color:'var(--text2)',padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)',marginBottom:14}}>
+      <Icon name="filter" size={12}/> <strong>Filters applied:</strong> {filterDesc}
+    </div>}
+
+    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:14}}>
+      {[{label:'Employees',val:members.length},{label:'Total Leave Days',val:members.reduce((a,m)=>a+m.dates.length,0)},{label:'On Leave Today',val:members.filter(m=>m.dates.some(isToday)).length}].map(s=>(
+        <div key={s.label} style={{background:'var(--surface2)',borderRadius:8,padding:'10px 14px',border:'1px solid var(--border)',textAlign:'center'}}>
+          <div style={{fontSize:22,fontWeight:700,color:'var(--accent)',fontFamily:"'JetBrains Mono',monospace"}}>{s.val}</div>
+          <div style={{fontSize:10.5,color:'var(--text3)',marginTop:2}}>{s.label}</div>
+        </div>
+      ))}
+    </div>
+
+    <div style={{border:'1px solid var(--border)',borderRadius:10,overflow:'hidden',maxHeight:380,overflowY:'auto'}}>
+      <table>
+        <thead><tr><th>Employee</th><th>Type</th><th>Date Range</th><th style={{textAlign:'center'}}>Days</th><th>Projects</th></tr></thead>
+        <tbody>
+          {members.map((m,i)=>{
+            const ranges=groupConsecutiveDates(m.dates);
+            const rangeStr=ranges.map(r=>r.start===r.end?fmtDate(r.start):fmtDate(r.start)+' – '+fmtDate(r.end)).join(', ');
+            const projects=parseProjectEntries(m.backup||'');
+            return(<tr key={i}>
+              <td style={{fontWeight:600,fontSize:13}}>{m.name}</td>
+              <td><span className={'badge '+(tbc[m.type]||'badge-none')}>{m.type}</span></td>
+              <td style={{fontSize:12}}>{rangeStr}</td>
+              <td style={{textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>{m.dates.length}</td>
+              <td style={{fontSize:11.5,color:'var(--text2)'}}>{projects.length>0?projects.map(p=>p.project||p.persons.join(',')).filter(Boolean).join(', '):'—'}</td>
+            </tr>);
+          })}
+        </tbody>
+      </table>
+    </div>
+    <div style={{marginTop:10,fontSize:11,color:'var(--text3)',textAlign:'center'}}>
+      CX Leave Tracker · {generatedAt}
+    </div>
+  </div></div>);
 }
-function getNextWorkingDay(dateStr){const d=new Date(dateStr+'T00:00:00');d.setDate(d.getDate()+1);while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()+1);return d}
+
+// ─── OOO MODAL ───
 function getAutoReplyText(name,dates){
   const sorted=[...dates].sort();const ranges=groupConsecutiveDates(sorted);
   const latestRange=ranges[ranges.length-1];const returnDay=getNextWorkingDay(latestRange.end);
@@ -649,8 +468,6 @@ function getAutoReplyText(name,dates){
   else{const first=new Date(ranges[0].start+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'});const last=new Date(ranges[ranges.length-1].end+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'});dateDesc='from '+first+' to '+last}
   return`Hello,\n\nThank you for your email. I am out of office ${dateDesc} and will be back on ${returnStr}.\n\nI have limited access to my mail and will respond to your email as soon as possible upon my return.\n\nThank you for your understanding.\n\nBest regards,\n${name}`;
 }
-
-// ─── OOO MODAL ───
 function OooActionsModal({name,dates,onClose}){
   const[copied,setCopied]=useState(false);const[opened,setOpened]=useState(false);
   const sorted=[...dates].sort();const ranges=groupConsecutiveDates(sorted);
@@ -662,29 +479,26 @@ function OooActionsModal({name,dates,onClose}){
   const handleCopy=async()=>{try{await navigator.clipboard.writeText(autoReply);setCopied(true);setTimeout(()=>setCopied(false),2500)}catch{const ta=document.createElement('textarea');ta.value=autoReply;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);setCopied(true);setTimeout(()=>setCopied(false),2500)}};
   const handleOpen=()=>{window.open('https://outlook.office.com/mail/options/accounts/automaticReplies','_blank');setOpened(true)};
   const checkItem=(done,text)=>(<div style={{display:'flex',alignItems:'flex-start',gap:8,padding:'6px 0',borderBottom:'1px solid var(--border)'}}><div style={{width:20,height:20,borderRadius:'50%',border:'2px solid',borderColor:done?'var(--green)':'var(--border)',background:done?'var(--green)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:1,transition:'all .2s'}}>{done&&<span style={{color:'#fff',fontSize:11,fontWeight:700}}>✓</span>}</div><span style={{fontSize:12.5,color:'var(--text)',lineHeight:1.5}}>{text}</span></div>);
-  const stepStyle={display:'flex',gap:12,padding:16,background:'var(--surface2)',borderRadius:10,border:'1px solid var(--border)',marginBottom:10};
-  const numStyle={width:28,height:28,borderRadius:'50%',background:'var(--accent)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,flexShrink:0,marginTop:1};
+  const stepStyle={display:'flex',gap:12,padding:14,background:'var(--surface2)',borderRadius:10,border:'1px solid var(--border)',marginBottom:10};
+  const numStyle={width:26,height:26,borderRadius:'50%',background:'var(--accent)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,flexShrink:0,marginTop:1};
   return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:560}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}><h3 style={{fontSize:17,fontWeight:600}}>Set Up Out of Office</h3><button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button></div>
     <div style={{padding:'10px 14px',background:'var(--accent-light)',border:'1px solid var(--accent-border)',borderRadius:8,marginBottom:14,fontSize:13}}><strong>{name}</strong> &nbsp;·&nbsp; {sorted.length} day{sorted.length>1?'s':''} &nbsp;·&nbsp; Returns <strong>{returnStr}</strong></div>
     <div style={stepStyle}><div style={numStyle}>1</div><div style={{flex:1}}>
       <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>Open Outlook Automatic Replies</div>
-      <button className={'btn btn-sm '+(opened?'btn-secondary':'btn-primary')} onClick={handleOpen} style={{marginBottom:12}}>{opened?'Opened — switch to that tab':'Open Automatic Replies ↗'}</button>
-      <div style={{fontSize:12,color:'var(--text2)',fontWeight:600,marginBottom:6}}>Once open, set it up like this:</div>
+      <button className={'btn btn-sm '+(opened?'btn-secondary':'btn-primary')} onClick={handleOpen} style={{marginBottom:10}}>{opened?'Opened — switch to that tab':'Open Automatic Replies ↗'}</button>
       <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,padding:'4px 12px'}}>
         {checkItem(false,<>Toggle <strong>Turn on automatic replies</strong> → <strong>On</strong></>)}
         {checkItem(false,<>Check <strong>"Send replies only during a time period"</strong></>)}
-        {checkItem(false,<>Set <strong>Start time</strong> to: <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11.5,color:'var(--accent)'}}>{startDateStr}</span></>)}
-        {checkItem(false,<>Set <strong>End time</strong> to: <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11.5,color:'var(--accent)'}}>{endDateStr}</span></>)}
-        {checkItem(false,<>Paste the reply message from Step 2 into the message box</>)}
-        {checkItem(false,<>Click <strong>Save</strong></>)}
+        {checkItem(false,<>Start: <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:'var(--accent)'}}>{startDateStr}</span></>)}
+        {checkItem(false,<>End: <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:'var(--accent)'}}>{endDateStr}</span></>)}
+        {checkItem(false,<>Paste message from Step 2 → <strong>Save</strong></>)}
       </div>
     </div></div>
     <div style={stepStyle}><div style={numStyle}>2</div><div style={{flex:1}}>
       <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>Copy Auto-Reply Message</div>
-      <div style={{fontSize:12,color:'var(--text2)',marginBottom:8}}>Copy this and paste it into the message box in Outlook:</div>
-      <div style={{background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:8,padding:12,fontSize:12.5,lineHeight:1.65,whiteSpace:'pre-wrap',color:'var(--text)',maxHeight:190,overflowY:'auto',marginBottom:8}}>{autoReply}</div>
-      <button className={'btn btn-sm '+(copied?'btn-secondary':'btn-primary')} onClick={handleCopy}>{copied?'✓ Copied to clipboard!':'Copy Message'}</button>
+      <div style={{background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:8,padding:10,fontSize:12,lineHeight:1.65,whiteSpace:'pre-wrap',color:'var(--text)',maxHeight:170,overflowY:'auto',marginBottom:8}}>{autoReply}</div>
+      <button className={'btn btn-sm '+(copied?'btn-secondary':'btn-primary')} onClick={handleCopy}>{copied?'✓ Copied!':'Copy Message'}</button>
     </div></div>
     <div style={{display:'flex',justifyContent:'flex-end',marginTop:4}}><button className="btn btn-secondary" onClick={onClose}>Done</button></div>
   </div></div>);
@@ -702,6 +516,204 @@ function UserPickerModal({names,selected,onClose,onApply}){
   </div></div>);
 }
 
+// ─── ADD/EDIT LEAVE MODAL ───
+function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
+  const[name]=useState(editData?editData.name:(userName||''));
+  const[type,setType]=useState(editData?editData.type:'PTO');
+  const[dates,setDates]=useState(editData?[...editData.dates]:[]);
+  const[rangeStart,setRangeStart]=useState('');
+  const[rangeEnd,setRangeEnd]=useState('');
+  const[dateInput,setDateInput]=useState('');
+  const[rangeErr,setRangeErr]=useState('');
+  const[tab,setTab]=useState('dates');
+  const[editFilter,setEditFilter]=useState({date:'',project:''});
+
+  const parseInitialEntries=()=>{
+    if(!editData?.backup)return[];
+    return parseProjectEntries(editData.backup).map(p=>({...p,newPerson:'',showPicker:false,pickerQ:''}));
+  };
+  const[entries,setEntries]=useState(parseInitialEntries);
+
+  const weekdays=useMemo(()=>dates.filter(isWeekday).sort(),[dates]);
+
+  // ── Date range validation ──
+  const handleRangeStartChange=v=>{
+    setRangeStart(v);setRangeErr('');
+    // If end is already set and is before new start, clear it
+    if(rangeEnd&&v&&rangeEnd<v){setRangeEnd('');setRangeErr('End date was before start — please re-select')}
+  };
+  const handleRangeEndChange=v=>{
+    setRangeEnd(v);setRangeErr('');
+    if(rangeStart&&v&&v<rangeStart){setRangeErr('End date must be on or after start date');setRangeEnd('')}
+  };
+
+  const applyRange=()=>{
+    if(!rangeStart||!rangeEnd){setRangeErr('Select both start and end dates');return}
+    if(rangeEnd<rangeStart){setRangeErr('End date must be on or after start date');return}
+    const allInRange=expandDateRange(rangeStart,rangeEnd);
+    const newDates=new Set(dates);allInRange.forEach(d=>newDates.add(d));
+    setDates([...newDates].sort());setRangeStart('');setRangeEnd('');setRangeErr('');
+  };
+
+  const rangePreviewDays=rangeStart&&rangeEnd&&rangeEnd>=rangeStart?expandDateRange(rangeStart,rangeEnd).length:0;
+  const rangePreviewWeekdays=rangeStart&&rangeEnd&&rangeEnd>=rangeStart?getWeekdaysInRange(rangeStart,rangeEnd).length:0;
+
+  const updateEntry=(idx,field,val)=>setEntries(e=>e.map((x,i)=>i===idx?{...x,[field]:val}:x));
+  const removeEntry=idx=>setEntries(e=>e.filter((_,i)=>i!==idx));
+  const addPersonToEntry=(idx,person)=>{setEntries(e=>e.map((x,i)=>{if(i!==idx)return x;if(x.persons.includes(person))return x;return{...x,persons:[...x.persons,person],showPicker:false,pickerQ:''}}))};
+  const removePersonFromEntry=(idx,person)=>{setEntries(e=>e.map((x,i)=>i===idx?{...x,persons:x.persons.filter(p=>p!==person)}:x))};
+  const addNewPersonToEntry=(idx)=>{setEntries(e=>e.map((x,i)=>{if(i!==idx||!x.newPerson.trim())return x;const np=x.newPerson.trim();if(x.persons.includes(np))return{...x,newPerson:''};return{...x,persons:[...x.persons,np],newPerson:''}}))};
+  const addEntryForDay=(dateStr)=>setEntries(e=>[...e,{date:dateStr,project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}]);
+  const addBlankEntry=()=>setEntries(e=>[...e,{date:'',project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}]);
+  const deleteDateEntry=(dateStr)=>{setDates(ds=>ds.filter(d=>d!==dateStr));setEntries(e=>e.filter(en=>en.date!==dateStr))};
+
+  const filteredEntries=useMemo(()=>{
+    let e=entries;
+    if(editFilter.date)e=e.filter(x=>x.date===editFilter.date);
+    if(editFilter.project)e=e.filter(x=>x.project.toLowerCase().includes(editFilter.project.toLowerCase()));
+    return e;
+  },[entries,editFilter]);
+
+  const lbl={fontSize:12,color:'var(--text2)',marginBottom:4,display:'block',fontWeight:500};
+  const subLbl={fontSize:11,color:'var(--text3)',marginBottom:3,display:'block'};
+
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:640}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+      <h3 style={{fontSize:17,fontWeight:600}}>{editData?'Edit Leave':'Add Leave'}</h3>
+      <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
+    </div>
+
+    {editData&&<div style={{fontSize:12,color:'var(--text2)',marginBottom:12,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)'}}>Editing leave for <strong>{editData.name}</strong></div>}
+    <div style={{marginBottom:14,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)',fontSize:14,fontWeight:600}}>{name||userName||'You'}</div>
+
+    <label style={lbl}>Leave Type</label>
+    <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
+      {['PTO','Sick','Business Travel','Mixed','Other'].map(t=>(<button key={t} onClick={()=>setType(t)} style={{padding:'5px 14px',borderRadius:999,fontSize:12,fontWeight:500,border:'1px solid',borderColor:type===t?'var(--accent)':'var(--border)',background:type===t?'var(--accent-light)':'transparent',color:type===t?'var(--accent)':'var(--text2)',cursor:'pointer',transition:'all .15s'}}>{t}</button>))}
+    </div>
+
+    <div style={{display:'flex',gap:2,background:'var(--surface2)',borderRadius:8,padding:2,border:'1px solid var(--border)',marginBottom:14}}>
+      {[{k:'dates',label:'📅 Leave Dates'+(dates.length>0?' ('+dates.length+')':'')},{k:'projects',label:'📋 Projects & Backup'+(entries.filter(e=>e.project||e.persons.length>0).length>0?' ('+entries.filter(e=>e.project||e.persons.length>0).length+')':'')}].map(t=>(
+        <button key={t.k} onClick={()=>setTab(t.k)} style={{flex:1,padding:'6px 12px',borderRadius:6,fontSize:12.5,fontWeight:500,border:'none',background:tab===t.k?'var(--accent)':'transparent',color:tab===t.k?'#fff':'var(--text2)',cursor:'pointer',transition:'all .15s'}}>{t.label}</button>
+      ))}
+    </div>
+
+    {tab==='dates'&&<div>
+      {/* Date range picker with validation */}
+      <div style={{marginBottom:10,padding:'12px',background:'var(--surface2)',borderRadius:10,border:'1px solid var(--border)'}}>
+        <label style={{...lbl,marginBottom:8}}>Add Date Range</label>
+        <div style={{display:'flex',gap:6,alignItems:'flex-start',flexWrap:'wrap'}}>
+          <div style={{flex:1,minWidth:130}}>
+            <div style={{fontSize:10.5,color:'var(--text3)',marginBottom:3}}>Start date</div>
+            <input type="date" className={'input'+(rangeErr&&!rangeStart?' input-error':'')} value={rangeStart} onChange={e=>handleRangeStartChange(e.target.value)}/>
+          </div>
+          <div style={{paddingTop:22,color:'var(--text3)',fontSize:13,flexShrink:0}}>→</div>
+          <div style={{flex:1,minWidth:130}}>
+            <div style={{fontSize:10.5,color:'var(--text3)',marginBottom:3}}>End date {rangeStart&&<span style={{color:'var(--accent)'}}>(must be ≥ {fmtDate(rangeStart)})</span>}</div>
+            <input type="date" className={'input'+(rangeErr?' input-error':'')} value={rangeEnd} min={rangeStart||undefined} onChange={e=>handleRangeEndChange(e.target.value)}/>
+          </div>
+          <div style={{paddingTop:20,flexShrink:0}}><button className="btn btn-sm btn-primary" onClick={applyRange} disabled={!rangeStart||!rangeEnd}>Add</button></div>
+        </div>
+        {rangeErr&&<div className="date-validation-hint">⚠ {rangeErr}</div>}
+        {!rangeErr&&rangePreviewDays>0&&<div style={{fontSize:11,color:'var(--text2)',marginTop:5}}>{rangePreviewDays} days ({rangePreviewWeekdays} weekdays) will be added to your leave</div>}
+      </div>
+
+      <div style={{display:'flex',gap:8,marginBottom:8}}>
+        <input type="date" className="input" value={dateInput} onChange={e=>setDateInput(e.target.value)}
+          onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();if(dateInput&&!dates.includes(dateInput)){setDates(d=>[...d,dateInput].sort());setDateInput('')}}}}/>
+        <button className="btn btn-sm btn-secondary" onClick={()=>{if(dateInput&&!dates.includes(dateInput)){setDates(d=>[...d,dateInput].sort());setDateInput('')}}}>+ Single</button>
+      </div>
+
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+        <span style={{fontSize:11.5,color:'var(--text2)',fontWeight:500}}>{dates.length} date{dates.length!==1?'s':''} · {weekdays.length} weekday{weekdays.length!==1?'s':''}</span>
+        {dates.length>0&&<button className="btn btn-sm btn-danger" onClick={()=>setDates([])} style={{fontSize:10,padding:'2px 8px'}}>Clear all</button>}
+      </div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:6,minHeight:24}}>
+        {dates.length===0?<span style={{fontSize:12,color:'var(--text3)',fontStyle:'italic'}}>No dates added yet</span>:dates.map(d=>(
+          <span key={d} className={'chip '+(isToday(d)?'chip-today':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5}}>
+            {fmtDate(d)}{!isWeekday(d)&&<span style={{fontSize:9,opacity:.6}}> wknd</span>}
+            <span style={{cursor:'pointer',marginLeft:3,opacity:.6}} onClick={()=>deleteDateEntry(d)}>×</span>
+          </span>
+        ))}
+      </div>
+      {weekdays.length>0&&<div style={{fontSize:11,color:'var(--green)'}}>✓ {weekdays.length} weekday{weekdays.length!==1?'s':''} ready for project assignment</div>}
+    </div>}
+
+    {tab==='projects'&&<div>
+      {weekdays.length===0&&<div style={{padding:16,background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)',textAlign:'center',marginBottom:12}}>
+        <div style={{fontSize:13,color:'var(--text2)',marginBottom:4}}>No weekdays selected</div>
+        <div style={{fontSize:12,color:'var(--text3)'}}>Add dates in the Leave Dates tab first.</div>
+      </div>}
+
+      {weekdays.length>0&&<div>
+        {editData&&<div style={{display:'flex',gap:8,marginBottom:10,flexWrap:'wrap'}}>
+          <select className="input" value={editFilter.date} onChange={e=>setEditFilter(f=>({...f,date:e.target.value}))} style={{flex:1,fontSize:12,padding:'5px 28px 5px 10px'}}>
+            <option value="">All dates</option>
+            {weekdays.map(d=><option key={d} value={d}>{fmtDate(d)}</option>)}
+          </select>
+          <input className="input" placeholder="Filter by project..." value={editFilter.project} onChange={e=>setEditFilter(f=>({...f,project:e.target.value}))} style={{flex:1,fontSize:12}}/>
+          {(editFilter.date||editFilter.project)&&<button className="btn btn-sm btn-secondary" onClick={()=>setEditFilter({date:'',project:''})} style={{fontSize:11}}>Clear</button>}
+        </div>}
+
+        {weekdays.map(dayStr=>{
+          const relevantEntries=editData
+            ?(filteredEntries.filter(e=>e.date===dayStr||(!e.date&&!editFilter.date))).map(e=>({...e,_idx:entries.indexOf(e)}))
+            :entries.map((e,i)=>({...e,_idx:i})).filter(e=>e.date===dayStr);
+
+          return(<div key={dayStr} className="day-entry-card">
+            <div className="day-entry-header">
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span className="day-label">{fmtDate(dayStr)}</span>
+                <span style={{fontSize:11,color:'var(--text3)'}}>{new Date(dayStr+'T00:00:00').toLocaleDateString('en-US',{weekday:'long'})}</span>
+              </div>
+              <button className="btn btn-sm btn-secondary" onClick={()=>addEntryForDay(dayStr)} style={{fontSize:11,padding:'2px 8px'}}><Icon name="plus" size={11}/> Add Project</button>
+            </div>
+            {relevantEntries.length===0&&<div style={{fontSize:12,color:'var(--text3)',fontStyle:'italic',padding:'2px 0'}}>No projects — click "Add Project"</div>}
+            {relevantEntries.map(entry=>{
+              const idx=entry._idx;
+              return(<div key={idx} className="fade-in" style={{background:'var(--surface)',borderRadius:8,padding:10,marginTop:8,border:'1px solid var(--border)'}}>
+                <div style={{display:'flex',gap:8,marginBottom:6}}>
+                  <div style={{flex:1}}><label style={subLbl}>Project Name</label><input className="input" placeholder="e.g. Shield Roofing" value={entry.project} onChange={e=>updateEntry(idx,'project',e.target.value)} style={{fontSize:13}}/></div>
+                  <button className="btn-icon" onClick={()=>removeEntry(idx)} style={{width:26,height:26,color:'var(--red)',marginTop:17,flexShrink:0}}><Icon name="trash" size={12}/></button>
+                </div>
+                <label style={subLbl}>Backup Person(s)</label>
+                <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:6,minHeight:26}}>
+                  {entry.persons.map(p=>(<span key={p} className="chip chip-future" style={{fontSize:11}}>{p} <span style={{cursor:'pointer',marginLeft:2,opacity:.6}} onClick={()=>removePersonFromEntry(idx,p)}>×</span></span>))}
+                  <button className="btn btn-sm btn-secondary" onClick={()=>updateEntry(idx,'showPicker',!entry.showPicker)} style={{fontSize:11,padding:'2px 8px',borderRadius:999}}><Icon name="plus" size={11}/> {entry.showPicker?'Close':'Add'}</button>
+                </div>
+                {entry.showPicker&&<div className="fade-in" style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:8,marginBottom:8}}>
+                  <input className="input" placeholder="Search team members..." value={entry.pickerQ} onChange={e=>updateEntry(idx,'pickerQ',e.target.value)} style={{fontSize:12,marginBottom:6,padding:'5px 10px'}}/>
+                  <div style={{maxHeight:100,overflowY:'auto',display:'flex',flexDirection:'column',gap:1}}>
+                    {existingNames.filter(n=>!entry.persons.includes(n)&&(!entry.pickerQ||n.toLowerCase().includes(entry.pickerQ.toLowerCase()))).map(n=>(
+                      <div key={n} onClick={()=>addPersonToEntry(idx,n)} style={{padding:'4px 8px',borderRadius:4,fontSize:12,cursor:'pointer'}} onMouseOver={e=>e.currentTarget.style.background='var(--accent-light)'} onMouseOut={e=>e.currentTarget.style.background='transparent'}>{n}</div>
+                    ))}
+                  </div>
+                  <div style={{display:'flex',gap:6,marginTop:6,borderTop:'1px solid var(--border)',paddingTop:6}}>
+                    <input className="input" placeholder="Or type new name..." value={entry.newPerson} onChange={e=>updateEntry(idx,'newPerson',e.target.value)} onKeyDown={e=>e.key==='Enter'&&addNewPersonToEntry(idx)} style={{fontSize:12,padding:'4px 8px',flex:1}}/>
+                    <button className="btn btn-sm btn-primary" onClick={()=>addNewPersonToEntry(idx)} style={{fontSize:11,padding:'3px 10px'}}>Add</button>
+                  </div>
+                </div>}
+                <label style={subLbl}>Agenda / Notes</label>
+                <input className="input" placeholder="Meeting agenda, handoff notes..." value={entry.agenda} onChange={e=>updateEntry(idx,'agenda',e.target.value)} style={{fontSize:13}}/>
+              </div>);
+            })}
+          </div>);
+        })}
+        <div style={{marginTop:8,display:'flex',justifyContent:'center'}}>
+          <button className="btn btn-sm btn-secondary" onClick={addBlankEntry} style={{fontSize:12}}><Icon name="plus" size={12}/> Add multi-day project entry</button>
+        </div>
+      </div>}
+    </div>}
+
+    <div style={{display:'flex',gap:8,marginTop:18,justifyContent:'space-between',alignItems:'center'}}>
+      <span style={{fontSize:11.5,color:'var(--text3)'}}>{dates.length} date{dates.length!==1?'s':''} · {entries.filter(e=>e.project||e.persons.length>0).length} entries</span>
+      <div style={{display:'flex',gap:8}}>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={()=>{if(!name.trim())return;onSave({name:name.trim(),type,dates,backup:buildBackupString(entries)})}}>{editData?'Update':'Save'}</button>
+      </div>
+    </div>
+  </div></div>);
+}
+
 // ─── MAIN APP ───
 function App(){
   const[theme,setTheme]=useState(()=>localStorage.getItem('cx_lt_theme')||'light');
@@ -713,11 +725,11 @@ function App(){
   const[typeFilter,setTypeFilter]=useState('All');const[search,setSearch]=useState('');
   const[selectedUsers,setSelectedUsers]=useState([]);
   const[showAddLeave,setShowAddLeave]=useState(false);const[showUserPicker,setShowUserPicker]=useState(false);
-  const[syncing,setSyncing]=useState(false);const[syncStatus,setSyncStatus]=useState('');
   const[toasts,setToasts]=useState([]);const[editingIdx,setEditingIdx]=useState(null);
   const[showOoo,setShowOoo]=useState(false);const[oooData,setOooData]=useState(null);
   const[showDeleteConfirm,setShowDeleteConfirm]=useState(null);
-  const[showExport,setShowExport]=useState(null);
+  const[showExport,setShowExport]=useState(null);  // single member export
+  const[showBulkExport,setShowBulkExport]=useState(false);
   const[refreshing,setRefreshing]=useState(false);
   const toast=(msg,type='info')=>{const id=Date.now();setToasts(t=>[...t,{id,msg,type}]);setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),4000)};
 
@@ -730,12 +742,13 @@ function App(){
 
   const handleRefresh=async()=>{
     setRefreshing(true);
-    try{await loadAllData();toast('Refreshed with latest data','success')}
+    try{await loadAllData();toast('Refreshed','success')}
     catch(e){toast('Refresh failed: '+e.message,'error')}
     setRefreshing(false);
   };
 
   const allNames=useMemo(()=>data.map(m=>m.name).sort(),[data]);
+
   const filtered=useMemo(()=>{
     let r=data;
     if(view==='today')r=r.filter(m=>m.dates.some(isToday));
@@ -746,14 +759,27 @@ function App(){
     if(search.trim()){const q=search.toLowerCase();r=r.filter(m=>m.name.toLowerCase().includes(q)||m.backup.toLowerCase().includes(q)||m.dates.some(d=>d.includes(q)))}
     return[...r].sort((a,b)=>{const aMe=user&&a.name.toLowerCase()===user.name.toLowerCase();const bMe=user&&b.name.toLowerCase()===user.name.toLowerCase();if(aMe&&!bMe)return-1;if(!aMe&&bMe)return 1;return a.name.localeCompare(b.name)});
   },[data,view,weekDate,typeFilter,selectedUsers,search,user]);
+
   const stats=useMemo(()=>({total:data.length,today:data.filter(m=>m.dates.some(isToday)).length,week:data.filter(m=>m.dates.some(d=>inWeek(d,new Date()))).length,upcoming:data.filter(m=>m.dates.length>0).length}),[data]);
   const clearFilters=()=>{setView('upcoming');setTypeFilter('All');setSearch('');setSelectedUsers([])};
+
+  // Build human-readable filter description for bulk export
+  const filterDesc=useMemo(()=>{
+    const parts=[];
+    if(view!=='upcoming')parts.push('View: '+view.charAt(0).toUpperCase()+view.slice(1));
+    if(typeFilter!=='All')parts.push('Type: '+typeFilter);
+    if(selectedUsers.length>0)parts.push('Members: '+selectedUsers.join(', '));
+    if(search.trim())parts.push('Search: "'+search.trim()+'"');
+    return parts.join(' · ');
+  },[view,typeFilter,selectedUsers,search]);
+
+  const hasFilters=!!(view!=='upcoming'||typeFilter!=='All'||selectedUsers.length>0||search.trim());
 
   const handleDeleteMember=idx=>setShowDeleteConfirm(idx);
   const confirmDelete=async()=>{
     const idx=showDeleteConfirm;const member=data[idx];
     setData(d=>d.filter((_,i)=>i!==idx));setShowDeleteConfirm(null);
-    try{await softDeleteLeave(member.name);toast(member.name+' removed & saved','success')}
+    try{await softDeleteLeave(member.name);toast(member.name+' removed','success')}
     catch{toast('Removed locally (save failed)','error')}
   };
 
@@ -781,13 +807,20 @@ function App(){
 
   return(<div style={{minHeight:'100vh',background:'var(--bg)'}}>
     <ToastContainer toasts={toasts} remove={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>
+
     <header style={{position:'sticky',top:0,zIndex:50,padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',background:'var(--header-bg)',backdropFilter:'blur(16px)',borderBottom:'1px solid var(--header-border)'}}>
-      <div style={{display:'flex',alignItems:'center',gap:10}}><div style={{width:32,height:32,borderRadius:8,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'#fff',fontWeight:700}}>CX</div><span style={{fontSize:17,fontWeight:700}}>Leave Tracker</span></div>
+      <div style={{display:'flex',alignItems:'center',gap:10}}>
+        <div style={{width:32,height:32,borderRadius:8,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'#fff',fontWeight:700}}>CX</div>
+        <span style={{fontSize:17,fontWeight:700}}>Leave Tracker</span>
+      </div>
       <div style={{display:'flex',alignItems:'center',gap:8}}>
-        <button className="btn btn-secondary btn-sm" onClick={handleRefresh} disabled={refreshing}><span className={refreshing?'spin':''} style={{display:'inline-flex'}}><Icon name="refresh" size={14}/></span> {refreshing?'Refreshing...':'Refresh'}</button>
+        <button className="btn btn-secondary btn-sm" onClick={handleRefresh} disabled={refreshing}><span className={refreshing?'spin':''} style={{display:'inline-flex'}}><Icon name="refresh" size={14}/></span> {refreshing?'…':'Refresh'}</button>
         <button className="btn btn-primary btn-sm" onClick={()=>{setEditingIdx(null);setShowAddLeave(true)}}><Icon name="plus" size={14}/> Add My Leave</button>
         <button className="theme-toggle" onClick={()=>setTheme(t=>t==='light'?'dark':'light')}/>
-        <div style={{display:'flex',alignItems:'center',gap:6,marginLeft:4,paddingLeft:8,borderLeft:'1px solid var(--border)'}}><span style={{fontSize:12,color:'var(--text2)',maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name}</span><button className="btn-icon" title="Logout" onClick={()=>{localStorage.removeItem('cx_lt_session');setUser(null)}} style={{width:28,height:28}}><Icon name="logout" size={14}/></button></div>
+        <div style={{display:'flex',alignItems:'center',gap:6,marginLeft:4,paddingLeft:8,borderLeft:'1px solid var(--border)'}}>
+          <span style={{fontSize:12,color:'var(--text2)',maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name}</span>
+          <button className="btn-icon" title="Logout" onClick={()=>{localStorage.removeItem('cx_lt_session');setUser(null)}} style={{width:28,height:28}}><Icon name="logout" size={14}/></button>
+        </div>
       </div>
     </header>
 
@@ -801,54 +834,79 @@ function App(){
           <div style={{display:'flex',gap:2,background:'var(--surface2)',borderRadius:8,padding:2,border:'1px solid var(--border)'}}>
             {['upcoming','today','week','all'].map(v=>(<button key={v} onClick={()=>setView(v)} style={{padding:'5px 12px',borderRadius:6,fontSize:12,fontWeight:500,border:'none',background:view===v?'var(--accent)':'transparent',color:view===v?'#fff':'var(--text2)',cursor:'pointer'}}>{v==='all'?'All':v[0].toUpperCase()+v.slice(1)}</button>))}
           </div>
-          {view==='week'&&<div style={{display:'flex',alignItems:'center',gap:4}}><button className="btn-icon" onClick={()=>setWeekDate(d=>shiftWeek(d,-1))} style={{width:26,height:26}}><Icon name="chevL" size={14}/></button><span style={{fontSize:12,color:'var(--text2)',minWidth:110,textAlign:'center',fontFamily:"'JetBrains Mono',monospace"}}>{fmtDate(getWeekRange(weekDate)[0])+' – '+fmtDate(getWeekRange(weekDate)[1])}</span><button className="btn-icon" onClick={()=>setWeekDate(d=>shiftWeek(d,1))} style={{width:26,height:26}}><Icon name="chevR" size={14}/></button><button className="btn btn-sm btn-secondary" style={{fontSize:11,padding:'3px 8px'}} onClick={()=>setWeekDate(new Date())}>This week</button></div>}
+          {view==='week'&&<div style={{display:'flex',alignItems:'center',gap:4}}>
+            <button className="btn-icon" onClick={()=>setWeekDate(d=>shiftWeek(d,-1))} style={{width:26,height:26}}><Icon name="chevL" size={14}/></button>
+            <span style={{fontSize:12,color:'var(--text2)',minWidth:110,textAlign:'center',fontFamily:"'JetBrains Mono',monospace"}}>{fmtDate(getWeekRange(weekDate)[0])+' – '+fmtDate(getWeekRange(weekDate)[1])}</span>
+            <button className="btn-icon" onClick={()=>setWeekDate(d=>shiftWeek(d,1))} style={{width:26,height:26}}><Icon name="chevR" size={14}/></button>
+            <button className="btn btn-sm btn-secondary" style={{fontSize:11,padding:'3px 8px'}} onClick={()=>setWeekDate(new Date())}>This week</button>
+          </div>}
           <select className="input" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} style={{width:'auto',fontSize:12,padding:'5px 28px 5px 10px'}}>{['All','PTO','Sick','Mixed','Business Travel'].map(t=><option key={t}>{t}</option>)}</select>
           <button className="btn btn-sm btn-secondary" onClick={()=>setShowUserPicker(true)}><Icon name="users" size={13}/> {selectedUsers.length>0?selectedUsers.length+' selected':'Members'}</button>
-          <div style={{position:'relative',flex:'1 1 140px',minWidth:130}}><span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text3)',display:'flex'}}><Icon name="search" size={14}/></span><input className="input" placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:32,fontSize:12}}/></div>
+          <div style={{position:'relative',flex:'1 1 140px',minWidth:130}}>
+            <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text3)',display:'flex'}}><Icon name="search" size={14}/></span>
+            <input className="input" placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:32,fontSize:12}}/>
+          </div>
           <button className="btn btn-sm btn-danger" onClick={clearFilters} style={{fontSize:11}}>Clear</button>
+          {/* ── Bulk Export button ── */}
+          <button
+            className="btn btn-sm"
+            onClick={()=>setShowBulkExport(true)}
+            title={hasFilters?'Export filtered results ('+filtered.length+' rows)':'Export all ('+filtered.length+' rows)'}
+            style={{background:'var(--green-bg)',color:'var(--green)',border:'1px solid rgba(43,138,62,.25)',whiteSpace:'nowrap'}}
+          >
+            <Icon name="download" size={13}/>
+            {hasFilters?'Export filtered ('+filtered.length+')':'Export all ('+filtered.length+')'}
+          </button>
         </div>
       </div>
 
-      <div className="card responsive-table" style={{overflow:'hidden'}}><div style={{overflowX:'auto'}}><table><thead><tr>
-        <th>Name</th><th>Type</th><th>Leave Dates</th><th>Days</th>
-        <th className="desktop-only">Project</th><th className="desktop-only">Backup</th><th className="desktop-only">Agenda</th>
-        <th style={{width:80}}>Actions</th>
-      </tr></thead><tbody>
-        {filtered.length===0?<tr><td colSpan={8} style={{textAlign:'center',padding:40,color:'var(--text3)'}}>No matching records</td></tr>:filtered.map((m,i)=>{
-          const oi=data.indexOf(m);const dc=m.dates.length;
-          const isMe=user&&m.name.toLowerCase()===user.name.toLowerCase();
-          const projects=parseProjectEntries(m.backup||'');
-          const rowSpan=Math.max(projects.length,1);
-          return(<React.Fragment key={m.name+i}>
-            <tr className="fade-in">
-              <td rowSpan={rowSpan} style={{fontWeight:600,whiteSpace:'nowrap',fontSize:13.5,verticalAlign:'top'}}>{m.name}{isMe&&<span style={{fontSize:10,color:'var(--accent)',marginLeft:4}}>(you)</span>}</td>
-              <td rowSpan={rowSpan} style={{verticalAlign:'top'}}><span className={'badge '+(tbc[m.type]||'badge-none')}>{m.type}</span></td>
-              <td rowSpan={rowSpan} style={{maxWidth:280,verticalAlign:'top'}}><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{dc===0?<span style={{color:'var(--text3)',fontSize:12}}>No upcoming</span>:m.dates.slice(0,10).map(d=>(<span key={d} className={'chip '+(isToday(d)?'chip-today pulse':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)}</span>))}{dc>10&&<span className="chip chip-gray" style={{fontSize:10}}>+{dc-10}</span>}</div></td>
-              <td rowSpan={rowSpan} style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,fontSize:14,textAlign:'center',verticalAlign:'top'}}><span style={dc>5?{color:'var(--amber)',background:'var(--amber-bg)',padding:'2px 8px',borderRadius:6}:{}}>{dc}</span></td>
-              <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].project||'':''}</td>
-              <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].persons.join(', ')||'':''}</td>
-              <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',fontStyle:projects[0]&&projects[0].agenda?'normal':'italic'}}>{projects[0]&&projects[0].agenda?projects[0].agenda:''}</td>
-              <td rowSpan={rowSpan} style={{verticalAlign:'top'}}>
-                <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
-                  <button className="btn-icon" onClick={()=>setShowExport(m)} title="Export/Share" style={{width:28,height:28,color:'var(--indigo)'}}><Icon name="share" size={13}/></button>
-                  {isMe&&<>
-                    <button className="btn-icon" onClick={()=>{setEditingIdx(oi);setShowAddLeave(true)}} title="Edit" style={{width:28,height:28}}><Icon name="edit" size={13}/></button>
-                    <button className="btn-icon" onClick={()=>handleDeleteMember(oi)} title="Delete" style={{width:28,height:28,color:'var(--red)'}}><Icon name="trash" size={13}/></button>
-                  </>}
-                </div>
-              </td>
-            </tr>
-            {projects.slice(1).map((p,pi)=>(
-              <tr key={m.name+'-proj-'+pi} className="fade-in">
-                <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.project||''}</td>
-                <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.persons.join(', ')||''}</td>
-                <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',fontStyle:p.agenda?'normal':'italic'}}>{p.agenda||''}</td>
-              </tr>
-            ))}
-          </React.Fragment>);
-        })}
-      </tbody></table></div>
-      <div style={{padding:'10px 14px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',fontSize:11.5,color:'var(--text3)'}}><span>Showing {filtered.length} of {data.length}</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>Last sync: {lastSync}</span></div>
+      <div className="card responsive-table" style={{overflow:'hidden'}}>
+        <div style={{overflowX:'auto'}}>
+          <table><thead><tr>
+            <th>Name</th><th>Type</th><th>Leave Dates</th><th>Days</th>
+            <th className="desktop-only">Project</th><th className="desktop-only">Backup</th><th className="desktop-only">Agenda</th>
+            <th style={{width:88}}>Actions</th>
+          </tr></thead><tbody>
+            {filtered.length===0?<tr><td colSpan={8} style={{textAlign:'center',padding:40,color:'var(--text3)'}}>No matching records</td></tr>:filtered.map((m,i)=>{
+              const oi=data.indexOf(m);const dc=m.dates.length;
+              const isMe=user&&m.name.toLowerCase()===user.name.toLowerCase();
+              const projects=parseProjectEntries(m.backup||'');
+              const rowSpan=Math.max(projects.length,1);
+              return(<React.Fragment key={m.name+i}>
+                <tr className="fade-in">
+                  <td rowSpan={rowSpan} style={{fontWeight:600,whiteSpace:'nowrap',fontSize:13.5,verticalAlign:'top'}}>{m.name}{isMe&&<span style={{fontSize:10,color:'var(--accent)',marginLeft:4}}>(you)</span>}</td>
+                  <td rowSpan={rowSpan} style={{verticalAlign:'top'}}><span className={'badge '+(tbc[m.type]||'badge-none')}>{m.type}</span></td>
+                  <td rowSpan={rowSpan} style={{maxWidth:260,verticalAlign:'top'}}><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{dc===0?<span style={{color:'var(--text3)',fontSize:12}}>No upcoming</span>:m.dates.slice(0,10).map(d=>(<span key={d} className={'chip '+(isToday(d)?'chip-today pulse':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5}}>{fmtDate(d)}</span>))}{dc>10&&<span className="chip chip-gray" style={{fontSize:10}}>+{dc-10}</span>}</div></td>
+                  <td rowSpan={rowSpan} style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,fontSize:14,textAlign:'center',verticalAlign:'top'}}><span style={dc>5?{color:'var(--amber)',background:'var(--amber-bg)',padding:'2px 8px',borderRadius:6}:{}}>{dc}</span></td>
+                  <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].project||'':''}</td>
+                  <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].persons.join(', ')||'':''}</td>
+                  <td className="desktop-only" style={{fontSize:12,color:'var(--text3)'}}>{projects[0]?projects[0].agenda||'':''}</td>
+                  <td rowSpan={rowSpan} style={{verticalAlign:'top'}}>
+                    <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
+                      {/* Per-row export (always visible) */}
+                      <button className="btn-icon" onClick={()=>setShowExport(m)} title="Export this record" style={{width:28,height:28,color:'var(--indigo)'}}><Icon name="share" size={13}/></button>
+                      {isMe&&<>
+                        <button className="btn-icon" onClick={()=>{setEditingIdx(oi);setShowAddLeave(true)}} title="Edit" style={{width:28,height:28}}><Icon name="edit" size={13}/></button>
+                        <button className="btn-icon" onClick={()=>handleDeleteMember(oi)} title="Delete" style={{width:28,height:28,color:'var(--red)'}}><Icon name="trash" size={13}/></button>
+                      </>}
+                    </div>
+                  </td>
+                </tr>
+                {projects.slice(1).map((p,pi)=>(
+                  <tr key={m.name+'-proj-'+pi} className="fade-in">
+                    <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.project||''}</td>
+                    <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.persons.join(', ')||''}</td>
+                    <td className="desktop-only" style={{fontSize:12,color:'var(--text3)'}}>{p.agenda||''}</td>
+                  </tr>
+                ))}
+              </React.Fragment>);
+            })}
+          </tbody></table>
+        </div>
+        <div style={{padding:'10px 14px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',fontSize:11.5,color:'var(--text3)'}}>
+          <span>Showing {filtered.length} of {data.length}{hasFilters&&<span style={{color:'var(--accent)',marginLeft:6}}>· Filtered</span>}</span>
+          <span style={{fontFamily:"'JetBrains Mono',monospace"}}>Last sync: {lastSync}</span>
+        </div>
       </div>
     </main>
 
@@ -856,14 +914,15 @@ function App(){
     {showUserPicker&&<UserPickerModal names={allNames} selected={selectedUsers} onClose={()=>setShowUserPicker(false)} onApply={sel=>{setSelectedUsers(sel);setShowUserPicker(false)}}/>}
     {showOoo&&oooData&&<OooActionsModal name={oooData.name} dates={oooData.dates} onClose={()=>{setShowOoo(false);setOooData(null)}}/>}
     {showExport&&<ExportModal member={showExport} onClose={()=>setShowExport(null)}/>}
+    {showBulkExport&&<BulkExportModal members={filtered} filterDesc={filterDesc} onClose={()=>setShowBulkExport(false)}/>}
     {showDeleteConfirm!==null&&data[showDeleteConfirm]&&<div className="overlay" onClick={()=>setShowDeleteConfirm(null)}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:420}}>
       <h3 style={{fontSize:17,fontWeight:600,marginBottom:12,color:'var(--red)'}}>Delete Leave Record</h3>
-      <p style={{fontSize:13.5,color:'var(--text)',marginBottom:8}}>Are you sure you want to remove <strong>{data[showDeleteConfirm].name}</strong>?</p>
+      <p style={{fontSize:13.5,marginBottom:8}}>Remove <strong>{data[showDeleteConfirm].name}</strong>?</p>
       {data[showDeleteConfirm].dates.length>0&&<div style={{marginBottom:12}}>
-        <div style={{fontSize:12,color:'var(--text2)',marginBottom:6}}>This will remove {data[showDeleteConfirm].dates.length} leave date{data[showDeleteConfirm].dates.length>1?'s':''}:</div>
+        <div style={{fontSize:12,color:'var(--text2)',marginBottom:6}}>{data[showDeleteConfirm].dates.length} leave date{data[showDeleteConfirm].dates.length>1?'s':''} will be removed:</div>
         <div style={{display:'flex',flexWrap:'wrap',gap:4}}>{data[showDeleteConfirm].dates.slice(0,8).map(d=>(<span key={d} className="chip chip-future" style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)}</span>))}{data[showDeleteConfirm].dates.length>8&&<span className="chip chip-gray" style={{fontSize:10}}>+{data[showDeleteConfirm].dates.length-8} more</span>}</div>
       </div>}
-      <p style={{fontSize:12,color:'var(--text3)',marginBottom:14}}>This action is saved to the database and visible to all users.</p>
+      <p style={{fontSize:12,color:'var(--text3)',marginBottom:14}}>Saved to database — visible to all users.</p>
       <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
         <button className="btn btn-secondary" onClick={()=>setShowDeleteConfirm(null)}>Cancel</button>
         <button className="btn btn-danger" onClick={confirmDelete} style={{background:'var(--red)',color:'#fff',border:'none'}}>Delete</button>
