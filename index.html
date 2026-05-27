@@ -219,6 +219,47 @@ async function upsertLeave(entry,addedBy){
 async function softDeleteLeave(name){
   return fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(name)+'&deleted=eq.false',{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({deleted:true,updated_at:new Date().toISOString()})});
 }
+
+// ─── STANDALONE PROJECT ENTRIES (lt_projects table) ───
+// Schema: id, name(author), date, project, next_call, backup, agenda, created_at, updated_at, deleted
+async function fetchProjectEntries(){
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/lt_projects?deleted=eq.false&order=date.asc',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+    if(!r.ok)return JSON.parse(localStorage.getItem('cx_lt_proj_cache')||'[]');
+    const data=await r.json();
+    localStorage.setItem('cx_lt_proj_cache',JSON.stringify(data));
+    return data;
+  }catch{return JSON.parse(localStorage.getItem('cx_lt_proj_cache')||'[]')}
+}
+async function upsertProjectEntry(entry){
+  // entry: {id?, name, date, project, next_call, backup, agenda}
+  try{
+    if(entry.id){
+      const r=await fetch(SB_URL+'/rest/v1/lt_projects?id=eq.'+entry.id,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({date:entry.date,project:entry.project,next_call:entry.next_call||'',backup:entry.backup||'',agenda:entry.agenda||'',updated_at:new Date().toISOString()})});
+      if(!r.ok)throw new Error('patch failed');
+      return r.json();
+    }else{
+      const r=await fetch(SB_URL+'/rest/v1/lt_projects',{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({name:entry.name,date:entry.date,project:entry.project,next_call:entry.next_call||'',backup:entry.backup||'',agenda:entry.agenda||''})});
+      if(!r.ok)throw new Error('insert failed');
+      return r.json();
+    }
+  }catch(e){
+    // Fallback: store locally with temp id
+    const cache=JSON.parse(localStorage.getItem('cx_lt_proj_cache')||'[]');
+    const tempId='local_'+Date.now();
+    if(entry.id){const idx=cache.findIndex(x=>x.id===entry.id);if(idx>=0)cache[idx]={...cache[idx],...entry};else cache.push({...entry})}
+    else cache.push({...entry,id:tempId,deleted:false,created_at:new Date().toISOString()});
+    localStorage.setItem('cx_lt_proj_cache',JSON.stringify(cache));
+    return[{...entry,id:tempId}];
+  }
+}
+async function deleteProjectEntry(id){
+  try{
+    await fetch(SB_URL+'/rest/v1/lt_projects?id=eq.'+id,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({deleted:true,updated_at:new Date().toISOString()})});
+  }catch{}
+  const cache=JSON.parse(localStorage.getItem('cx_lt_proj_cache')||'[]');
+  localStorage.setItem('cx_lt_proj_cache',JSON.stringify(cache.filter(x=>x.id!==id)));
+}
 function mergeCanvasAndUserLeaves(canvasMembers,userLeaves){
   const merged=[...canvasMembers];const deletedNames=new Set();
   for(const ul of userLeaves){
@@ -504,47 +545,126 @@ function BulkExportModal({members,filterDesc,onClose}){
   </div></div>);
 }
 
-// ─── PROJECTS & AGENDA VIEWER MODAL (all users, view+export) ───
-function ProjectsAgendaModal({members,onClose}){
+// ─── PROJECTS & AGENDA MODAL (standalone work tracker + leave-linked team view) ───
+function ProjectsAgendaModal({members,userName,allNames,onClose}){
+  const[activeTab,setActiveTab]=useState('mine');
+  const[projEntries,setProjEntries]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[saving,setSaving]=useState(false);
+  // Edit state for "My Entries" tab
+  const blankEntry=()=>({id:null,date:todayStr(),project:'',next_call:'',backup:'',agenda:'',showPicker:false,pickerQ:'',_dirty:false});
+  const[draftEntries,setDraftEntries]=useState([blankEntry()]);
+  const[saveMsg,setSaveMsg]=useState('');
+  // Team view filters
   const[search,setSearch]=useState('');
   const[memberFilter,setMemberFilter]=useState('');
   const[dateFilter,setDateFilter]=useState('');
   const generatedAt=new Date().toLocaleString();
 
-  // Flatten all project entries across all members
-  const allEntries=useMemo(()=>{
+  // Load all standalone project entries on mount
+  useEffect(()=>{
+    fetchProjectEntries().then(data=>{
+      setProjEntries(data||[]);
+      // Pre-populate My Entries with existing entries for current user
+      const mine=(data||[]).filter(e=>e.name&&e.name.toLowerCase()===userName.toLowerCase());
+      if(mine.length>0){
+        setDraftEntries(mine.map(e=>({...e,showPicker:false,pickerQ:'',_dirty:false})));
+      }
+      setLoading(false);
+    });
+  },[userName]);
+
+  const myEntries=draftEntries;
+  const updateDraft=(idx,field,val)=>setDraftEntries(e=>e.map((x,i)=>i===idx?{...x,[field]:val,_dirty:true}:x));
+  const addDraftRow=()=>setDraftEntries(e=>[...e,blankEntry()]);
+  const removeDraftRow=async(idx)=>{
+    const entry=draftEntries[idx];
+    if(entry.id&&!String(entry.id).startsWith('local_')){
+      await deleteProjectEntry(entry.id);
+      setProjEntries(p=>p.filter(x=>x.id!==entry.id));
+    }
+    setDraftEntries(e=>e.filter((_,i)=>i!==idx));
+  };
+
+  const addPersonToDraft=(idx,person)=>setDraftEntries(e=>e.map((x,i)=>{
+    if(i!==idx)return x;
+    const existing=(x.backup||'').split(',').map(s=>s.trim()).filter(Boolean);
+    if(existing.includes(person))return{...x,showPicker:false,pickerQ:''};
+    return{...x,backup:[...existing,person].join(', '),showPicker:false,pickerQ:'',_dirty:true};
+  }));
+  const removePersonFromDraft=(idx,person)=>setDraftEntries(e=>e.map((x,i)=>{
+    if(i!==idx)return x;
+    const persons=(x.backup||'').split(',').map(s=>s.trim()).filter(p=>p&&p!==person);
+    return{...x,backup:persons.join(', '),_dirty:true};
+  }));
+
+  const handleSaveAll=async()=>{
+    const toSave=draftEntries.filter(e=>e.project.trim());
+    if(toSave.length===0){setSaveMsg('Add at least one project name to save.');return}
+    setSaving(true);setSaveMsg('');
+    try{
+      const saved=[];
+      for(const e of toSave){
+        const result=await upsertProjectEntry({...e,name:userName});
+        if(result&&result[0])saved.push({...result[0],showPicker:false,pickerQ:'',_dirty:false});
+        else saved.push({...e,_dirty:false});
+      }
+      // Refresh from server
+      const fresh=await fetchProjectEntries();
+      setProjEntries(fresh||[]);
+      const mine=(fresh||[]).filter(e=>e.name&&e.name.toLowerCase()===userName.toLowerCase());
+      setDraftEntries(mine.length>0?mine.map(e=>({...e,showPicker:false,pickerQ:'',_dirty:false})):[blankEntry()]);
+      setSaveMsg('✓ Saved successfully');
+      setTimeout(()=>setSaveMsg(''),3000);
+    }catch(err){setSaveMsg('Save failed — changes stored locally')}
+    setSaving(false);
+  };
+
+  // Merge: leave-linked entries + standalone entries for team view
+  const allTeamEntries=useMemo(()=>{
     const rows=[];
+    // Standalone project entries from lt_projects
+    projEntries.forEach(e=>{
+      if(!e.deleted)rows.push({
+        member:e.name||'',source:'standalone',type:'—',rangeStr:'',
+        date:e.date||'',project:e.project||'',
+        next_call:e.next_call||'',
+        backup:e.backup?e.backup.split(',').map(s=>s.trim()).filter(Boolean):[],
+        agenda:e.agenda||'',isNoCalls:false,noProjects:false
+      });
+    });
+    // Leave-linked entries from backup strings
     members.forEach(m=>{
       const projs=parseProjectEntries(m.backup||'',true);
       const ranges=groupConsecutiveDates(m.dates);
       const rangeStr=ranges.map(r=>r.start===r.end?fmtDate(r.start):fmtDate(r.start)+' – '+fmtDate(r.end)).join(', ');
       if(projs.length===0){
-        rows.push({member:m.name,type:m.type,rangeStr,date:'',project:'',persons:[],agenda:'',isNoCalls:false,noProjects:true});
-      } else {
+        rows.push({member:m.name,source:'leave',type:m.type,rangeStr,date:'',project:'',next_call:'',backup:[],agenda:'',isNoCalls:false,noProjects:true});
+      }else{
         projs.forEach(p=>{
-          rows.push({member:m.name,type:m.type,rangeStr,date:p.date,project:p.project,persons:p.persons,agenda:p.agenda,isNoCalls:p.isNoCalls,noProjects:false});
+          rows.push({member:m.name,source:'leave',type:m.type,rangeStr,date:p.date,project:p.project,next_call:'',backup:p.persons,agenda:p.agenda,isNoCalls:p.isNoCalls,noProjects:false});
         });
       }
     });
-    return rows;
-  },[members]);
+    return rows.sort((a,b)=>a.date>b.date?1:a.date<b.date?-1:a.member.localeCompare(b.member));
+  },[projEntries,members]);
 
-  const filtered=useMemo(()=>{
-    let r=allEntries;
+  const uniqueMembers=[...new Set(allTeamEntries.map(e=>e.member).filter(Boolean))].sort();
+  const uniqueDates=[...new Set(allTeamEntries.map(e=>e.date).filter(Boolean))].sort();
+
+  const filteredTeam=useMemo(()=>{
+    let r=allTeamEntries;
     if(memberFilter)r=r.filter(e=>e.member===memberFilter);
     if(dateFilter)r=r.filter(e=>e.date===dateFilter);
-    if(search.trim()){const q=search.toLowerCase();r=r.filter(e=>e.member.toLowerCase().includes(q)||e.project.toLowerCase().includes(q)||e.persons.join(' ').toLowerCase().includes(q)||e.agenda.toLowerCase().includes(q))}
+    if(search.trim()){const q=search.toLowerCase();r=r.filter(e=>e.member.toLowerCase().includes(q)||e.project.toLowerCase().includes(q)||(e.backup||[]).join(' ').toLowerCase().includes(q)||e.agenda.toLowerCase().includes(q))}
     return r;
-  },[allEntries,memberFilter,dateFilter,search]);
-
-  const uniqueMembers=[...new Set(allEntries.map(e=>e.member))].sort();
-  const uniqueDates=[...new Set(allEntries.map(e=>e.date).filter(Boolean))].sort();
+  },[allTeamEntries,memberFilter,dateFilter,search]);
 
   const handleCsv=()=>{
     const esc=v=>{const s=String(v||'');return s.includes(',')||s.includes('"')||s.includes('\n')?'"'+s.replace(/"/g,'""')+'"':s};
-    const rows=[['Employee','Leave Type','Leave Range','Date','Project','Backup Owner(s)','Agenda / Notes','Status']];
-    filtered.forEach(e=>{
-      rows.push([e.member,e.type,e.rangeStr,e.date?fmtDate(e.date):'',e.isNoCalls?'No customer calls':e.project||'',e.persons.join(', ')||'',e.agenda||'',e.isNoCalls?'No calls':e.noProjects?'No projects':e.project?'Has project':'']);
+    const rows=[['Source','Employee','Leave Type','Leave Range','Date','Project','Next Call','Backup Owner(s)','Agenda / Notes']];
+    filteredTeam.forEach(e=>{
+      rows.push([e.source==='standalone'?'Standalone':'Leave-linked',e.member,e.type||'',e.rangeStr||'',e.date?fmtDate(e.date):'',e.isNoCalls?'No customer calls':e.project||'',e.next_call||'',(e.backup||[]).join(', ')||'',e.agenda||'']);
     });
     const csv=rows.map(r=>r.map(esc).join(',')).join('\r\n');
     const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
@@ -554,14 +674,13 @@ function ProjectsAgendaModal({members,onClose}){
   };
 
   const handlePdf=()=>{
-    const tbc={PTO:'#5c47e0',Sick:'#e03131',Mixed:'#e67700','Business Travel':'#0c8599',Other:'#c2255c'};
-    const rows=filtered.map(e=>`<tr>
-      <td style="font-weight:600">${e.member}</td>
-      <td><span style="background:${tbc[e.type]||'#888'};color:#fff;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;text-transform:uppercase">${e.type}</span></td>
-      <td style="font-size:11px;color:#6b5344">${e.rangeStr}</td>
-      <td style="font-family:monospace;font-size:11px;white-space:nowrap">${e.date?fmtDate(e.date):'—'}</td>
-      <td style="font-weight:500;color:${e.isNoCalls?'#0c8599':'inherit'}">${e.isNoCalls?'📵 No customer calls':e.project||'—'}</td>
-      <td>${e.persons.join(', ')||'—'}</td>
+    const rows=filteredTeam.map(e=>`<tr>
+      <td style="font-size:10px;color:#888">${e.source==='standalone'?'🗂️':'📅'}</td>
+      <td style="font-weight:600">${e.member||'—'}</td>
+      <td style="font-family:monospace;font-size:11px;white-space:nowrap;color:#e8590c">${e.date?fmtDate(e.date):'—'}</td>
+      <td style="font-weight:500;color:${e.isNoCalls?'#0c8599':'inherit'}">${e.isNoCalls?'📵 No calls':e.project||'—'}</td>
+      <td style="font-size:11px;color:#0c8599">${e.next_call||'—'}</td>
+      <td>${(e.backup||[]).join(', ')||'—'}</td>
       <td style="color:#6b5344">${e.agenda||'—'}</td>
     </tr>`).join('');
     const w=window.open('','_blank');
@@ -570,92 +689,189 @@ function ProjectsAgendaModal({members,onClose}){
 <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'DM Sans',sans-serif;padding:32px 36px;color:#2c1810;font-size:13px;line-height:1.6}
 .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:14px;border-bottom:3px solid #e8590c}
 h1{font-size:20px;font-weight:700}.meta{font-size:11px;color:#9a8576;margin-top:3px}
-.print-btn{padding:7px 14px;background:#e8590c;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:500}
-table{width:100%;border-collapse:collapse}th{text-align:left;padding:8px 10px;background:#f7f3ee;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#9a8576;border-bottom:2px solid #e0d5c7;white-space:nowrap}
+.print-btn{padding:7px 14px;background:#e8590c;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:8px 10px;background:#f7f3ee;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#9a8576;border-bottom:2px solid #e0d5c7;white-space:nowrap}
 td{padding:8px 10px;border-bottom:1px solid #e0d5c7;vertical-align:top;font-size:12px}
 .footer{margin-top:24px;font-size:10px;color:#9a8576;border-top:1px solid #e0d5c7;padding-top:10px;display:flex;justify-content:space-between}
 @media print{.print-btn{display:none}}</style></head><body>
 <div class="header"><div><h1>📋 Projects &amp; Agenda</h1><div class="meta">CX Leave Tracker · ${generatedAt}</div></div>
-<button class="print-btn no-print" onclick="window.print()">Print / Save PDF</button></div>
-<table><thead><tr><th>Employee</th><th>Type</th><th>Leave Range</th><th>Date</th><th>Project / Status</th><th>Backup Owner</th><th>Agenda / Notes</th></tr></thead>
+<button class="print-btn" onclick="window.print()">Print / Save PDF</button></div>
+<table><thead><tr><th></th><th>Employee</th><th>Date</th><th>Project</th><th>Next Call</th><th>Backup Owner</th><th>Agenda / Notes</th></tr></thead>
 <tbody>${rows}</tbody></table>
-<div class="footer"><span>CX Leave Tracker · Projects &amp; Agenda Report</span><span>${generatedAt}</span></div>
+<div class="footer"><span>CX Leave Tracker · Projects &amp; Agenda</span><span>${generatedAt}</span></div>
 </body></html>`);
     w.document.close();
   };
 
+  const subLbl={fontSize:11,color:'var(--text3)',marginBottom:3,display:'block'};
   const tbc={PTO:'badge-pto',Sick:'badge-sick',Mixed:'badge-mixed','Business Travel':'badge-bt',Other:'badge-other'};
+  const unsaved=draftEntries.some(e=>e._dirty&&e.project.trim());
 
-  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:900,width:'95%'}}>
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:940,width:'96%',maxHeight:'92vh'}}>
+    {/* Header */}
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14,gap:12,flexWrap:'wrap'}}>
       <div>
         <h3 style={{fontSize:18,fontWeight:700,display:'flex',alignItems:'center',gap:8}}><Icon name="clipboard" size={18}/> Projects &amp; Agenda</h3>
-        <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>View-only · All team members · {allEntries.length} entries total</div>
+        <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>Log your customer calls, projects and agendas — independent of leave</div>
       </div>
       <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-        <button className="btn btn-sm btn-secondary" onClick={handleCsv}><Icon name="csv" size={13}/> CSV</button>
-        <button className="btn btn-sm btn-primary" onClick={handlePdf}><Icon name="pdf" size={13}/> PDF / Print</button>
+        {activeTab==='team'&&<>
+          <button className="btn btn-sm btn-secondary" onClick={handleCsv}><Icon name="csv" size={13}/> CSV</button>
+          <button className="btn btn-sm btn-primary" onClick={handlePdf}><Icon name="pdf" size={13}/> PDF</button>
+        </>}
         <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
       </div>
     </div>
 
-    {/* Filters */}
-    <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap'}}>
-      <select className="input" value={memberFilter} onChange={e=>setMemberFilter(e.target.value)} style={{flex:'1 1 140px',fontSize:12,padding:'5px 28px 5px 10px'}}>
-        <option value="">All employees</option>
-        {uniqueMembers.map(m=><option key={m} value={m}>{m}</option>)}
-      </select>
-      <select className="input" value={dateFilter} onChange={e=>setDateFilter(e.target.value)} style={{flex:'1 1 130px',fontSize:12,padding:'5px 28px 5px 10px'}}>
-        <option value="">All dates</option>
-        {uniqueDates.map(d=><option key={d} value={d}>{fmtDate(d)}</option>)}
-      </select>
-      <div style={{position:'relative',flex:'2 1 180px'}}>
-        <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text3)',display:'flex'}}><Icon name="search" size={13}/></span>
-        <input className="input" placeholder="Search project, backup, agenda..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:30,fontSize:12}}/>
-      </div>
-      {(memberFilter||dateFilter||search)&&<button className="btn btn-sm btn-danger" onClick={()=>{setMemberFilter('');setDateFilter('');setSearch('')}} style={{fontSize:11}}>Clear</button>}
-    </div>
-
-    {/* Summary pills */}
-    <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+    {/* Tabs */}
+    <div style={{display:'flex',gap:2,background:'var(--surface2)',borderRadius:8,padding:2,border:'1px solid var(--border)',marginBottom:16}}>
       {[
-        {label:'Showing',val:filtered.length+' entries',color:'var(--accent)'},
-        {label:'No-call days',val:filtered.filter(e=>e.isNoCalls).length,color:'var(--cyan)'},
-        {label:'With projects',val:filtered.filter(e=>e.project&&!e.isNoCalls).length,color:'var(--green)'},
-      ].map(s=><div key={s.label} style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:'6px 12px',fontSize:11.5,display:'flex',gap:6,alignItems:'center'}}>
-        <span style={{color:'var(--text3)'}}>{s.label}:</span>
-        <span style={{fontWeight:600,color:s.color}}>{s.val}</span>
-      </div>)}
+        {k:'mine',label:'✏️ My Entries',sub:'Add & edit your project log'},
+        {k:'team',label:'👥 Team View',sub:'All members · read-only'}
+      ].map(t=>(
+        <button key={t.k} onClick={()=>setActiveTab(t.k)} style={{flex:1,padding:'8px 12px',borderRadius:6,border:'none',background:activeTab===t.k?'var(--accent)':'transparent',color:activeTab===t.k?'#fff':'var(--text2)',cursor:'pointer',transition:'all .15s',textAlign:'left'}}>
+          <div style={{fontSize:13,fontWeight:600}}>{t.label}{t.k==='mine'&&unsaved&&<span style={{fontSize:10,background:'rgba(255,255,255,.3)',borderRadius:4,padding:'1px 5px',marginLeft:6}}>unsaved</span>}</div>
+          <div style={{fontSize:10.5,opacity:.75,marginTop:1}}>{t.sub}</div>
+        </button>
+      ))}
     </div>
 
-    {/* Table */}
-    <div style={{border:'1px solid var(--border)',borderRadius:10,overflow:'hidden',maxHeight:460,overflowY:'auto'}}>
-      <table>
-        <thead><tr>
-          <th>Employee</th><th>Type</th><th>Leave Range</th><th>Date</th><th>Project / Status</th><th>Backup Owner</th><th>Agenda / Notes</th>
-        </tr></thead>
-        <tbody>
-          {filtered.length===0
-            ?<tr><td colSpan={7} style={{textAlign:'center',padding:32,color:'var(--text3)'}}>No entries match the current filters</td></tr>
-            :filtered.map((e,i)=>(
-            <tr key={i} style={{background:e.isNoCalls?'rgba(12,133,153,.04)':i%2===0?'transparent':'var(--surface2)'}}>
-              <td style={{fontWeight:600,fontSize:12.5,whiteSpace:'nowrap'}}>{e.member}</td>
-              <td><span className={'badge '+(tbc[e.type]||'badge-none')} style={{fontSize:9.5}}>{e.type}</span></td>
-              <td style={{fontSize:11,color:'var(--text2)',whiteSpace:'nowrap'}}>{e.rangeStr}</td>
-              <td style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5,whiteSpace:'nowrap',color:'var(--accent)'}}>{e.date?fmtDate(e.date):'—'}</td>
-              <td style={{fontSize:12,fontWeight:e.isNoCalls?400:500,color:e.isNoCalls?'var(--cyan)':e.noProjects?'var(--text3)':'var(--text)',fontStyle:e.noProjects?'italic':'normal'}}>
-                {e.isNoCalls?'📵 No customer calls':e.noProjects?'No projects entered':e.project||'—'}
-              </td>
-              <td style={{fontSize:12,color:'var(--text2)'}}>{e.persons.join(', ')||'—'}</td>
-              <td style={{fontSize:11.5,color:'var(--text3)',maxWidth:220}}>{e.agenda||'—'}</td>
-            </tr>
+    {/* ══ MY ENTRIES TAB ══ */}
+    {activeTab==='mine'&&<div>
+      {loading?<div style={{textAlign:'center',padding:32,color:'var(--text3)'}}>Loading...</div>:<>
+        <div style={{fontSize:12,color:'var(--text2)',marginBottom:12,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)'}}>
+          Add your project updates, customer calls, and agendas below. These are <strong>not tied to your leave</strong> — log them anytime. All entries are visible in Team View.
+        </div>
+
+        <div style={{display:'flex',flexDirection:'column',gap:10,maxHeight:'52vh',overflowY:'auto',paddingRight:2}}>
+          {draftEntries.map((entry,idx)=>(
+            <div key={idx} className="fade-in" style={{background:'var(--surface)',border:'1px solid',borderColor:entry._dirty?'var(--accent-border)':'var(--border)',borderRadius:10,padding:14}}>
+              {/* Row 1: Date + Project */}
+              <div style={{display:'flex',gap:10,marginBottom:10,flexWrap:'wrap'}}>
+                <div style={{flex:'0 0 140px'}}>
+                  <label style={subLbl}>Date</label>
+                  <input type="date" className="input" value={entry.date||''} onChange={e=>updateDraft(idx,'date',e.target.value)} style={{fontSize:12.5}}/>
+                </div>
+                <div style={{flex:'2 1 180px'}}>
+                  <label style={subLbl}>Project Name <span style={{color:'var(--red)'}}>*</span></label>
+                  <input className="input" placeholder="e.g. Shield Roofing, Acme Corp..." value={entry.project} onChange={e=>updateDraft(idx,'project',e.target.value)} style={{fontSize:13}}/>
+                </div>
+                <div style={{flex:'1 1 150px'}}>
+                  <label style={subLbl}>Next Call / Meeting</label>
+                  <input className="input" placeholder="e.g. Jun 3, 2pm IST" value={entry.next_call||''} onChange={e=>updateDraft(idx,'next_call',e.target.value)} style={{fontSize:12.5}}/>
+                </div>
+                <div style={{paddingTop:18,flexShrink:0}}>
+                  <button className="btn-icon" onClick={()=>removeDraftRow(idx)} title="Remove this entry" style={{color:'var(--red)',width:28,height:28}}><Icon name="trash" size={13}/></button>
+                </div>
+              </div>
+              {/* Row 2: Backup + Agenda */}
+              <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+                <div style={{flex:'1 1 200px'}}>
+                  <label style={subLbl}>Backup / DRI</label>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:5,minHeight:28,alignItems:'center'}}>
+                    {(entry.backup||'').split(',').map(s=>s.trim()).filter(Boolean).map(p=>(
+                      <span key={p} className="chip chip-future" style={{fontSize:11}}>{p} <span style={{cursor:'pointer',marginLeft:2,opacity:.6}} onClick={()=>removePersonFromDraft(idx,p)}>×</span></span>
+                    ))}
+                    <button className="btn btn-sm btn-secondary" onClick={()=>updateDraft(idx,'showPicker',!entry.showPicker)} style={{fontSize:11,padding:'2px 8px',borderRadius:999}}><Icon name="plus" size={11}/> {entry.showPicker?'Close':'Add'}</button>
+                  </div>
+                  {entry.showPicker&&<div className="fade-in" style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:8,marginBottom:6}}>
+                    <input className="input" placeholder="Search team..." value={entry.pickerQ||''} onChange={e=>updateDraft(idx,'pickerQ',e.target.value)} style={{fontSize:12,marginBottom:5,padding:'5px 9px'}}/>
+                    <div style={{maxHeight:90,overflowY:'auto',display:'flex',flexDirection:'column',gap:1}}>
+                      {(allNames||[]).filter(n=>{const existing=(entry.backup||'').split(',').map(s=>s.trim());return!existing.includes(n)&&(!entry.pickerQ||n.toLowerCase().includes((entry.pickerQ||'').toLowerCase()))}).map(n=>(
+                        <div key={n} onClick={()=>addPersonToDraft(idx,n)} style={{padding:'4px 8px',borderRadius:4,fontSize:12,cursor:'pointer'}} onMouseOver={e=>e.currentTarget.style.background='var(--accent-light)'} onMouseOut={e=>e.currentTarget.style.background='transparent'}>{n}</div>
+                      ))}
+                    </div>
+                    <div style={{display:'flex',gap:6,marginTop:5,borderTop:'1px solid var(--border)',paddingTop:5}}>
+                      <input className="input" placeholder="Type new name..." value={entry._newPerson||''} onChange={e=>updateDraft(idx,'_newPerson',e.target.value)} onKeyDown={ev=>{if(ev.key==='Enter'&&(entry._newPerson||'').trim()){addPersonToDraft(idx,entry._newPerson.trim());updateDraft(idx,'_newPerson','');}}} style={{fontSize:12,padding:'4px 8px',flex:1}}/>
+                      <button className="btn btn-sm btn-primary" onClick={()=>{if((entry._newPerson||'').trim()){addPersonToDraft(idx,entry._newPerson.trim());updateDraft(idx,'_newPerson','');}}} style={{fontSize:11,padding:'3px 9px'}}>Add</button>
+                    </div>
+                  </div>}
+                </div>
+                <div style={{flex:'2 1 220px'}}>
+                  <label style={subLbl}>Agenda / Notes</label>
+                  <textarea className="input" placeholder="Topics to discuss, action items, context..." value={entry.agenda||''} onChange={e=>updateDraft(idx,'agenda',e.target.value)} style={{fontSize:12.5,minHeight:56,resize:'vertical',lineHeight:1.5}}/>
+                </div>
+              </div>
+              {entry._dirty&&<div style={{fontSize:10.5,color:'var(--accent)',marginTop:6}}>● Unsaved changes</div>}
+            </div>
           ))}
-        </tbody>
-      </table>
-    </div>
-    <div style={{marginTop:10,fontSize:11,color:'var(--text3)',textAlign:'right'}}>
-      CX Leave Tracker · {generatedAt}
-    </div>
+        </div>
+
+        <div style={{display:'flex',gap:10,marginTop:12,justifyContent:'space-between',alignItems:'center',flexWrap:'wrap'}}>
+          <button className="btn btn-sm btn-secondary" onClick={addDraftRow}><Icon name="plus" size={13}/> Add Another Entry</button>
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            {saveMsg&&<span style={{fontSize:12,color:saveMsg.startsWith('✓')?'var(--green)':'var(--red)'}}>{saveMsg}</span>}
+            <button className="btn btn-primary" onClick={handleSaveAll} disabled={saving} style={{minWidth:90}}>
+              {saving?'Saving…':'Save All'}
+            </button>
+          </div>
+        </div>
+      </>}
+    </div>}
+
+    {/* ══ TEAM VIEW TAB ══ */}
+    {activeTab==='team'&&<div>
+      {/* Filters */}
+      <div style={{display:'flex',gap:8,marginBottom:10,flexWrap:'wrap'}}>
+        <select className="input" value={memberFilter} onChange={e=>setMemberFilter(e.target.value)} style={{flex:'1 1 140px',fontSize:12,padding:'5px 28px 5px 10px'}}>
+          <option value="">All employees</option>
+          {uniqueMembers.map(m=><option key={m} value={m}>{m}</option>)}
+        </select>
+        <select className="input" value={dateFilter} onChange={e=>setDateFilter(e.target.value)} style={{flex:'1 1 130px',fontSize:12,padding:'5px 28px 5px 10px'}}>
+          <option value="">All dates</option>
+          {uniqueDates.map(d=><option key={d} value={d}>{fmtDate(d)}</option>)}
+        </select>
+        <div style={{position:'relative',flex:'2 1 180px'}}>
+          <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text3)',display:'flex'}}><Icon name="search" size={13}/></span>
+          <input className="input" placeholder="Search project, backup, notes..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:30,fontSize:12}}/>
+        </div>
+        {(memberFilter||dateFilter||search)&&<button className="btn btn-sm btn-danger" onClick={()=>{setMemberFilter('');setDateFilter('');setSearch('')}} style={{fontSize:11}}>Clear</button>}
+      </div>
+
+      {/* Summary */}
+      <div style={{display:'flex',gap:8,marginBottom:10,flexWrap:'wrap'}}>
+        {[
+          {label:'Total entries',val:filteredTeam.length,c:'var(--accent)'},
+          {label:'Standalone',val:filteredTeam.filter(e=>e.source==='standalone').length,c:'var(--indigo)'},
+          {label:'Leave-linked',val:filteredTeam.filter(e=>e.source==='leave'&&e.project).length,c:'var(--cyan)'},
+          {label:'No-call days',val:filteredTeam.filter(e=>e.isNoCalls).length,c:'var(--text3)'},
+        ].map(s=><div key={s.label} style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:'5px 11px',fontSize:11.5,display:'flex',gap:5,alignItems:'center'}}>
+          <span style={{color:'var(--text3)'}}>{s.label}:</span>
+          <span style={{fontWeight:600,color:s.c}}>{s.val}</span>
+        </div>)}
+      </div>
+
+      <div style={{border:'1px solid var(--border)',borderRadius:10,overflow:'hidden',maxHeight:'50vh',overflowY:'auto'}}>
+        <table>
+          <thead><tr>
+            <th style={{width:24}}></th>
+            <th>Employee</th><th>Date</th><th>Project / Status</th><th>Next Call</th><th>Backup / DRI</th><th>Agenda / Notes</th>
+          </tr></thead>
+          <tbody>
+            {filteredTeam.length===0
+              ?<tr><td colSpan={7} style={{textAlign:'center',padding:32,color:'var(--text3)'}}>No entries match the filters</td></tr>
+              :filteredTeam.map((e,i)=>(
+              <tr key={i} style={{background:e.source==='standalone'?'rgba(92,71,224,.03)':i%2===0?'transparent':'var(--surface2)'}}>
+                <td style={{fontSize:14,textAlign:'center',paddingLeft:8}} title={e.source==='standalone'?'Standalone entry':'Leave-linked entry'}>{e.source==='standalone'?'🗂️':'📅'}</td>
+                <td style={{fontWeight:600,fontSize:12.5,whiteSpace:'nowrap'}}>{e.member||'—'}</td>
+                <td style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5,whiteSpace:'nowrap',color:'var(--accent)'}}>{e.date?fmtDate(e.date):'—'}</td>
+                <td style={{fontSize:12,fontWeight:e.isNoCalls?400:500,color:e.isNoCalls?'var(--cyan)':e.noProjects?'var(--text3)':'var(--text)',fontStyle:e.noProjects?'italic':'normal'}}>
+                  {e.isNoCalls?'📵 No customer calls':e.noProjects?'No projects entered':e.project||'—'}
+                </td>
+                <td style={{fontSize:11.5,color:'var(--cyan)',whiteSpace:'nowrap'}}>{e.next_call||'—'}</td>
+                <td style={{fontSize:12,color:'var(--text2)'}}>{(e.backup||[]).join(', ')||'—'}</td>
+                <td style={{fontSize:11.5,color:'var(--text3)',maxWidth:200}}>{e.agenda||'—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{marginTop:8,fontSize:11,color:'var(--text3)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <span>🗂️ Standalone &nbsp;·&nbsp; 📅 Leave-linked</span>
+        <span>CX Leave Tracker · {generatedAt}</span>
+      </div>
+    </div>}
   </div></div>);
 }
 
@@ -1354,7 +1570,7 @@ function App(){
     {showOoo&&oooData&&<OooActionsModal name={oooData.name} dates={oooData.dates} onClose={()=>{setShowOoo(false);setOooData(null)}}/>}
     {showExport&&<ExportModal member={showExport} onClose={()=>setShowExport(null)}/>}
     {showBulkExport&&<BulkExportModal members={filtered} filterDesc={filterDesc} onClose={()=>setShowBulkExport(false)}/>}
-    {showProjectsAgenda&&<ProjectsAgendaModal members={data} onClose={()=>setShowProjectsAgenda(false)}/>}
+    {showProjectsAgenda&&<ProjectsAgendaModal members={data} userName={user.name} allNames={allNames} onClose={()=>setShowProjectsAgenda(false)}/>}
     {showDeleteConfirm!==null&&data[showDeleteConfirm]&&<div className="overlay" onClick={()=>setShowDeleteConfirm(null)}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:420}}>
       <h3 style={{fontSize:17,fontWeight:600,marginBottom:12,color:'var(--red)'}}>Delete Leave Record</h3>
       <p style={{fontSize:13.5,marginBottom:8}}>Remove <strong>{data[showDeleteConfirm].name}</strong>?</p>
