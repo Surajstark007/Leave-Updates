@@ -57,29 +57,40 @@ tr:hover td{background:var(--accent-light)}
 .theme-toggle::after{content:'';position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:3px;left:3px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
 [data-theme="dark"] .theme-toggle{background:var(--accent)}[data-theme="dark"] .theme-toggle::after{transform:translateX(20px)}
 .sync-progress{font-size:11px;color:var(--text2);padding:4px 0}
+/* Date range picker styles */
+.date-range-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.day-entry-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px}
+.day-entry-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.day-label{font-size:12px;font-weight:600;color:var(--accent);font-family:'JetBrains Mono',monospace}
+/* Export styles */
+@media print{.no-print{display:none!important}.print-only{display:block!important}}
+.print-only{display:none}
+.export-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:16px}
 @media(max-width:768px){.desktop-only{display:none!important}.responsive-table{overflow-x:auto}.stat-grid{grid-template-columns:1fr 1fr!important}.filter-row{flex-wrap:wrap}.modal{width:95%;padding:18px}}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const{useState,useEffect,useMemo}=React;
+const{useState,useEffect,useMemo,useRef,useCallback}=React;
 const SB_URL='https://wplarfdgdwhbbtjrgjrw.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndwbGFyZmRnZHdoYmJ0anJnanJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTk5MzYsImV4cCI6MjA5MzczNTkzNn0._6Ot3hk6u419alzt9ruLnDKD0CyevcIlBdPT7wZYCh0';
 const CANVAS_ID='F09LAPUPJH1';
-const SLACK_MCP_URL='https://mcp.slack.com/mcp';
 
 const SU={'U076358T0Q5':'Dinesh MS','U037YB1SD6Y':'Sundeep','U072FRECZ41':'Balaje','U0A3GTQANUT':'Kari','U04S03L5EC9':'Suraj Pillai','U08JL5H9GSG':'Nancy','U8JPFF83Y':'Ramya','U08MX6QKNUQ':'Vigneswaran','U01QUJKDDRP':'Preetha','U07CZN255CP':'Rakul','U06AK5LTU4B':'Sateesh Babu','U02CFDXAHV2':'Devi','U0A8VJU90NQ':'Unknown','U065H6E5940':'Unknown','U05338G3Q7M':'Samuel J','U07662DHBS6':'Unknown','U03Q0AH8PGW':'Manjusha','U04RERW24F8':'Vignesh P','U08CELR2E05':'Radhika','U07CKR6FG92':'Madhu','U03E0G6UCH0':'Sai Kishan T','U04M46PN9RC':'Johnkamesh','U07CWKK62TA':'Jahanwi Shree','U06BZA0EWQM':'Jacob','U07235UJSSW':'Ajit','U071WGRMX62':'Unknown','U07V18B4SQP':'Unknown','U02HN9RC3DM':'Archanaa','U03BWDXKPU5':'Karunambika','U079W3Q6ZB9':'Thanveer','U099LL9097X':'Shanthosh','U06S2QPP0S1':'Unknown','U02JTAK36TX':'Unknown','U02A8N46ZV5':'Unknown','U04M7S27J13':'Unknown','U04078U5RE3':'Deepak','URZHXB6QL':'Unknown','U4RQ6868Y':'Vijay','U08KNEUM7HD':'Unknown','U08KNEWE6G7':'Unknown','U06PU003J1Y':'Unknown','U03CE9S8685':'Abiramy','U0768GE2SH2':'Unknown'};
 
 const todayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const parseDate=s=>{if(!s)return null;const m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?new Date(+m[1],+m[2]-1,+m[3]):null};
 const fmtDate=ds=>{const d=parseDate(ds);return d?d.toLocaleDateString('en-US',{month:'short',day:'numeric'}):'?'};
+const fmtDateLong=ds=>{const d=parseDate(ds);return d?d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}):'?'};
 const isToday=ds=>ds===todayStr();
 const isFuture=ds=>ds>=todayStr();
+const isWeekday=ds=>{const d=parseDate(ds);if(!d)return false;return d.getDay()!==0&&d.getDay()!==6};
 function getWeekRange(d){const day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1);const mon=new Date(d);mon.setDate(diff);mon.setHours(0,0,0,0);const sun=new Date(mon);sun.setDate(mon.getDate()+6);const f=x=>x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');return[f(mon),f(sun)]}
 function inWeek(ds,wd){const[ws,we]=getWeekRange(wd);return ds>=ws&&ds<=we}
 function shiftWeek(d,n){const nd=new Date(d);nd.setDate(nd.getDate()+7*n);return nd}
-function expandDateRange(s,e){const dates=[];const sd=new Date(s);const ed=new Date(e);for(let d=new Date(sd);d<=ed;d.setDate(d.getDate()+1))dates.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));return dates}
+function expandDateRange(s,e){const dates=[];const sd=new Date(s+'T00:00:00');const ed=new Date(e+'T00:00:00');for(let d=new Date(sd);d<=ed;d.setDate(d.getDate()+1)){const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');dates.push(ds)}return dates}
+function getWeekdaysInRange(start,end){return expandDateRange(start,end).filter(isWeekday)}
 
 function parseDatesFromCell(raw){
   if(!raw||!raw.trim())return[];const dates=new Set();const year=new Date().getFullYear();
@@ -99,8 +110,6 @@ function parseDatesFromCell(raw){
   while((rm=dmp.exec(cl))!==null){const mn=mm[rm[2].toLowerCase()];if(mn)dates.add(year+'-'+mn+'-'+String(rm[1]).padStart(2,'0'))}
   const ur=/(\d{2})\/(\d{2})\/(\d{4})\s*to\s*(\d{2})\/(\d{2})\/(\d{4})/g;
   while((rm=ur.exec(cl))!==null)expandDateRange(rm[3]+'-'+rm[1]+'-'+rm[2],rm[6]+'-'+rm[4]+'-'+rm[5]).forEach(d=>dates.add(d));
-  const wp=/(\w+)\s*-\s*(\d{1,2})\s*-\s*(\d{4})/gi;
-  while((rm=wp.exec(cl))!==null){const mn=mm[rm[1].toLowerCase()];if(mn)dates.add(rm[3]+'-'+mn+'-'+String(rm[2]).padStart(2,'0'))}
   return[...dates].filter(d=>d.match(/^\d{4}-\d{2}-\d{2}$/)).sort();
 }
 function cleanBackup(raw){if(!raw)return'';return raw.replace(/<@(\w+)>/g,(_,u)=>SU[u]||u).replace(/<br\s*\/?>/gi,'\n').replace(/!\[\]\(@\w+\)/g,'').replace(/\*\*/g,'').replace(/\\/g,'').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').trim()}
@@ -124,17 +133,9 @@ function parseCanvasMarkdown(md){
   return members;
 }
 
-// ─── SYNC: Edge Function reads from Supabase cache ───
-// To update the cache with live Slack data, tell Claude "sync the canvas" in chat.
-// Claude reads the live canvas via Slack MCP and writes to Supabase.
-// Then this Sync button pulls the latest from Supabase instantly.
 async function liveSync(onProgress){
   onProgress('Fetching latest data...');
-  const r=await fetch(SB_URL+'/functions/v1/slack-proxy',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'read_canvas',canvas_id:CANVAS_ID})
-  });
+  const r=await fetch(SB_URL+'/functions/v1/slack-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'read_canvas',canvas_id:CANVAS_ID})});
   if(!r.ok)throw new Error('Sync request failed: '+r.status);
   const data=await r.json();
   if(!data.ok)throw new Error(data.error||'Unknown error');
@@ -142,11 +143,8 @@ async function liveSync(onProgress){
   return{markdown:data.markdown,updated_at:data.updated_at};
 }
 
-// Fallback: read from Supabase cache
 async function readCache(){
-  const r=await fetch(SB_URL+'/rest/v1/lt_canvas_cache?canvas_id=eq.'+CANVAS_ID+'&order=updated_at.desc&limit=1',{
-    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-  });
+  const r=await fetch(SB_URL+'/rest/v1/lt_canvas_cache?canvas_id=eq.'+CANVAS_ID+'&order=updated_at.desc&limit=1',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
   if(!r.ok)return null;
   const data=await r.json();
   return data&&data[0]?{markdown:data[0].markdown_content,updated_at:data[0].updated_at}:null;
@@ -154,43 +152,22 @@ async function readCache(){
 
 // ─── USER-ADDED LEAVES (persisted in Supabase lt_leaves) ───
 async function fetchUserLeaves(){
-  const r=await fetch(SB_URL+'/rest/v1/lt_leaves?deleted=eq.false&order=created_at.desc',{
-    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-  });
+  const r=await fetch(SB_URL+'/rest/v1/lt_leaves?deleted=eq.false&order=created_at.desc',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
   if(!r.ok)return[];
   return r.json();
 }
 async function upsertLeave(entry,addedBy){
-  // Check if entry already exists by name (case-insensitive)
-  const existing=await fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(entry.name)+'&deleted=eq.false&limit=1',{
-    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-  });
+  const existing=await fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(entry.name)+'&deleted=eq.false&limit=1',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
   const existingData=await existing.json();
   if(existingData&&existingData.length>0){
-    // Update existing
-    return fetch(SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingData[0].id,{
-      method:'PATCH',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
-      body:JSON.stringify({type:entry.type,dates:JSON.stringify(entry.dates),backup:entry.backup,updated_at:new Date().toISOString(),added_by:addedBy})
-    });
+    return fetch(SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingData[0].id,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({type:entry.type,dates:JSON.stringify(entry.dates),backup:entry.backup,updated_at:new Date().toISOString(),added_by:addedBy})});
   }
-  // Insert new
-  return fetch(SB_URL+'/rest/v1/lt_leaves',{
-    method:'POST',
-    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
-    body:JSON.stringify({name:entry.name,type:entry.type,dates:JSON.stringify(entry.dates),backup:entry.backup,added_by:addedBy})
-  });
+  return fetch(SB_URL+'/rest/v1/lt_leaves',{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({name:entry.name,type:entry.type,dates:JSON.stringify(entry.dates),backup:entry.backup,added_by:addedBy})});
 }
 async function softDeleteLeave(name){
-  // Mark as deleted by name
-  return fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(name)+'&deleted=eq.false',{
-    method:'PATCH',
-    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
-    body:JSON.stringify({deleted:true,updated_at:new Date().toISOString()})
-  });
+  return fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(name)+'&deleted=eq.false',{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({deleted:true,updated_at:new Date().toISOString()})});
 }
 
-// Merge canvas data with user-added leaves (user entries override canvas for same name)
 function mergeCanvasAndUserLeaves(canvasMembers,userLeaves){
   const merged=[...canvasMembers];
   const deletedNames=new Set();
@@ -200,7 +177,6 @@ function mergeCanvasAndUserLeaves(canvasMembers,userLeaves){
     try{dates=typeof ul.dates==='string'?JSON.parse(ul.dates):ul.dates||[]}catch{dates=[]}
     const idx=merged.findIndex(m=>m.name.toLowerCase()===ul.name.toLowerCase());
     if(idx>=0){
-      // Merge dates and backup
       const existingDates=new Set(merged[idx].dates);
       dates.forEach(d=>existingDates.add(d));
       merged[idx]={...merged[idx],dates:[...existingDates].filter(d=>d>=todayStr()).sort(),backup:ul.backup||merged[idx].backup,type:ul.type||merged[idx].type};
@@ -211,13 +187,13 @@ function mergeCanvasAndUserLeaves(canvasMembers,userLeaves){
   return merged.filter(m=>!deletedNames.has(m.name.toLowerCase()));
 }
 
-// Supabase user auth
 async function sbFetch(path,opts={}){const r=await fetch(SB_URL+'/rest/v1/'+path,{...opts,headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})}});if(!r.ok)throw new Error(await r.text());const t=await r.text();return t?JSON.parse(t):null}
 async function logAction(email,name,action){return sbFetch('lt_user_logs',{method:'POST',body:JSON.stringify({email,name,action,last_activity:new Date().toISOString()})})}
 async function findUser(email){const d=await sbFetch('lt_user_logs?email=eq.'+encodeURIComponent(email)+'&action=eq.register&order=created_at.desc&limit=1');return d&&d.length>0?d[0]:null}
 
-const Icon=({name,size=16})=>{const p={width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round',viewBox:'0 0 24 24'};const icons={search:<svg {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,sync:<svg {...p}><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>,plus:<svg {...p}><path d="M12 5v14M5 12h14"/></svg>,x:<svg {...p}><path d="M18 6 6 18M6 6l12 12"/></svg>,edit:<svg {...p}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>,trash:<svg {...p}><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,chevL:<svg {...p}><path d="m15 18-6-6 6-6"/></svg>,chevR:<svg {...p}><path d="m9 18 6-6-6-6"/></svg>,users:<svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,save:<svg {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,logout:<svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>,refresh:<svg {...p}><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64"/><path d="M3 21v-5h5"/></svg>};return<span style={{display:'inline-flex',alignItems:'center'}}>{icons[name]||null}</span>};
-function ToastContainer({toasts,remove}){return<div className="toast-container">{toasts.map(t=><div key={t.id} className={'toast toast-'+t.type} onClick={()=>remove(t.id)}>{t.type==='success'?'\u2713':t.type==='error'?'\u2717':'\u2139'} {t.msg}</div>)}</div>}
+const Icon=({name,size=16})=>{const p={width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round',viewBox:'0 0 24 24'};const icons={search:<svg {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,sync:<svg {...p}><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>,plus:<svg {...p}><path d="M12 5v14M5 12h14"/></svg>,x:<svg {...p}><path d="M18 6 6 18M6 6l12 12"/></svg>,edit:<svg {...p}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>,trash:<svg {...p}><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,chevL:<svg {...p}><path d="m15 18-6-6 6-6"/></svg>,chevR:<svg {...p}><path d="m9 18 6-6-6-6"/></svg>,users:<svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,save:<svg {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,logout:<svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>,refresh:<svg {...p}><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64"/><path d="M3 21v-5h5"/></svg>,download:<svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,filter:<svg {...p}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,calendar:<svg {...p}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,share:<svg {...p}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>};return<span style={{display:'inline-flex',alignItems:'center'}}>{icons[name]||null}</span>};
+
+function ToastContainer({toasts,remove}){return<div className="toast-container">{toasts.map(t=><div key={t.id} className={'toast toast-'+t.type} onClick={()=>remove(t.id)}>{t.type==='success'?'✓':t.type==='error'?'✗':'ℹ'} {t.msg}</div>)}</div>}
 
 function LoginScreen({onLogin}){
   const[email,setEmail]=useState('');const[name,setName]=useState('');const[step,setStep]=useState('email');const[err,setErr]=useState('');
@@ -230,273 +206,204 @@ function LoginScreen({onLogin}){
   {err&&<p style={{color:'var(--red)',fontSize:13,marginTop:10}}>{err}</p>}</div></div>);
 }
 
-function App(){
-  const[theme,setTheme]=useState(()=>localStorage.getItem('cx_lt_theme')||'light');
-  useEffect(()=>{document.documentElement.setAttribute('data-theme',theme);localStorage.setItem('cx_lt_theme',theme)},[theme]);
-  const[user,setUser]=useState(()=>{try{return JSON.parse(localStorage.getItem('cx_lt_session'))}catch{return null}});
-  const[data,setData]=useState([]);
-  const[lastSync,setLastSync]=useState('Loading...');
-  const[view,setView]=useState('upcoming');const[weekDate,setWeekDate]=useState(new Date());
-  const[typeFilter,setTypeFilter]=useState('All');const[search,setSearch]=useState('');
-  const[selectedUsers,setSelectedUsers]=useState([]);
-  const[showAddLeave,setShowAddLeave]=useState(false);const[showUserPicker,setShowUserPicker]=useState(false);
-  const[syncing,setSyncing]=useState(false);const[syncStatus,setSyncStatus]=useState('');
-  const[toasts,setToasts]=useState([]);const[editingIdx,setEditingIdx]=useState(null);
-  const toast=(msg,type='info')=>{const id=Date.now();setToasts(t=>[...t,{id,msg,type}]);setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),4000)};
+// ─── EXPORT MODAL ───
+function ExportModal({member,onClose}){
+  const printRef=useRef(null);
+  const ranges=groupConsecutiveDates(member.dates);
+  const dateRangeStr=ranges.map(r=>r.start===r.end?fmtDate(r.start):fmtDate(r.start)+' – '+fmtDate(r.end)).join(', ');
+  const projects=parseProjectEntries(member.backup||'');
 
-  // Load merged data: canvas cache + user-added leaves
-  const loadAllData=async()=>{
-    let canvasMembers=[];
-    try{const c=await readCache();if(c){canvasMembers=parseCanvasMarkdown(c.markdown);setLastSync(new Date(c.updated_at).toLocaleString())}}catch{}
-    try{const ul=await fetchUserLeaves();const merged=mergeCanvasAndUserLeaves(canvasMembers,ul);setData(merged)}catch{setData(canvasMembers)}
-  };
-  useEffect(()=>{loadAllData()},[]);
-
-  const[refreshing,setRefreshing]=useState(false);
-  const handleRefresh=async()=>{
-    setRefreshing(true);
-    try{await loadAllData();toast('Refreshed with latest data','success')}
-    catch(e){toast('Refresh failed: '+e.message,'error')}
-    setRefreshing(false);
-  };
-
-  const allNames=useMemo(()=>data.map(m=>m.name).sort(),[data]);
-  const filtered=useMemo(()=>{let r=data;if(view==='today')r=r.filter(m=>m.dates.some(isToday));else if(view==='upcoming')r=r.filter(m=>m.dates.length>0);else if(view==='week')r=r.filter(m=>m.dates.some(d=>inWeek(d,weekDate)));if(typeFilter!=='All')r=r.filter(m=>m.type===typeFilter);if(selectedUsers.length>0)r=r.filter(m=>selectedUsers.includes(m.name));if(search.trim()){const q=search.toLowerCase();r=r.filter(m=>m.name.toLowerCase().includes(q)||m.backup.toLowerCase().includes(q)||m.dates.some(d=>d.includes(q)))}
-  // Sort: logged-in user first, then alphabetically
-  return[...r].sort((a,b)=>{const aMe=user&&a.name.toLowerCase()===user.name.toLowerCase();const bMe=user&&b.name.toLowerCase()===user.name.toLowerCase();if(aMe&&!bMe)return-1;if(!aMe&&bMe)return 1;return a.name.localeCompare(b.name)});},[data,view,weekDate,typeFilter,selectedUsers,search,user]);
-  const stats=useMemo(()=>({total:data.length,today:data.filter(m=>m.dates.some(isToday)).length,week:data.filter(m=>m.dates.some(d=>inWeek(d,new Date()))).length,upcoming:data.filter(m=>m.dates.length>0).length}),[data]);
-
-  const handleSync=async()=>{
-    setSyncing(true);setSyncStatus('Starting...');
-    try{
-      const result=await liveSync(msg=>setSyncStatus(msg));
-      const canvasMembers=parseCanvasMarkdown(result.markdown);
-      if(canvasMembers.length>0){
-        const ul=await fetchUserLeaves();
-        const merged=mergeCanvasAndUserLeaves(canvasMembers,ul);
-        setData(merged);setLastSync(new Date().toLocaleString());
-        toast('Synced '+merged.length+' members (canvas + app data)','success');
-      }else toast('Parsed 0 rows from canvas','error');
-    }catch(e){
-      console.error('Live sync failed:',e);
-      toast('Sync failed: '+e.message+'. Refreshing...','error');
-      await loadAllData();
+  const handleCopy=async()=>{
+    let text=`LEAVE PLAN — ${member.name}\n`;
+    text+=`${'─'.repeat(40)}\n`;
+    text+=`Employee: ${member.name}\n`;
+    text+=`Leave Type: ${member.type}\n`;
+    text+=`Dates: ${dateRangeStr}\n`;
+    text+=`Total Days: ${member.dates.length}\n\n`;
+    if(projects.length>0){
+      text+=`PROJECT ASSIGNMENTS\n${'─'.repeat(40)}\n`;
+      projects.forEach(p=>{
+        if(p.date)text+=`Date: ${fmtDate(p.date)}\n`;
+        if(p.project)text+=`Project: ${p.project}\n`;
+        if(p.persons.length>0)text+=`Backup: ${p.persons.join(', ')}\n`;
+        if(p.agenda)text+=`Agenda: ${p.agenda}\n`;
+        text+='\n';
+      });
     }
-    setSyncing(false);setSyncStatus('');
+    await navigator.clipboard.writeText(text).catch(()=>{});
   };
 
-  const clearFilters=()=>{setView('upcoming');setTypeFilter('All');setSearch('');setSelectedUsers([])};
-  // ─── DELETE CONFIRMATION ───
-  const[showDeleteConfirm,setShowDeleteConfirm]=useState(null);
-  const handleDeleteMember=idx=>{setShowDeleteConfirm(idx)};
-  const confirmDelete=async()=>{
-    const idx=showDeleteConfirm;
-    const member=data[idx];
-    setData(d=>d.filter((_,i)=>i!==idx));
-    setShowDeleteConfirm(null);
-    try{await softDeleteLeave(member.name);toast(member.name+' removed & saved','success')}
-    catch{toast('Removed locally (save failed)','error')}
-  };
-  const handleSaveLeave=async(entry)=>{
-    const savedDates=entry.dates.filter(isFuture).sort();
-    const wasEditing=editingIdx!==null;
-    if(wasEditing){
-      setData(d=>d.map((m,i)=>i===editingIdx?{...m,name:entry.name,type:entry.type,dates:savedDates,backup:entry.backup}:m));
-      setEditingIdx(null);
-      try{await upsertLeave({...entry,dates:savedDates},user?.email||'');toast('Updated & saved','success')}
-      catch{toast('Updated locally (save failed)','error')}
-    }else{
-      const ei=data.findIndex(m=>m.name.toLowerCase()===entry.name.toLowerCase());
-      if(ei>=0){
-        setData(d=>d.map((m,i)=>{if(i!==ei)return m;const mg=new Set([...m.dates,...entry.dates]);return{...m,dates:[...mg].filter(isFuture).sort(),backup:entry.backup||m.backup,type:entry.type||m.type}}));
-      }else{
-        setData(d=>[...d,{name:entry.name,dates:savedDates,backup:entry.backup,type:entry.type,raw:''}]);
-      }
-      try{await upsertLeave({...entry,dates:savedDates},user?.email||'');toast('Leave added & saved','success')}
-      catch{toast('Added locally (save failed)','error')}
-    }
-    setShowAddLeave(false);
-    // Always show OOO actions modal after saving if there are dates
-    if(savedDates.length>0){
-      // Use setTimeout to ensure AddLeave modal is fully closed before opening OOO modal
-      setTimeout(()=>{setOooData({name:entry.name,dates:savedDates});setShowOoo(true)},150);
-    }
+  const handlePrint=()=>{
+    const content=printRef.current;
+    const w=window.open('','_blank');
+    w.document.write(`<html><head><title>Leave Plan - ${member.name}</title><style>
+      body{font-family:'DM Sans',sans-serif;padding:32px;color:#2c1810;font-size:14px;line-height:1.6}
+      h1{font-size:22px;font-weight:700;margin-bottom:4px}
+      h2{font-size:15px;font-weight:600;margin:20px 0 10px;padding-bottom:6px;border-bottom:2px solid #e8590c;color:#e8590c}
+      .meta{color:#6b5344;font-size:13px;margin-bottom:16px}
+      .badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600;background:#5c47e0;color:#fff;text-transform:uppercase;letter-spacing:.4px}
+      table{width:100%;border-collapse:collapse;margin-top:12px}
+      th{text-align:left;padding:8px 12px;background:#f7f3ee;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#9a8576;border-bottom:2px solid #e0d5c7}
+      td{padding:8px 12px;border-bottom:1px solid #e0d5c7;font-size:13px;vertical-align:top}
+      .dates{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+      .chip{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;background:#ede9fe;color:#5c47e0;border:1px solid rgba(92,71,224,.3);font-family:monospace}
+      .footer{margin-top:40px;font-size:11px;color:#9a8576;border-top:1px solid #e0d5c7;padding-top:12px}
+    </style></head><body>${content.innerHTML}<div class="footer">Generated by CX Leave Tracker · ${new Date().toLocaleString()}</div></body></html>`);
+    w.document.close();
+    w.print();
   };
 
-  // ─── OOO ACTIONS STATE ───
-  const[showOoo,setShowOoo]=useState(false);
-  const[oooData,setOooData]=useState(null);
-
-  if(!user)return<LoginScreen onLogin={setUser}/>;
-  const tbc={PTO:'badge-pto',Sick:'badge-sick',Mixed:'badge-mixed','Business Travel':'badge-bt',Other:'badge-other'};
-  return(<div style={{minHeight:'100vh',background:'var(--bg)'}}>
-    <ToastContainer toasts={toasts} remove={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>
-    <header style={{position:'sticky',top:0,zIndex:50,padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',background:'var(--header-bg)',backdropFilter:'blur(16px)',borderBottom:'1px solid var(--header-border)'}}>
-      <div style={{display:'flex',alignItems:'center',gap:10}}><div style={{width:32,height:32,borderRadius:8,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'#fff',fontWeight:700}}>CX</div><span style={{fontSize:17,fontWeight:700}}>Leave Tracker</span></div>
-      <div style={{display:'flex',alignItems:'center',gap:8}}>
-        <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end'}}>
-          <div style={{display:'flex',gap:6}}>
-            <button className="btn btn-secondary btn-sm" onClick={handleRefresh} disabled={refreshing} title="Pull latest data from all users"><span className={refreshing?'spin':''} style={{display:'inline-flex'}}><Icon name="refresh" size={14}/></span> {refreshing?'Refreshing...':'Refresh'}</button>
-          </div>
-        </div>
-        <button className="btn btn-primary btn-sm" onClick={()=>{setEditingIdx(null);setShowAddLeave(true)}}><Icon name="plus" size={14}/> Add My Leave</button>
-        <button className="theme-toggle" onClick={()=>setTheme(t=>t==='light'?'dark':'light')}/>
-        <div style={{display:'flex',alignItems:'center',gap:6,marginLeft:4,paddingLeft:8,borderLeft:'1px solid var(--border)'}}><span style={{fontSize:12,color:'var(--text2)',maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name}</span><button className="btn-icon" title="Logout" onClick={()=>{localStorage.removeItem('cx_lt_session');setUser(null)}} style={{width:28,height:28}}><Icon name="logout" size={14}/></button></div>
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:640}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+      <h3 style={{fontSize:17,fontWeight:600}}>Export Leave Plan</h3>
+      <div style={{display:'flex',gap:8}}>
+        <button className="btn btn-sm btn-secondary" onClick={handleCopy}><Icon name="save" size={13}/> Copy Text</button>
+        <button className="btn btn-sm btn-primary" onClick={handlePrint}><Icon name="download" size={13}/> Print / Save PDF</button>
+        <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
       </div>
-    </header>
-    <main style={{maxWidth:1320,margin:'0 auto',padding:'18px 18px 40px'}}>
-      <div className="stat-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:18}}>
-        {[{key:'all',val:stats.total,label:'Total Members',color:'var(--accent)'},{key:'today',val:stats.today,label:'On Leave Today',color:'var(--red)'},{key:'week',val:stats.week,label:'This Week',color:'var(--amber)'},{key:'upcoming',val:stats.upcoming,label:'Upcoming Leaves',color:'var(--green)'}].map(s=>(<div key={s.key} className={'stat-card '+(view===s.key?'active':'')} onClick={()=>setView(s.key)}><div className="value" style={{color:s.color}}>{s.val}</div><div className="label">{s.label}</div></div>))}
-      </div>
-      <div className="card" style={{padding:12,marginBottom:14}}>
-        <div className="filter-row" style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-          <div style={{display:'flex',gap:2,background:'var(--surface2)',borderRadius:8,padding:2,border:'1px solid var(--border)'}}>
-            {['upcoming','today','week','all'].map(v=>(<button key={v} onClick={()=>setView(v)} style={{padding:'5px 12px',borderRadius:6,fontSize:12,fontWeight:500,border:'none',background:view===v?'var(--accent)':'transparent',color:view===v?'#fff':'var(--text2)',cursor:'pointer'}}>{v==='all'?'All':v[0].toUpperCase()+v.slice(1)}</button>))}
+    </div>
+
+    <div ref={printRef}>
+      <div style={{background:'var(--accent-light)',border:'1px solid var(--accent-border)',borderRadius:10,padding:'16px 20px',marginBottom:16}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:8}}>
+          <div>
+            <h1 style={{fontSize:20,fontWeight:700,marginBottom:4}}>{member.name}</h1>
+            <div style={{fontSize:12.5,color:'var(--text2)'}}>Leave plan prepared for leadership review</div>
           </div>
-          {view==='week'&&<div style={{display:'flex',alignItems:'center',gap:4}}><button className="btn-icon" onClick={()=>setWeekDate(d=>shiftWeek(d,-1))} style={{width:26,height:26}}><Icon name="chevL" size={14}/></button><span style={{fontSize:12,color:'var(--text2)',minWidth:110,textAlign:'center',fontFamily:"'JetBrains Mono',monospace"}}>{fmtDate(getWeekRange(weekDate)[0])+' \u2013 '+fmtDate(getWeekRange(weekDate)[1])}</span><button className="btn-icon" onClick={()=>setWeekDate(d=>shiftWeek(d,1))} style={{width:26,height:26}}><Icon name="chevR" size={14}/></button><button className="btn btn-sm btn-secondary" style={{fontSize:11,padding:'3px 8px'}} onClick={()=>setWeekDate(new Date())}>This week</button></div>}
-          <select className="input" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} style={{width:'auto',fontSize:12,padding:'5px 28px 5px 10px'}}>{['All','PTO','Sick','Mixed','Business Travel'].map(t=><option key={t}>{t}</option>)}</select>
-          <button className="btn btn-sm btn-secondary" onClick={()=>setShowUserPicker(true)}><Icon name="users" size={13}/> {selectedUsers.length>0?selectedUsers.length+' selected':'Members'}</button>
-          <div style={{position:'relative',flex:'1 1 140px',minWidth:130}}><span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text3)',display:'flex'}}><Icon name="search" size={14}/></span><input className="input" placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:32,fontSize:12}}/></div>
-          <button className="btn btn-sm btn-danger" onClick={clearFilters} style={{fontSize:11}}>Clear</button>
+          <span className={'badge badge-'+(member.type==='PTO'?'pto':member.type==='Sick'?'sick':member.type==='Business Travel'?'bt':member.type==='Mixed'?'mixed':'other')}>{member.type}</span>
         </div>
       </div>
-      <div className="card responsive-table" style={{overflow:'hidden'}}><div style={{overflowX:'auto'}}><table><thead><tr>
-        <th>Name</th><th>Type</th><th>Leave Dates</th><th>Days</th>
-        <th className="desktop-only">Project</th><th className="desktop-only">Backup</th><th className="desktop-only">Agenda</th>
-        <th style={{width:60}}>Actions</th>
-      </tr></thead><tbody>
-        {filtered.length===0?<tr><td colSpan={8} style={{textAlign:'center',padding:40,color:'var(--text3)'}}>No matching records</td></tr>:filtered.map((m,i)=>{
-          const oi=data.indexOf(m);const dc=m.dates.length;
-          const isMe=user&&m.name.toLowerCase()===user.name.toLowerCase();
-          // Parse backup into project rows
-          const backupLines=(m.backup||'').split('\n').filter(l=>l.trim());
-          const projects=backupLines.map(line=>{
-            let project='',persons='',agenda='';
-            const pipeParts=line.split('|').map(s=>s.trim());
-            const mainPart=pipeParts[0]||'';
-            agenda=(pipeParts[1]||'').replace(/^Agenda:\s*/i,'');
-            const dashIdx=mainPart.indexOf(' - ');
-            if(dashIdx>-1){project=mainPart.substring(0,dashIdx).trim();persons=mainPart.substring(dashIdx+3).trim()}
-            else{const colonIdx=mainPart.indexOf(':');if(colonIdx>-1){project=mainPart.substring(0,colonIdx).trim();persons=mainPart.substring(colonIdx+1).trim()}else persons=mainPart}
-            return{project,persons,agenda};
-          }).filter(p=>p.project||p.persons);
-          const rowSpan=Math.max(projects.length,1);
-          return(<React.Fragment key={m.name+i}>
-            {/* First row with Name, Type, Dates, Days + first project */}
-            <tr className="fade-in">
-              <td rowSpan={rowSpan} style={{fontWeight:600,whiteSpace:'nowrap',fontSize:13.5,verticalAlign:'top'}}>{m.name}{isMe&&<span style={{fontSize:10,color:'var(--accent)',marginLeft:4}}>(you)</span>}</td>
-              <td rowSpan={rowSpan} style={{verticalAlign:'top'}}><span className={'badge '+(tbc[m.type]||'badge-none')}>{m.type}</span></td>
-              <td rowSpan={rowSpan} style={{maxWidth:280,verticalAlign:'top'}}><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{dc===0?<span style={{color:'var(--text3)',fontSize:12}}>No upcoming</span>:m.dates.slice(0,10).map(d=>(<span key={d} className={'chip '+(isToday(d)?'chip-today pulse':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)}</span>))}{dc>10&&<span className="chip chip-gray" style={{fontSize:10}}>+{dc-10}</span>}</div></td>
-              <td rowSpan={rowSpan} style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,fontSize:14,textAlign:'center',verticalAlign:'top'}}><span style={dc>5?{color:'var(--amber)',background:'var(--amber-bg)',padding:'2px 8px',borderRadius:6}:{}}>{dc}</span></td>
-              <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].project||'':''}</td>
-              <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].persons||'':''}</td>
-              <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',fontStyle:projects[0]&&projects[0].agenda?'normal':'italic'}}>{projects[0]&&projects[0].agenda?projects[0].agenda:''}</td>
-              <td rowSpan={rowSpan} style={{verticalAlign:'top'}}>
-                {isMe?<div style={{display:'flex',gap:4}}>
-                  <button className="btn-icon" onClick={()=>{setEditingIdx(oi);setShowAddLeave(true)}} title="Edit" style={{width:28,height:28}}><Icon name="edit" size={13}/></button>
-                  <button className="btn-icon" onClick={()=>handleDeleteMember(oi)} title="Delete" style={{width:28,height:28,color:'var(--red)'}}><Icon name="trash" size={13}/></button>
-                </div>:<span/>}
-              </td>
-            </tr>
-            {/* Additional rows for remaining projects */}
-            {projects.slice(1).map((p,pi)=>(
-              <tr key={m.name+'-proj-'+pi} className="fade-in">
-                <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.project||''}</td>
-                <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.persons||''}</td>
-                <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',fontStyle:p.agenda?'normal':'italic'}}>{p.agenda||''}</td>
-              </tr>
-            ))}
-          </React.Fragment>);
-        })}
-      </tbody></table></div><div style={{padding:'10px 14px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',fontSize:11.5,color:'var(--text3)'}}><span>Showing {filtered.length} of {data.length}</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>Last sync: {lastSync}</span></div></div>
-    </main>
-    {showAddLeave&&<AddLeaveModal onClose={()=>{setShowAddLeave(false);setEditingIdx(null)}} onSave={handleSaveLeave} existingNames={allNames} editData={editingIdx!==null?data[editingIdx]:null} userName={user.name}/>}
-    {showUserPicker&&<UserPickerModal names={allNames} selected={selectedUsers} onClose={()=>setShowUserPicker(false)} onApply={sel=>{setSelectedUsers(sel);setShowUserPicker(false)}}/>}
-    {showOoo&&oooData&&<OooActionsModal name={oooData.name} dates={oooData.dates} onClose={()=>{setShowOoo(false);setOooData(null)}}/>}
-    {showDeleteConfirm!==null&&data[showDeleteConfirm]&&<div className="overlay" onClick={()=>setShowDeleteConfirm(null)}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:420}}>
-      <h3 style={{fontSize:17,fontWeight:600,marginBottom:12,color:'var(--red)'}}>Delete Leave Record</h3>
-      <p style={{fontSize:13.5,color:'var(--text)',marginBottom:8}}>Are you sure you want to remove <strong>{data[showDeleteConfirm].name}</strong>?</p>
-      {data[showDeleteConfirm].dates.length>0&&<div style={{marginBottom:12}}>
-        <div style={{fontSize:12,color:'var(--text2)',marginBottom:6}}>This will remove {data[showDeleteConfirm].dates.length} leave date{data[showDeleteConfirm].dates.length>1?'s':''}:</div>
-        <div style={{display:'flex',flexWrap:'wrap',gap:4}}>{data[showDeleteConfirm].dates.slice(0,8).map(d=>(<span key={d} className="chip chip-future" style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)}</span>))}{data[showDeleteConfirm].dates.length>8&&<span className="chip chip-gray" style={{fontSize:10}}>+{data[showDeleteConfirm].dates.length-8} more</span>}</div>
-      </div>}
-      {data[showDeleteConfirm].backup&&<div style={{marginBottom:12}}>
-        <div style={{fontSize:12,color:'var(--text2)',marginBottom:4}}>Backup info will also be removed:</div>
-        <div style={{fontSize:12,color:'var(--text3)',background:'var(--surface2)',padding:8,borderRadius:6,whiteSpace:'pre-wrap',maxHeight:80,overflowY:'auto'}}>{data[showDeleteConfirm].backup}</div>
-      </div>}
-      <p style={{fontSize:12,color:'var(--text3)',marginBottom:14}}>This action is saved to the database and visible to all users.</p>
-      <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-        <button className="btn btn-secondary" onClick={()=>setShowDeleteConfirm(null)}>Cancel</button>
-        <button className="btn btn-danger" onClick={confirmDelete} style={{background:'var(--red)',color:'#fff',border:'none'}}>Delete</button>
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
+        {[{label:'Total Leave Days',val:member.dates.length},{label:'Date Range',val:dateRangeStr}].map(s=><div key={s.label} style={{background:'var(--surface2)',borderRadius:8,padding:'12px 16px',border:'1px solid var(--border)'}}>
+          <div style={{fontSize:11,color:'var(--text3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:4}}>{s.label}</div>
+          <div style={{fontSize:14,fontWeight:600,color:'var(--text)'}}>{s.val}</div>
+        </div>)}
       </div>
-    </div></div>}
+
+      <div style={{marginBottom:16}}>
+        <div style={{fontSize:11,color:'var(--text3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8}}>Leave Dates</div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+          {member.dates.map(d=><span key={d} className={'chip '+(isToday(d)?'chip-today':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)}</span>)}
+        </div>
+      </div>
+
+      {projects.length>0&&<div>
+        <div style={{fontSize:11,color:'var(--text3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8}}>Project Assignments & Handoffs</div>
+        <div style={{border:'1px solid var(--border)',borderRadius:10,overflow:'hidden'}}>
+          <table>
+            <thead><tr>
+              <th>Date</th><th>Project</th><th>Backup Owner</th><th>Agenda / Notes</th>
+            </tr></thead>
+            <tbody>
+              {projects.map((p,i)=><tr key={i}>
+                <td style={{whiteSpace:'nowrap',fontFamily:"'JetBrains Mono',monospace",fontSize:11.5}}>{p.date?fmtDate(p.date):'—'}</td>
+                <td style={{fontWeight:500}}>{p.project||'—'}</td>
+                <td>{p.persons.length>0?p.persons.join(', '):'—'}</td>
+                <td style={{color:'var(--text2)',fontStyle:p.agenda?'normal':'italic'}}>{p.agenda||'—'}</td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>}
+    </div>
+
+    <div style={{marginTop:14,paddingTop:12,borderTop:'1px solid var(--border)',fontSize:11.5,color:'var(--text3)',textAlign:'center'}}>
+      Generated by CX Leave Tracker · {new Date().toLocaleString()}
+    </div>
+  </div></div>);
+}
+
+// ─── PARSE PROJECT ENTRIES FROM BACKUP STRING ───
+function parseProjectEntries(backupStr){
+  if(!backupStr)return[];
+  return backupStr.split('\n').filter(l=>l.trim()).map(line=>{
+    let project='',personStr='',agenda='',date='';
+    // Check for date prefix: [2025-01-15] Project - Person | Agenda
+    const dateMatch=line.match(/^\[(\d{4}-\d{2}-\d{2})\]\s*/);
+    if(dateMatch){date=dateMatch[1];line=line.slice(dateMatch[0].length)}
+    const pipeParts=line.split('|').map(s=>s.trim());
+    const mainPart=pipeParts[0]||'';
+    agenda=(pipeParts[1]||'').replace(/^Agenda:\s*/i,'');
+    const dashIdx=mainPart.indexOf(' - ');
+    if(dashIdx>-1){project=mainPart.substring(0,dashIdx).trim();personStr=mainPart.substring(dashIdx+3).trim()}
+    else{const colonIdx=mainPart.indexOf(':');if(colonIdx>-1){project=mainPart.substring(0,colonIdx).trim();personStr=mainPart.substring(colonIdx+1).trim()}else personStr=mainPart}
+    const persons=personStr?personStr.split(/\s*,\s*/).filter(Boolean):[];
+    return{date,project,persons,agenda};
+  }).filter(p=>p.project||p.persons.length>0);
+}
+
+// ─── BUILD BACKUP STRING ───
+function buildBackupString(entries){
+  return entries.filter(e=>e.project||e.persons.length>0).map(e=>{
+    let s='';
+    if(e.date)s+='['+e.date+'] ';
+    if(e.project){s+=e.project;if(e.persons.length>0)s+=' - '+e.persons.join(', ')}
+    else if(e.persons.length>0)s+=e.persons.join(', ');
+    if(e.agenda)s+=' | Agenda: '+e.agenda;
+    return s;
+  }).join('\n');
+}
+
+// ─── DATE RANGE PICKER ───
+function DateRangePicker({startDate,endDate,onStartChange,onEndChange,dates,onDatesChange}){
+  const[rangeStart,setRangeStart]=useState('');
+  const[rangeEnd,setRangeEnd]=useState('');
+
+  const applyRange=()=>{
+    if(!rangeStart||!rangeEnd)return;
+    const s=rangeStart<=rangeEnd?rangeStart:rangeEnd;
+    const e=rangeStart<=rangeEnd?rangeEnd:rangeStart;
+    const allInRange=expandDateRange(s,e);
+    const newDates=new Set(dates);
+    allInRange.forEach(d=>newDates.add(d));
+    onDatesChange([...newDates].sort());
+    setRangeStart('');setRangeEnd('');
+  };
+
+  return(<div>
+    <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8,flexWrap:'wrap'}}>
+      <div style={{display:'flex',gap:6,alignItems:'center',flex:1}}>
+        <input type="date" className="input" value={rangeStart} onChange={e=>setRangeStart(e.target.value)} style={{flex:1}} placeholder="From"/>
+        <span style={{color:'var(--text3)',fontSize:13}}>→</span>
+        <input type="date" className="input" value={rangeEnd} onChange={e=>setRangeEnd(e.target.value)} style={{flex:1}} placeholder="To"/>
+      </div>
+      <button className="btn btn-sm btn-primary" onClick={applyRange} disabled={!rangeStart||!rangeEnd}>Add Range</button>
+    </div>
+    {rangeStart&&rangeEnd&&<div style={{fontSize:11.5,color:'var(--text2)',marginBottom:6,padding:'4px 8px',background:'var(--surface2)',borderRadius:6}}>
+      {expandDateRange(rangeStart<=rangeEnd?rangeStart:rangeEnd,rangeStart<=rangeEnd?rangeEnd:rangeStart).length} total days, {getWeekdaysInRange(rangeStart<=rangeEnd?rangeStart:rangeEnd,rangeStart<=rangeEnd?rangeEnd:rangeStart).length} weekdays
+    </div>}
   </div>);
 }
 
+// ─── ADD/EDIT LEAVE MODAL ───
 function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
-  const[name,setName]=useState(editData?editData.name:(userName||''));
-  const[isNew,setIsNew]=useState(false);
+  const[name]=useState(editData?editData.name:(userName||''));
   const[type,setType]=useState(editData?editData.type:'PTO');
   const[dates,setDates]=useState(editData?[...editData.dates]:[]);
+  const[rangeStart,setRangeStart]=useState('');
+  const[rangeEnd,setRangeEnd]=useState('');
   const[dateInput,setDateInput]=useState('');
+  // tab: 'dates' | 'projects'
+  const[tab,setTab]=useState('dates');
+  // filter for edit tab
+  const[editFilter,setEditFilter]=useState({date:'',project:''});
 
-  // Parse existing backup into structured entries
-  const parseBackupEntries=(backupStr)=>{
-    if(!backupStr)return[{project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}];
-    const lines=backupStr.split('\n').filter(l=>l.trim());
-    if(lines.length===0)return[{project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}];
-    // Build a set of known names (lowercase) for matching
-    const knownNames=existingNames.map(n=>n.toLowerCase());
-    const splitPersons=(str)=>{
-      if(!str)return[];
-      // First split on commas, &, " and ", " / "
-      const rough=str.split(/\s*[,&\/]\s*|\s+and\s+/i).map(s=>s.trim()).filter(Boolean);
-      const result=[];
-      for(const chunk of rough){
-        // Check if this chunk is a known name directly
-        if(knownNames.includes(chunk.toLowerCase())){result.push(chunk);continue}
-        // Check if it matches a known name (case-insensitive partial)
-        const exactMatch=existingNames.find(n=>n.toLowerCase()===chunk.toLowerCase());
-        if(exactMatch){result.push(exactMatch);continue}
-        // Try to find multiple known names within the chunk (e.g. "Vigneswaran Nancy")
-        let remaining=chunk;
-        let foundAny=false;
-        // Sort known names by length descending so longer names match first
-        const sortedNames=[...existingNames].sort((a,b)=>b.length-a.length);
-        for(const kn of sortedNames){
-          const regex=new RegExp('\\b'+kn.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i');
-          if(regex.test(remaining)){
-            result.push(kn);
-            remaining=remaining.replace(regex,'').trim();
-            foundAny=true;
-          }
-        }
-        // If nothing matched, keep the whole chunk as-is (e.g. "Day 41 team")
-        if(!foundAny&&remaining.trim()){result.push(remaining.trim())}
-        else if(remaining.trim()&&remaining.trim()!==chunk.trim()){
-          // Leftover text after extracting names (e.g. "Day 41 team")
-          result.push(remaining.trim());
-        }
-      }
-      return result.filter(Boolean);
-    };
-    return lines.map(line=>{
-      let project='',personStr='',agenda='';
-      const pipeParts=line.split('|').map(s=>s.trim());
-      const mainPart=pipeParts[0]||'';
-      agenda=(pipeParts[1]||'').replace(/^Agenda:\s*/i,'');
-      const dashIdx=mainPart.indexOf(' - ');
-      if(dashIdx>-1){project=mainPart.substring(0,dashIdx).trim();personStr=mainPart.substring(dashIdx+3).trim()}
-      else{const colonIdx=mainPart.indexOf(':');if(colonIdx>-1){project=mainPart.substring(0,colonIdx).trim();personStr=mainPart.substring(colonIdx+1).trim()}else personStr=mainPart}
-      const persons=splitPersons(personStr);
-      return{project,persons,newPerson:'',agenda,showPicker:false,pickerQ:''};
-    });
+  // entries: [{date, project, persons, newPerson, agenda, showPicker, pickerQ}]
+  const parseInitialEntries=()=>{
+    if(!editData?.backup)return[];
+    return parseProjectEntries(editData.backup).map(p=>({...p,newPerson:'',showPicker:false,pickerQ:''}));
   };
-  const[entries,setEntries]=useState(()=>parseBackupEntries(editData?editData.backup:''));
+  const[entries,setEntries]=useState(parseInitialEntries);
+
+  const weekdays=useMemo(()=>{
+    if(dates.length===0)return[];
+    return dates.filter(isWeekday).sort();
+  },[dates]);
 
   const updateEntry=(idx,field,val)=>setEntries(e=>e.map((x,i)=>i===idx?{...x,[field]:val}:x));
-  const addEntry=()=>{setEntries(e=>[...e,{project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}]);setTimeout(()=>{const els=document.querySelectorAll('.backup-entry');if(els.length)els[els.length-1].scrollIntoView({behavior:'smooth',block:'start'})},50)};
   const removeEntry=idx=>setEntries(e=>e.filter((_,i)=>i!==idx));
+
   const addPersonToEntry=(idx,person)=>{
     setEntries(e=>e.map((x,i)=>{
       if(i!==idx)return x;
@@ -516,255 +423,270 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
     }));
   };
 
-  const buildBackupString=()=>{
-    return entries.filter(e=>e.project||e.persons.length>0).map(e=>{
-      let s='';
-      if(e.project){s+=e.project;if(e.persons.length>0)s+=' - '+e.persons.join(', ')}
-      else if(e.persons.length>0)s+=e.persons.join(', ');
-      if(e.agenda)s+=' | Agenda: '+e.agenda;
-      return s;
-    }).join('\n');
+  const addEntryForDay=(dateStr)=>{
+    setEntries(e=>[...e,{date:dateStr,project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}]);
   };
+  const addBlankEntry=()=>{
+    setEntries(e=>[...e,{date:'',project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}]);
+  };
+
+  const applyRange=()=>{
+    if(!rangeStart||!rangeEnd)return;
+    const s=rangeStart<=rangeEnd?rangeStart:rangeEnd;
+    const e=rangeStart<=rangeEnd?rangeEnd:rangeStart;
+    const allInRange=expandDateRange(s,e);
+    const newDates=new Set(dates);
+    allInRange.forEach(d=>newDates.add(d));
+    setDates([...newDates].sort());
+    setRangeStart('');setRangeEnd('');
+  };
+
+  const deleteDateEntry=(dateStr)=>{
+    setDates(ds=>ds.filter(d=>d!==dateStr));
+    setEntries(e=>e.filter(en=>en.date!==dateStr));
+  };
+
+  const filteredEntries=useMemo(()=>{
+    let e=entries;
+    if(editFilter.date)e=e.filter(x=>x.date===editFilter.date);
+    if(editFilter.project)e=e.filter(x=>x.project.toLowerCase().includes(editFilter.project.toLowerCase()));
+    return e;
+  },[entries,editFilter]);
 
   const lbl={fontSize:12,color:'var(--text2)',marginBottom:4,display:'block',fontWeight:500};
   const subLbl={fontSize:11,color:'var(--text3)',marginBottom:3,display:'block'};
 
-  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:580}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+  const rangePreviewCount=rangeStart&&rangeEnd?expandDateRange(rangeStart<=rangeEnd?rangeStart:rangeEnd,rangeStart<=rangeEnd?rangeEnd:rangeStart).length:0;
+  const weekdayPreviewCount=rangeStart&&rangeEnd?getWeekdaysInRange(rangeStart<=rangeEnd?rangeStart:rangeEnd,rangeStart<=rangeEnd?rangeEnd:rangeStart).length:0;
+
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:620}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
       <h3 style={{fontSize:17,fontWeight:600}}>{editData?'Edit Leave':'Add Leave'}</h3>
       <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
     </div>
-    {editData&&<div style={{fontSize:12,color:'var(--text2)',marginBottom:14,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)'}}>Editing leave for <strong>{editData.name}</strong> — modify dates, backup, or agenda below. Remove individual dates by clicking the <strong>×</strong> on each chip.</div>}
 
-    <label style={lbl}>Team Member</label>
+    {editData&&<div style={{fontSize:12,color:'var(--text2)',marginBottom:12,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)'}}>Editing leave for <strong>{editData.name}</strong></div>}
+
+    {/* Member display */}
     <div style={{marginBottom:14,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)',fontSize:14,fontWeight:600,color:'var(--text)'}}>{name||userName||'You'}</div>
 
+    {/* Leave Type */}
     <label style={lbl}>Leave Type</label>
-    <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>{['PTO','Sick','Business Travel','Mixed','Other'].map(t=>(<button key={t} onClick={()=>setType(t)} style={{padding:'5px 14px',borderRadius:999,fontSize:12,fontWeight:500,border:'1px solid',borderColor:type===t?'var(--accent)':'var(--border)',background:type===t?'var(--accent-light)':'transparent',color:type===t?'var(--accent)':'var(--text2)',cursor:'pointer',transition:'all .15s'}}>{t}</button>))}</div>
-
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><label style={lbl}>Leave Dates</label>{dates.length>0&&<button className="btn btn-sm btn-danger" onClick={()=>setDates([])} style={{fontSize:10,padding:'2px 8px'}}>Clear all ({dates.length})</button>}</div>
-    <div style={{display:'flex',gap:8,marginBottom:8}}><input type="date" className="input" value={dateInput} onChange={e=>setDateInput(e.target.value)} style={{flex:1}} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();if(dateInput&&!dates.includes(dateInput)){setDates(d=>[...d,dateInput].sort());setDateInput('')}}}} /><button className="btn btn-sm btn-primary" onClick={()=>{if(dateInput&&!dates.includes(dateInput)){setDates(d=>[...d,dateInput].sort());setDateInput('')}}}>Add</button></div>
-    <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:14,minHeight:24}}>{dates.length===0?<span style={{fontSize:12,color:'var(--text3)',fontStyle:'italic'}}>No dates added yet</span>:dates.map(d=>(<span key={d} className="chip chip-future" style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)} <span style={{cursor:'pointer',marginLeft:2,opacity:.6}} onClick={()=>setDates(ds=>ds.filter(x=>x!==d))} title="Remove this date">{'\u00d7'}</span></span>))}</div>
-
-    <div style={{borderTop:'1px solid var(--border)',paddingTop:14}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-        <label style={{...lbl,marginBottom:0}}>Backup & Agenda Details</label>
-        <button className="btn btn-sm btn-secondary" onClick={addEntry}><Icon name="plus" size={12}/> Add Project</button>
-      </div>
-
-      {entries.map((entry,idx)=>(<div key={idx} className="fade-in backup-entry" style={{background:'var(--surface2)',borderRadius:10,padding:12,marginBottom:8,border:'1px solid var(--border)'}}>
-        <div style={{display:'flex',gap:8,marginBottom:8}}>
-          <div style={{flex:1}}>
-            <label style={subLbl}>Project Name</label>
-            <input className="input" placeholder="e.g. Shield Roofing" value={entry.project} onChange={e=>updateEntry(idx,'project',e.target.value)} style={{fontSize:13}}/>
-          </div>
-          <button className="btn-icon" onClick={()=>removeEntry(idx)} title="Remove this project" style={{width:28,height:28,color:'var(--red)',marginTop:18,flexShrink:0}}><Icon name="trash" size={13}/></button>
-        </div>
-
-        <label style={subLbl}>Backup Person(s)</label>
-        <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:6,minHeight:26}}>
-          {entry.persons.map(p=>(<span key={p} className="chip chip-future" style={{fontSize:11}}>{p} <span style={{cursor:'pointer',marginLeft:2,opacity:.6}} onClick={()=>removePersonFromEntry(idx,p)}>{'\u00d7'}</span></span>))}
-          <button className="btn btn-sm btn-secondary" onClick={()=>updateEntry(idx,'showPicker',!entry.showPicker)} style={{fontSize:11,padding:'2px 8px',borderRadius:999}}>
-            <Icon name="plus" size={11}/> {entry.showPicker?'Close':'Add'}
-          </button>
-        </div>
-
-        {entry.showPicker&&<div className="fade-in" style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,padding:8,marginBottom:8}}>
-          <input className="input" placeholder="Search team members..." value={entry.pickerQ} onChange={e=>updateEntry(idx,'pickerQ',e.target.value)} style={{fontSize:12,marginBottom:6,padding:'5px 10px'}}/>
-          <div style={{maxHeight:120,overflowY:'auto',display:'flex',flexDirection:'column',gap:1}}>
-            {existingNames.filter(n=>!entry.persons.includes(n)&&(!entry.pickerQ||n.toLowerCase().includes(entry.pickerQ.toLowerCase()))).map(n=>(
-              <div key={n} onClick={()=>addPersonToEntry(idx,n)} style={{padding:'4px 8px',borderRadius:4,fontSize:12,cursor:'pointer',background:'transparent',transition:'background .1s'}} onMouseOver={e=>e.currentTarget.style.background='var(--accent-light)'} onMouseOut={e=>e.currentTarget.style.background='transparent'}>{n}</div>
-            ))}
-          </div>
-          <div style={{display:'flex',gap:6,marginTop:6,borderTop:'1px solid var(--border)',paddingTop:6}}>
-            <input className="input" placeholder="Or type new name..." value={entry.newPerson} onChange={e=>updateEntry(idx,'newPerson',e.target.value)} onKeyDown={e=>e.key==='Enter'&&addNewPersonToEntry(idx)} style={{fontSize:12,padding:'4px 8px',flex:1}}/>
-            <button className="btn btn-sm btn-primary" onClick={()=>addNewPersonToEntry(idx)} style={{fontSize:11,padding:'3px 10px'}}>Add</button>
-          </div>
-        </div>}
-
-        <label style={subLbl}>Agenda / Notes</label>
-        <input className="input" placeholder="Meeting agenda, handoff notes..." value={entry.agenda} onChange={e=>updateEntry(idx,'agenda',e.target.value)} style={{fontSize:13}}/>
-      </div>))}
+    <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
+      {['PTO','Sick','Business Travel','Mixed','Other'].map(t=>(<button key={t} onClick={()=>setType(t)} style={{padding:'5px 14px',borderRadius:999,fontSize:12,fontWeight:500,border:'1px solid',borderColor:type===t?'var(--accent)':'var(--border)',background:type===t?'var(--accent-light)':'transparent',color:type===t?'var(--accent)':'var(--text2)',cursor:'pointer',transition:'all .15s'}}>{t}</button>))}
     </div>
 
-    <div style={{display:'flex',gap:8,marginTop:18,justifyContent:'flex-end'}}>
-      <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-      <button className="btn btn-primary" onClick={()=>{if(!name.trim())return;onSave({name:name.trim(),type,dates,backup:buildBackupString()})}}>{editData?'Update':'Save'}</button>
+    {/* Tab switcher */}
+    <div style={{display:'flex',gap:2,background:'var(--surface2)',borderRadius:8,padding:2,border:'1px solid var(--border)',marginBottom:14}}>
+      {[{k:'dates',label:'📅 Leave Dates'},{k:'projects',label:'📋 Projects & Backup'}].map(t=>(
+        <button key={t.k} onClick={()=>setTab(t.k)} style={{flex:1,padding:'6px 12px',borderRadius:6,fontSize:12.5,fontWeight:500,border:'none',background:tab===t.k?'var(--accent)':'transparent',color:tab===t.k?'#fff':'var(--text2)',cursor:'pointer',transition:'all .15s'}}>{t.label}</button>
+      ))}
+    </div>
+
+    {/* ── TAB: DATES ── */}
+    {tab==='dates'&&<div>
+      {/* Date range picker */}
+      <div style={{marginBottom:10,padding:'10px 12px',background:'var(--surface2)',borderRadius:10,border:'1px solid var(--border)'}}>
+        <label style={{...lbl,marginBottom:6}}>Add Date Range</label>
+        <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+          <input type="date" className="input" value={rangeStart} onChange={e=>setRangeStart(e.target.value)} style={{flex:1,minWidth:130}}/>
+          <span style={{color:'var(--text3)',fontSize:13,flexShrink:0}}>to</span>
+          <input type="date" className="input" value={rangeEnd} onChange={e=>setRangeEnd(e.target.value)} style={{flex:1,minWidth:130}}/>
+          <button className="btn btn-sm btn-primary" onClick={applyRange} disabled={!rangeStart||!rangeEnd} style={{flexShrink:0}}>Add</button>
+        </div>
+        {rangeStart&&rangeEnd&&rangePreviewCount>0&&(
+          <div style={{fontSize:11,color:'var(--text2)',marginTop:6}}>
+            {rangePreviewCount} total days ({weekdayPreviewCount} weekdays) will be added
+          </div>
+        )}
+      </div>
+
+      {/* Or add single date */}
+      <div style={{display:'flex',gap:8,marginBottom:8}}>
+        <input type="date" className="input" value={dateInput} onChange={e=>setDateInput(e.target.value)}
+          onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();if(dateInput&&!dates.includes(dateInput)){setDates(d=>[...d,dateInput].sort());setDateInput('')}}}}/>
+        <button className="btn btn-sm btn-secondary" onClick={()=>{if(dateInput&&!dates.includes(dateInput)){setDates(d=>[...d,dateInput].sort());setDateInput('')}}}>+ Single</button>
+      </div>
+
+      {/* Date chips with delete */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+        <span style={{fontSize:11.5,color:'var(--text2)',fontWeight:500}}>{dates.length} date{dates.length!==1?'s':''} selected</span>
+        {dates.length>0&&<button className="btn btn-sm btn-danger" onClick={()=>setDates([])} style={{fontSize:10,padding:'2px 8px'}}>Clear all</button>}
+      </div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:6,minHeight:24}}>
+        {dates.length===0?<span style={{fontSize:12,color:'var(--text3)',fontStyle:'italic'}}>No dates added yet</span>:dates.map(d=>(
+          <span key={d} className={'chip '+(isToday(d)?'chip-today':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>
+            {fmtDate(d)}
+            {!isWeekday(d)&&<span style={{fontSize:9,color:'inherit',opacity:.6,marginLeft:2}}>(wknd)</span>}
+            <span style={{cursor:'pointer',marginLeft:3,opacity:.6}} onClick={()=>deleteDateEntry(d)} title="Remove">×</span>
+          </span>
+        ))}
+      </div>
+      {weekdays.length>0&&<div style={{fontSize:11,color:'var(--green)',marginTop:4}}>✓ {weekdays.length} weekday{weekdays.length!==1?'s':''} — ready for project assignment</div>}
+    </div>}
+
+    {/* ── TAB: PROJECTS ── */}
+    {tab==='projects'&&<div>
+      {weekdays.length===0&&<div style={{padding:'16px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)',textAlign:'center',marginBottom:12}}>
+        <div style={{fontSize:13,color:'var(--text2)',marginBottom:6}}>No weekdays selected yet</div>
+        <div style={{fontSize:12,color:'var(--text3)'}}>Go to the "Leave Dates" tab and add your leave range first. Project entries will show up per weekday.</div>
+      </div>}
+
+      {weekdays.length>0&&<div>
+        {/* Filter bar for edit mode */}
+        {editData&&<div style={{display:'flex',gap:8,marginBottom:10,flexWrap:'wrap'}}>
+          <select className="input" value={editFilter.date} onChange={e=>setEditFilter(f=>({...f,date:e.target.value}))} style={{flex:1,fontSize:12,padding:'5px 28px 5px 10px'}}>
+            <option value="">All dates</option>
+            {weekdays.map(d=><option key={d} value={d}>{fmtDate(d)}</option>)}
+          </select>
+          <input className="input" placeholder="Filter by project..." value={editFilter.project} onChange={e=>setEditFilter(f=>({...f,project:e.target.value}))} style={{flex:1,fontSize:12}}/>
+          {(editFilter.date||editFilter.project)&&<button className="btn btn-sm btn-secondary" onClick={()=>setEditFilter({date:'',project:''})} style={{fontSize:11}}>Clear</button>}
+        </div>}
+
+        {/* One section per weekday */}
+        {weekdays.map(dayStr=>{
+          const dayEntries=entries.map((e,i)=>({...e,_idx:i})).filter(e=>e.date===dayStr||(editData&&!e.date&&!editFilter.date));
+          const relevantEntries=editData?filteredEntries.map((e,i)=>({...e,_idx:entries.indexOf(e)})).filter(e=>e.date===dayStr||(!e.date&&!editFilter.date)):entries.map((e,i)=>({...e,_idx:i})).filter(e=>e.date===dayStr);
+
+          return(<div key={dayStr} className="day-entry-card">
+            <div className="day-entry-header">
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span className="day-label">{fmtDate(dayStr)}</span>
+                <span style={{fontSize:11,color:'var(--text3)'}}>{new Date(dayStr+'T00:00:00').toLocaleDateString('en-US',{weekday:'long'})}</span>
+              </div>
+              <button className="btn btn-sm btn-secondary" onClick={()=>addEntryForDay(dayStr)} style={{fontSize:11,padding:'2px 8px'}}>
+                <Icon name="plus" size={11}/> Add Project
+              </button>
+            </div>
+
+            {relevantEntries.length===0&&<div style={{fontSize:12,color:'var(--text3)',fontStyle:'italic',padding:'4px 0'}}>No projects assigned — click "Add Project" above</div>}
+
+            {relevantEntries.map((entry)=>{
+              const idx=entry._idx;
+              return(<div key={idx} className="fade-in" style={{background:'var(--surface)',borderRadius:8,padding:10,marginTop:8,border:'1px solid var(--border)'}}>
+                <div style={{display:'flex',gap:8,marginBottom:6}}>
+                  <div style={{flex:1}}>
+                    <label style={subLbl}>Project Name</label>
+                    <input className="input" placeholder="e.g. Shield Roofing" value={entry.project} onChange={e=>updateEntry(idx,'project',e.target.value)} style={{fontSize:13}}/>
+                  </div>
+                  <button className="btn-icon" onClick={()=>removeEntry(idx)} title="Remove" style={{width:26,height:26,color:'var(--red)',marginTop:17,flexShrink:0}}><Icon name="trash" size={12}/></button>
+                </div>
+
+                <label style={subLbl}>Backup Person(s)</label>
+                <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:6,minHeight:26}}>
+                  {entry.persons.map(p=>(<span key={p} className="chip chip-future" style={{fontSize:11}}>{p} <span style={{cursor:'pointer',marginLeft:2,opacity:.6}} onClick={()=>removePersonFromEntry(idx,p)}>×</span></span>))}
+                  <button className="btn btn-sm btn-secondary" onClick={()=>updateEntry(idx,'showPicker',!entry.showPicker)} style={{fontSize:11,padding:'2px 8px',borderRadius:999}}>
+                    <Icon name="plus" size={11}/> {entry.showPicker?'Close':'Add'}
+                  </button>
+                </div>
+
+                {entry.showPicker&&<div className="fade-in" style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:8,marginBottom:8}}>
+                  <input className="input" placeholder="Search team members..." value={entry.pickerQ} onChange={e=>updateEntry(idx,'pickerQ',e.target.value)} style={{fontSize:12,marginBottom:6,padding:'5px 10px'}}/>
+                  <div style={{maxHeight:100,overflowY:'auto',display:'flex',flexDirection:'column',gap:1}}>
+                    {existingNames.filter(n=>!entry.persons.includes(n)&&(!entry.pickerQ||n.toLowerCase().includes(entry.pickerQ.toLowerCase()))).map(n=>(
+                      <div key={n} onClick={()=>addPersonToEntry(idx,n)} style={{padding:'4px 8px',borderRadius:4,fontSize:12,cursor:'pointer'}} onMouseOver={e=>e.currentTarget.style.background='var(--accent-light)'} onMouseOut={e=>e.currentTarget.style.background='transparent'}>{n}</div>
+                    ))}
+                  </div>
+                  <div style={{display:'flex',gap:6,marginTop:6,borderTop:'1px solid var(--border)',paddingTop:6}}>
+                    <input className="input" placeholder="Or type new name..." value={entry.newPerson} onChange={e=>updateEntry(idx,'newPerson',e.target.value)} onKeyDown={e=>e.key==='Enter'&&addNewPersonToEntry(idx)} style={{fontSize:12,padding:'4px 8px',flex:1}}/>
+                    <button className="btn btn-sm btn-primary" onClick={()=>addNewPersonToEntry(idx)} style={{fontSize:11,padding:'3px 10px'}}>Add</button>
+                  </div>
+                </div>}
+
+                <label style={subLbl}>Agenda / Notes</label>
+                <input className="input" placeholder="Meeting agenda, handoff notes..." value={entry.agenda} onChange={e=>updateEntry(idx,'agenda',e.target.value)} style={{fontSize:13}}/>
+              </div>);
+            })}
+          </div>);
+        })}
+
+        {/* Also allow blank entries that span multiple days */}
+        <div style={{marginTop:8,display:'flex',justifyContent:'center'}}>
+          <button className="btn btn-sm btn-secondary" onClick={addBlankEntry} style={{fontSize:12}}>
+            <Icon name="plus" size={12}/> Add multi-day project entry
+          </button>
+        </div>
+      </div>}
+    </div>}
+
+    <div style={{display:'flex',gap:8,marginTop:18,justifyContent:'space-between',alignItems:'center'}}>
+      <div style={{fontSize:11.5,color:'var(--text3)'}}>
+        {dates.length>0&&<span>{dates.length} date{dates.length!==1?'s':''} · {entries.filter(e=>e.project||e.persons.length>0).length} project entries</span>}
+      </div>
+      <div style={{display:'flex',gap:8}}>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={()=>{if(!name.trim())return;onSave({name:name.trim(),type,dates,backup:buildBackupString(entries)})}}>
+          {editData?'Update':'Save'}
+        </button>
+      </div>
     </div>
   </div></div>);
 }
 
-// ─── ICS FILE GENERATION ───
-// ─── OUTLOOK CALENDAR DEEPLINKS ───
-function buildOutlookEventLinks(name,dates){
-  const sorted=[...dates].sort();
-  return sorted.map(dt=>{
-    const d=new Date(dt+'T00:00:00');
-    const nextD=new Date(d);nextD.setDate(nextD.getDate()+1);
-    const fmt=dd=>dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')+'-'+String(dd.getDate()).padStart(2,'0');
-    const label=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-    const params=new URLSearchParams({
-      allday:'true',
-      startdt:fmt(d)+'T00:00:00',
-      enddt:fmt(nextD)+'T00:00:00',
-      subject:'OOO - '+name,
-      body:'Out of Office - '+name,
-      path:'/calendar/action/compose',
-      rru:'addevent'
-    });
-    return{date:dt,label:label,url:'https://outlook.office.com/calendar/0/deeplink/compose?'+params.toString()};
-  });
-}
-
-// Calculate the next working day (skip weekends)
-function getNextWorkingDay(dateStr){
-  const d=new Date(dateStr+'T00:00:00');
-  d.setDate(d.getDate()+1);
-  // 0=Sun, 6=Sat
-  while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()+1);
-  return d;
-}
-
-// Group dates into consecutive ranges (accounting for weekends bridging)
+// ─── HELPER FUNCTIONS ─────────────────────────────────
 function groupConsecutiveDates(dates){
   const sorted=[...dates].sort();
   if(sorted.length===0)return[];
-  const ranges=[];
-  let rangeStart=sorted[0];
-  let rangePrev=sorted[0];
+  const ranges=[];let rangeStart=sorted[0];let rangePrev=sorted[0];
   for(let i=1;i<sorted.length;i++){
-    const prev=new Date(rangePrev+'T00:00:00');
-    const cur=new Date(sorted[i]+'T00:00:00');
-    // Check if dates are consecutive (allow weekends in between)
+    const prev=new Date(rangePrev+'T00:00:00');const cur=new Date(sorted[i]+'T00:00:00');
     let expected=new Date(prev);expected.setDate(expected.getDate()+1);
-    // Skip weekends
     while(expected.getDay()===0||expected.getDay()===6)expected.setDate(expected.getDate()+1);
     const diffDays=Math.round((cur-prev)/(1000*60*60*24));
-    if(diffDays<=1||(cur.getTime()===expected.getTime())){
-      rangePrev=sorted[i];
-    }else{
-      ranges.push({start:rangeStart,end:rangePrev});
-      rangeStart=sorted[i];rangePrev=sorted[i];
-    }
+    if(diffDays<=1||(cur.getTime()===expected.getTime())){rangePrev=sorted[i]}
+    else{ranges.push({start:rangeStart,end:rangePrev});rangeStart=sorted[i];rangePrev=sorted[i]}
   }
   ranges.push({start:rangeStart,end:rangePrev});
   return ranges;
 }
-
+function getNextWorkingDay(dateStr){const d=new Date(dateStr+'T00:00:00');d.setDate(d.getDate()+1);while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()+1);return d}
 function getAutoReplyText(name,dates){
-  const sorted=[...dates].sort();
-  const ranges=groupConsecutiveDates(sorted);
-  // Find the range that contains the latest date (most relevant for the auto-reply)
-  const latestRange=ranges[ranges.length-1];
-  const returnDay=getNextWorkingDay(latestRange.end);
+  const sorted=[...dates].sort();const ranges=groupConsecutiveDates(sorted);
+  const latestRange=ranges[ranges.length-1];const returnDay=getNextWorkingDay(latestRange.end);
   const returnStr=returnDay.toLocaleDateString('en-US',{day:'numeric',month:'long',year:'numeric'});
-  // Build date description
   let dateDesc='';
-  if(ranges.length===1){
-    const r=ranges[0];
-    if(r.start===r.end){
-      dateDesc='on '+new Date(r.start+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'});
-    }else{
-      dateDesc='from '+new Date(r.start+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'})+' to '+new Date(r.end+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'});
-    }
-  }else{
-    const first=new Date(ranges[0].start+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'});
-    const last=new Date(ranges[ranges.length-1].end+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'});
-    dateDesc='from '+first+' to '+last;
-  }
-  return`Hello,
-
-Thank you for your email. I am out of office ${dateDesc} and will be back on ${returnStr}.
-
-I have limited access to my mail and will respond to your email as soon as possible upon my return.
-
-Thank you for your understanding.
-
-Best regards,
-${name}`;
+  if(ranges.length===1){const r=ranges[0];if(r.start===r.end)dateDesc='on '+new Date(r.start+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'});else dateDesc='from '+new Date(r.start+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'})+' to '+new Date(r.end+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'})}
+  else{const first=new Date(ranges[0].start+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'});const last=new Date(ranges[ranges.length-1].end+'T00:00:00').toLocaleDateString('en-US',{day:'numeric',month:'long'});dateDesc='from '+first+' to '+last}
+  return`Hello,\n\nThank you for your email. I am out of office ${dateDesc} and will be back on ${returnStr}.\n\nI have limited access to my mail and will respond to your email as soon as possible upon my return.\n\nThank you for your understanding.\n\nBest regards,\n${name}`;
 }
 
-// ─── OOO ACTIONS MODAL ───
+// ─── OOO MODAL ───
 function OooActionsModal({name,dates,onClose}){
-  const[copied,setCopied]=useState(false);
-  const[opened,setOpened]=useState(false);
-  const sorted=[...dates].sort();
-  const ranges=groupConsecutiveDates(sorted);
+  const[copied,setCopied]=useState(false);const[opened,setOpened]=useState(false);
+  const sorted=[...dates].sort();const ranges=groupConsecutiveDates(sorted);
   const returnDay=getNextWorkingDay(ranges[ranges.length-1].end);
   const returnStr=returnDay.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const startDateStr=new Date(sorted[0]+'T00:00:00').toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const endDateStr=new Date(sorted[sorted.length-1]+'T00:00:00').toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const autoReply=getAutoReplyText(name,dates);
-
-  const handleCopy=async()=>{
-    try{await navigator.clipboard.writeText(autoReply);setCopied(true);setTimeout(()=>setCopied(false),2500)}
-    catch{const ta=document.createElement('textarea');ta.value=autoReply;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);setCopied(true);setTimeout(()=>setCopied(false),2500)}
-  };
-  const handleOpen=()=>{
-    window.open('https://outlook.cloud.microsoft/mail/options/accounts-category/automaticReply','_blank');
-    setOpened(true);
-  };
-
-  const checkItem=(done,text)=>(
-    <div style={{display:'flex',alignItems:'flex-start',gap:8,padding:'6px 0',borderBottom:'1px solid var(--border)'}}>
-      <div style={{width:20,height:20,borderRadius:'50%',border:'2px solid',borderColor:done?'var(--green)':'var(--border)',background:done?'var(--green)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:1,transition:'all .2s'}}>
-        {done&&<span style={{color:'#fff',fontSize:11,fontWeight:700}}>✓</span>}
-      </div>
-      <span style={{fontSize:12.5,color:'var(--text)',lineHeight:1.5}}>{text}</span>
-    </div>
-  );
-
+  const handleCopy=async()=>{try{await navigator.clipboard.writeText(autoReply);setCopied(true);setTimeout(()=>setCopied(false),2500)}catch{const ta=document.createElement('textarea');ta.value=autoReply;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);setCopied(true);setTimeout(()=>setCopied(false),2500)}};
+  const handleOpen=()=>{window.open('https://outlook.office.com/mail/options/accounts/automaticReplies','_blank');setOpened(true)};
+  const checkItem=(done,text)=>(<div style={{display:'flex',alignItems:'flex-start',gap:8,padding:'6px 0',borderBottom:'1px solid var(--border)'}}><div style={{width:20,height:20,borderRadius:'50%',border:'2px solid',borderColor:done?'var(--green)':'var(--border)',background:done?'var(--green)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:1,transition:'all .2s'}}>{done&&<span style={{color:'#fff',fontSize:11,fontWeight:700}}>✓</span>}</div><span style={{fontSize:12.5,color:'var(--text)',lineHeight:1.5}}>{text}</span></div>);
   const stepStyle={display:'flex',gap:12,padding:16,background:'var(--surface2)',borderRadius:10,border:'1px solid var(--border)',marginBottom:10};
   const numStyle={width:28,height:28,borderRadius:'50%',background:'var(--accent)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,flexShrink:0,marginTop:1};
-
   return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:560}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-      <h3 style={{fontSize:17,fontWeight:600}}>Set Up Out of Office</h3>
-      <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
-    </div>
-    <div style={{padding:'10px 14px',background:'var(--accent-light)',border:'1px solid var(--accent-border)',borderRadius:8,marginBottom:14,fontSize:13}}>
-      <strong>{name}</strong> &nbsp;&middot;&nbsp; {sorted.length} day{sorted.length>1?'s':''} &nbsp;&middot;&nbsp; Returns <strong>{returnStr}</strong>
-    </div>
-
-    {/* Step 1: Open Automatic Replies */}
-    <div style={stepStyle}>
-      <div style={numStyle}>1</div>
-      <div style={{flex:1}}>
-        <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>Open Outlook Automatic Replies</div>
-        <button className={'btn btn-sm '+(opened?'btn-secondary':'btn-primary')} onClick={handleOpen} style={{marginBottom:12}}>
-          {opened?'Opened \u2014 switch to that tab':'Open Automatic Replies \u2197'}
-        </button>
-        <div style={{fontSize:12,color:'var(--text2)',fontWeight:600,marginBottom:6}}>Once open, set it up like this:</div>
-        <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,padding:'4px 12px'}}>
-          {checkItem(false,<>Toggle <strong>Turn on automatic replies</strong> → <strong>On</strong></>)}
-          {checkItem(false,<>Check <strong>"Send replies only during a time period"</strong></>)}
-          {checkItem(false,<>Set <strong>Start time</strong> to: <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11.5,color:'var(--accent)'}}>{startDateStr}</span></>)}
-          {checkItem(false,<>Set <strong>End time</strong> to: <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11.5,color:'var(--accent)'}}>{endDateStr}</span></>)}
-          {checkItem(false,<>Paste the reply message from Step 2 below into the message box</>)}
-          {checkItem(false,<>Click <strong>Save</strong></>)}
-        </div>
-        {!opened&&<div style={{fontSize:11,color:'var(--text3)',marginTop:8}}>If the link doesn't open the right page: Outlook → Settings (gear icon) → Accounts → Automatic replies</div>}
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}><h3 style={{fontSize:17,fontWeight:600}}>Set Up Out of Office</h3><button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button></div>
+    <div style={{padding:'10px 14px',background:'var(--accent-light)',border:'1px solid var(--accent-border)',borderRadius:8,marginBottom:14,fontSize:13}}><strong>{name}</strong> &nbsp;·&nbsp; {sorted.length} day{sorted.length>1?'s':''} &nbsp;·&nbsp; Returns <strong>{returnStr}</strong></div>
+    <div style={stepStyle}><div style={numStyle}>1</div><div style={{flex:1}}>
+      <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>Open Outlook Automatic Replies</div>
+      <button className={'btn btn-sm '+(opened?'btn-secondary':'btn-primary')} onClick={handleOpen} style={{marginBottom:12}}>{opened?'Opened — switch to that tab':'Open Automatic Replies ↗'}</button>
+      <div style={{fontSize:12,color:'var(--text2)',fontWeight:600,marginBottom:6}}>Once open, set it up like this:</div>
+      <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,padding:'4px 12px'}}>
+        {checkItem(false,<>Toggle <strong>Turn on automatic replies</strong> → <strong>On</strong></>)}
+        {checkItem(false,<>Check <strong>"Send replies only during a time period"</strong></>)}
+        {checkItem(false,<>Set <strong>Start time</strong> to: <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11.5,color:'var(--accent)'}}>{startDateStr}</span></>)}
+        {checkItem(false,<>Set <strong>End time</strong> to: <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11.5,color:'var(--accent)'}}>{endDateStr}</span></>)}
+        {checkItem(false,<>Paste the reply message from Step 2 into the message box</>)}
+        {checkItem(false,<>Click <strong>Save</strong></>)}
       </div>
-    </div>
-
-    {/* Step 2: Copy auto-reply message */}
-    <div style={stepStyle}>
-      <div style={numStyle}>2</div>
-      <div style={{flex:1}}>
-        <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>Copy Auto-Reply Message</div>
-        <div style={{fontSize:12,color:'var(--text2)',marginBottom:8}}>Copy this and paste it into the message box in Outlook:</div>
-        <div style={{background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:8,padding:12,fontSize:12.5,lineHeight:1.65,whiteSpace:'pre-wrap',color:'var(--text)',maxHeight:190,overflowY:'auto',marginBottom:8}}>
-          {autoReply}
-        </div>
-        <button className={'btn btn-sm '+(copied?'btn-secondary':'btn-primary')} onClick={handleCopy}>
-          {copied?'\u2713 Copied to clipboard!':'Copy Message'}
-        </button>
-      </div>
-    </div>
-
-    <div style={{display:'flex',justifyContent:'flex-end',marginTop:4}}>
-      <button className="btn btn-secondary" onClick={onClose}>Done</button>
-    </div>
+    </div></div>
+    <div style={stepStyle}><div style={numStyle}>2</div><div style={{flex:1}}>
+      <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>Copy Auto-Reply Message</div>
+      <div style={{fontSize:12,color:'var(--text2)',marginBottom:8}}>Copy this and paste it into the message box in Outlook:</div>
+      <div style={{background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:8,padding:12,fontSize:12.5,lineHeight:1.65,whiteSpace:'pre-wrap',color:'var(--text)',maxHeight:190,overflowY:'auto',marginBottom:8}}>{autoReply}</div>
+      <button className={'btn btn-sm '+(copied?'btn-secondary':'btn-primary')} onClick={handleCopy}>{copied?'✓ Copied to clipboard!':'Copy Message'}</button>
+    </div></div>
+    <div style={{display:'flex',justifyContent:'flex-end',marginTop:4}}><button className="btn btn-secondary" onClick={onClose}>Done</button></div>
   </div></div>);
 }
 
@@ -779,6 +701,177 @@ function UserPickerModal({names,selected,onClose,onApply}){
     <div style={{display:'flex',gap:8,marginTop:14,justifyContent:'space-between'}}><button className="btn btn-sm btn-secondary" onClick={()=>setSel(new Set())}>Clear</button><div style={{display:'flex',gap:8}}><button className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button><button className="btn btn-primary btn-sm" onClick={()=>onApply([...sel])}>Apply ({sel.size})</button></div></div>
   </div></div>);
 }
+
+// ─── MAIN APP ───
+function App(){
+  const[theme,setTheme]=useState(()=>localStorage.getItem('cx_lt_theme')||'light');
+  useEffect(()=>{document.documentElement.setAttribute('data-theme',theme);localStorage.setItem('cx_lt_theme',theme)},[theme]);
+  const[user,setUser]=useState(()=>{try{return JSON.parse(localStorage.getItem('cx_lt_session'))}catch{return null}});
+  const[data,setData]=useState([]);
+  const[lastSync,setLastSync]=useState('Loading...');
+  const[view,setView]=useState('upcoming');const[weekDate,setWeekDate]=useState(new Date());
+  const[typeFilter,setTypeFilter]=useState('All');const[search,setSearch]=useState('');
+  const[selectedUsers,setSelectedUsers]=useState([]);
+  const[showAddLeave,setShowAddLeave]=useState(false);const[showUserPicker,setShowUserPicker]=useState(false);
+  const[syncing,setSyncing]=useState(false);const[syncStatus,setSyncStatus]=useState('');
+  const[toasts,setToasts]=useState([]);const[editingIdx,setEditingIdx]=useState(null);
+  const[showOoo,setShowOoo]=useState(false);const[oooData,setOooData]=useState(null);
+  const[showDeleteConfirm,setShowDeleteConfirm]=useState(null);
+  const[showExport,setShowExport]=useState(null);
+  const[refreshing,setRefreshing]=useState(false);
+  const toast=(msg,type='info')=>{const id=Date.now();setToasts(t=>[...t,{id,msg,type}]);setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),4000)};
+
+  const loadAllData=async()=>{
+    let canvasMembers=[];
+    try{const c=await readCache();if(c){canvasMembers=parseCanvasMarkdown(c.markdown);setLastSync(new Date(c.updated_at).toLocaleString())}}catch{}
+    try{const ul=await fetchUserLeaves();const merged=mergeCanvasAndUserLeaves(canvasMembers,ul);setData(merged)}catch{setData(canvasMembers)}
+  };
+  useEffect(()=>{loadAllData()},[]);
+
+  const handleRefresh=async()=>{
+    setRefreshing(true);
+    try{await loadAllData();toast('Refreshed with latest data','success')}
+    catch(e){toast('Refresh failed: '+e.message,'error')}
+    setRefreshing(false);
+  };
+
+  const allNames=useMemo(()=>data.map(m=>m.name).sort(),[data]);
+  const filtered=useMemo(()=>{
+    let r=data;
+    if(view==='today')r=r.filter(m=>m.dates.some(isToday));
+    else if(view==='upcoming')r=r.filter(m=>m.dates.length>0);
+    else if(view==='week')r=r.filter(m=>m.dates.some(d=>inWeek(d,weekDate)));
+    if(typeFilter!=='All')r=r.filter(m=>m.type===typeFilter);
+    if(selectedUsers.length>0)r=r.filter(m=>selectedUsers.includes(m.name));
+    if(search.trim()){const q=search.toLowerCase();r=r.filter(m=>m.name.toLowerCase().includes(q)||m.backup.toLowerCase().includes(q)||m.dates.some(d=>d.includes(q)))}
+    return[...r].sort((a,b)=>{const aMe=user&&a.name.toLowerCase()===user.name.toLowerCase();const bMe=user&&b.name.toLowerCase()===user.name.toLowerCase();if(aMe&&!bMe)return-1;if(!aMe&&bMe)return 1;return a.name.localeCompare(b.name)});
+  },[data,view,weekDate,typeFilter,selectedUsers,search,user]);
+  const stats=useMemo(()=>({total:data.length,today:data.filter(m=>m.dates.some(isToday)).length,week:data.filter(m=>m.dates.some(d=>inWeek(d,new Date()))).length,upcoming:data.filter(m=>m.dates.length>0).length}),[data]);
+  const clearFilters=()=>{setView('upcoming');setTypeFilter('All');setSearch('');setSelectedUsers([])};
+
+  const handleDeleteMember=idx=>setShowDeleteConfirm(idx);
+  const confirmDelete=async()=>{
+    const idx=showDeleteConfirm;const member=data[idx];
+    setData(d=>d.filter((_,i)=>i!==idx));setShowDeleteConfirm(null);
+    try{await softDeleteLeave(member.name);toast(member.name+' removed & saved','success')}
+    catch{toast('Removed locally (save failed)','error')}
+  };
+
+  const handleSaveLeave=async(entry)=>{
+    const savedDates=entry.dates.filter(isFuture).sort();
+    const wasEditing=editingIdx!==null;
+    if(wasEditing){
+      setData(d=>d.map((m,i)=>i===editingIdx?{...m,name:entry.name,type:entry.type,dates:savedDates,backup:entry.backup}:m));
+      setEditingIdx(null);
+      try{await upsertLeave({...entry,dates:savedDates},user?.email||'');toast('Updated & saved','success')}
+      catch{toast('Updated locally (save failed)','error')}
+    }else{
+      const ei=data.findIndex(m=>m.name.toLowerCase()===entry.name.toLowerCase());
+      if(ei>=0){setData(d=>d.map((m,i)=>{if(i!==ei)return m;const mg=new Set([...m.dates,...entry.dates]);return{...m,dates:[...mg].filter(isFuture).sort(),backup:entry.backup||m.backup,type:entry.type||m.type}}))}
+      else{setData(d=>[...d,{name:entry.name,dates:savedDates,backup:entry.backup,type:entry.type,raw:''}])}
+      try{await upsertLeave({...entry,dates:savedDates},user?.email||'');toast('Leave added & saved','success')}
+      catch{toast('Added locally (save failed)','error')}
+    }
+    setShowAddLeave(false);
+    if(savedDates.length>0){setTimeout(()=>{setOooData({name:entry.name,dates:savedDates});setShowOoo(true)},150)}
+  };
+
+  if(!user)return<LoginScreen onLogin={setUser}/>;
+  const tbc={PTO:'badge-pto',Sick:'badge-sick',Mixed:'badge-mixed','Business Travel':'badge-bt',Other:'badge-other'};
+
+  return(<div style={{minHeight:'100vh',background:'var(--bg)'}}>
+    <ToastContainer toasts={toasts} remove={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>
+    <header style={{position:'sticky',top:0,zIndex:50,padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',background:'var(--header-bg)',backdropFilter:'blur(16px)',borderBottom:'1px solid var(--header-border)'}}>
+      <div style={{display:'flex',alignItems:'center',gap:10}}><div style={{width:32,height:32,borderRadius:8,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'#fff',fontWeight:700}}>CX</div><span style={{fontSize:17,fontWeight:700}}>Leave Tracker</span></div>
+      <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <button className="btn btn-secondary btn-sm" onClick={handleRefresh} disabled={refreshing}><span className={refreshing?'spin':''} style={{display:'inline-flex'}}><Icon name="refresh" size={14}/></span> {refreshing?'Refreshing...':'Refresh'}</button>
+        <button className="btn btn-primary btn-sm" onClick={()=>{setEditingIdx(null);setShowAddLeave(true)}}><Icon name="plus" size={14}/> Add My Leave</button>
+        <button className="theme-toggle" onClick={()=>setTheme(t=>t==='light'?'dark':'light')}/>
+        <div style={{display:'flex',alignItems:'center',gap:6,marginLeft:4,paddingLeft:8,borderLeft:'1px solid var(--border)'}}><span style={{fontSize:12,color:'var(--text2)',maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name}</span><button className="btn-icon" title="Logout" onClick={()=>{localStorage.removeItem('cx_lt_session');setUser(null)}} style={{width:28,height:28}}><Icon name="logout" size={14}/></button></div>
+      </div>
+    </header>
+
+    <main style={{maxWidth:1320,margin:'0 auto',padding:'18px 18px 40px'}}>
+      <div className="stat-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:18}}>
+        {[{key:'all',val:stats.total,label:'Total Members',color:'var(--accent)'},{key:'today',val:stats.today,label:'On Leave Today',color:'var(--red)'},{key:'week',val:stats.week,label:'This Week',color:'var(--amber)'},{key:'upcoming',val:stats.upcoming,label:'Upcoming Leaves',color:'var(--green)'}].map(s=>(<div key={s.key} className={'stat-card '+(view===s.key?'active':'')} onClick={()=>setView(s.key)}><div className="value" style={{color:s.color}}>{s.val}</div><div className="label">{s.label}</div></div>))}
+      </div>
+
+      <div className="card" style={{padding:12,marginBottom:14}}>
+        <div className="filter-row" style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+          <div style={{display:'flex',gap:2,background:'var(--surface2)',borderRadius:8,padding:2,border:'1px solid var(--border)'}}>
+            {['upcoming','today','week','all'].map(v=>(<button key={v} onClick={()=>setView(v)} style={{padding:'5px 12px',borderRadius:6,fontSize:12,fontWeight:500,border:'none',background:view===v?'var(--accent)':'transparent',color:view===v?'#fff':'var(--text2)',cursor:'pointer'}}>{v==='all'?'All':v[0].toUpperCase()+v.slice(1)}</button>))}
+          </div>
+          {view==='week'&&<div style={{display:'flex',alignItems:'center',gap:4}}><button className="btn-icon" onClick={()=>setWeekDate(d=>shiftWeek(d,-1))} style={{width:26,height:26}}><Icon name="chevL" size={14}/></button><span style={{fontSize:12,color:'var(--text2)',minWidth:110,textAlign:'center',fontFamily:"'JetBrains Mono',monospace"}}>{fmtDate(getWeekRange(weekDate)[0])+' – '+fmtDate(getWeekRange(weekDate)[1])}</span><button className="btn-icon" onClick={()=>setWeekDate(d=>shiftWeek(d,1))} style={{width:26,height:26}}><Icon name="chevR" size={14}/></button><button className="btn btn-sm btn-secondary" style={{fontSize:11,padding:'3px 8px'}} onClick={()=>setWeekDate(new Date())}>This week</button></div>}
+          <select className="input" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} style={{width:'auto',fontSize:12,padding:'5px 28px 5px 10px'}}>{['All','PTO','Sick','Mixed','Business Travel'].map(t=><option key={t}>{t}</option>)}</select>
+          <button className="btn btn-sm btn-secondary" onClick={()=>setShowUserPicker(true)}><Icon name="users" size={13}/> {selectedUsers.length>0?selectedUsers.length+' selected':'Members'}</button>
+          <div style={{position:'relative',flex:'1 1 140px',minWidth:130}}><span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text3)',display:'flex'}}><Icon name="search" size={14}/></span><input className="input" placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:32,fontSize:12}}/></div>
+          <button className="btn btn-sm btn-danger" onClick={clearFilters} style={{fontSize:11}}>Clear</button>
+        </div>
+      </div>
+
+      <div className="card responsive-table" style={{overflow:'hidden'}}><div style={{overflowX:'auto'}}><table><thead><tr>
+        <th>Name</th><th>Type</th><th>Leave Dates</th><th>Days</th>
+        <th className="desktop-only">Project</th><th className="desktop-only">Backup</th><th className="desktop-only">Agenda</th>
+        <th style={{width:80}}>Actions</th>
+      </tr></thead><tbody>
+        {filtered.length===0?<tr><td colSpan={8} style={{textAlign:'center',padding:40,color:'var(--text3)'}}>No matching records</td></tr>:filtered.map((m,i)=>{
+          const oi=data.indexOf(m);const dc=m.dates.length;
+          const isMe=user&&m.name.toLowerCase()===user.name.toLowerCase();
+          const projects=parseProjectEntries(m.backup||'');
+          const rowSpan=Math.max(projects.length,1);
+          return(<React.Fragment key={m.name+i}>
+            <tr className="fade-in">
+              <td rowSpan={rowSpan} style={{fontWeight:600,whiteSpace:'nowrap',fontSize:13.5,verticalAlign:'top'}}>{m.name}{isMe&&<span style={{fontSize:10,color:'var(--accent)',marginLeft:4}}>(you)</span>}</td>
+              <td rowSpan={rowSpan} style={{verticalAlign:'top'}}><span className={'badge '+(tbc[m.type]||'badge-none')}>{m.type}</span></td>
+              <td rowSpan={rowSpan} style={{maxWidth:280,verticalAlign:'top'}}><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{dc===0?<span style={{color:'var(--text3)',fontSize:12}}>No upcoming</span>:m.dates.slice(0,10).map(d=>(<span key={d} className={'chip '+(isToday(d)?'chip-today pulse':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)}</span>))}{dc>10&&<span className="chip chip-gray" style={{fontSize:10}}>+{dc-10}</span>}</div></td>
+              <td rowSpan={rowSpan} style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,fontSize:14,textAlign:'center',verticalAlign:'top'}}><span style={dc>5?{color:'var(--amber)',background:'var(--amber-bg)',padding:'2px 8px',borderRadius:6}:{}}>{dc}</span></td>
+              <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].project||'':''}</td>
+              <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].persons.join(', ')||'':''}</td>
+              <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',fontStyle:projects[0]&&projects[0].agenda?'normal':'italic'}}>{projects[0]&&projects[0].agenda?projects[0].agenda:''}</td>
+              <td rowSpan={rowSpan} style={{verticalAlign:'top'}}>
+                <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
+                  <button className="btn-icon" onClick={()=>setShowExport(m)} title="Export/Share" style={{width:28,height:28,color:'var(--indigo)'}}><Icon name="share" size={13}/></button>
+                  {isMe&&<>
+                    <button className="btn-icon" onClick={()=>{setEditingIdx(oi);setShowAddLeave(true)}} title="Edit" style={{width:28,height:28}}><Icon name="edit" size={13}/></button>
+                    <button className="btn-icon" onClick={()=>handleDeleteMember(oi)} title="Delete" style={{width:28,height:28,color:'var(--red)'}}><Icon name="trash" size={13}/></button>
+                  </>}
+                </div>
+              </td>
+            </tr>
+            {projects.slice(1).map((p,pi)=>(
+              <tr key={m.name+'-proj-'+pi} className="fade-in">
+                <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.project||''}</td>
+                <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.persons.join(', ')||''}</td>
+                <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',fontStyle:p.agenda?'normal':'italic'}}>{p.agenda||''}</td>
+              </tr>
+            ))}
+          </React.Fragment>);
+        })}
+      </tbody></table></div>
+      <div style={{padding:'10px 14px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',fontSize:11.5,color:'var(--text3)'}}><span>Showing {filtered.length} of {data.length}</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>Last sync: {lastSync}</span></div>
+      </div>
+    </main>
+
+    {showAddLeave&&<AddLeaveModal onClose={()=>{setShowAddLeave(false);setEditingIdx(null)}} onSave={handleSaveLeave} existingNames={allNames} editData={editingIdx!==null?data[editingIdx]:null} userName={user.name}/>}
+    {showUserPicker&&<UserPickerModal names={allNames} selected={selectedUsers} onClose={()=>setShowUserPicker(false)} onApply={sel=>{setSelectedUsers(sel);setShowUserPicker(false)}}/>}
+    {showOoo&&oooData&&<OooActionsModal name={oooData.name} dates={oooData.dates} onClose={()=>{setShowOoo(false);setOooData(null)}}/>}
+    {showExport&&<ExportModal member={showExport} onClose={()=>setShowExport(null)}/>}
+    {showDeleteConfirm!==null&&data[showDeleteConfirm]&&<div className="overlay" onClick={()=>setShowDeleteConfirm(null)}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:420}}>
+      <h3 style={{fontSize:17,fontWeight:600,marginBottom:12,color:'var(--red)'}}>Delete Leave Record</h3>
+      <p style={{fontSize:13.5,color:'var(--text)',marginBottom:8}}>Are you sure you want to remove <strong>{data[showDeleteConfirm].name}</strong>?</p>
+      {data[showDeleteConfirm].dates.length>0&&<div style={{marginBottom:12}}>
+        <div style={{fontSize:12,color:'var(--text2)',marginBottom:6}}>This will remove {data[showDeleteConfirm].dates.length} leave date{data[showDeleteConfirm].dates.length>1?'s':''}:</div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:4}}>{data[showDeleteConfirm].dates.slice(0,8).map(d=>(<span key={d} className="chip chip-future" style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fmtDate(d)}</span>))}{data[showDeleteConfirm].dates.length>8&&<span className="chip chip-gray" style={{fontSize:10}}>+{data[showDeleteConfirm].dates.length-8} more</span>}</div>
+      </div>}
+      <p style={{fontSize:12,color:'var(--text3)',marginBottom:14}}>This action is saved to the database and visible to all users.</p>
+      <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+        <button className="btn btn-secondary" onClick={()=>setShowDeleteConfirm(null)}>Cancel</button>
+        <button className="btn btn-danger" onClick={confirmDelete} style={{background:'var(--red)',color:'#fff',border:'none'}}>Delete</button>
+      </div>
+    </div></div>}
+  </div>);
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
