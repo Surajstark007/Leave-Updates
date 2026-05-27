@@ -103,6 +103,20 @@ function groupConsecutiveDates(dates){
 }
 function getNextWorkingDay(dateStr){const d=new Date(dateStr+'T00:00:00');d.setDate(d.getDate()+1);while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()+1);return d}
 
+// ─── HALF-DAY HELPERS ───
+// halfDays: {dateStr: 'first'|'second'|'full'} — 'full' is default (not stored if full)
+const HALF={'first':'First half','second':'Second half','full':'Full day'};
+const fmtHalfDay=h=>h==='first'?'½ AM':h==='second'?'½ PM':'';
+// Compute total leave days counting half-days as 0.5
+function countLeaveDays(dates,halfDays){
+  return dates.reduce((acc,d)=>{const h=halfDays&&halfDays[d];return acc+(h==='first'||h==='second'?0.5:1)},0);
+}
+// Format a date with optional half-day suffix for display
+function fmtDateWithHalf(ds,halfDays){
+  const base=fmtDate(ds);if(!halfDays||!halfDays[ds]||halfDays[ds]==='full')return base;
+  return base+' '+fmtHalfDay(halfDays[ds]);
+}
+
 // ─── DATA PARSING ───
 function parseDatesFromCell(raw){
   if(!raw||!raw.trim())return[];const dates=new Set();const year=new Date().getFullYear();
@@ -196,10 +210,11 @@ async function fetchUserLeaves(){
 async function upsertLeave(entry,addedBy){
   const existing=await fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(entry.name)+'&deleted=eq.false&limit=1',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
   const existingData=await existing.json();
+  const payload={type:entry.type,dates:JSON.stringify(entry.dates),backup:entry.backup,half_days:JSON.stringify(entry.halfDays||{}),updated_at:new Date().toISOString(),added_by:addedBy};
   if(existingData&&existingData.length>0){
-    return fetch(SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingData[0].id,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({type:entry.type,dates:JSON.stringify(entry.dates),backup:entry.backup,updated_at:new Date().toISOString(),added_by:addedBy})});
+    return fetch(SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingData[0].id,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)});
   }
-  return fetch(SB_URL+'/rest/v1/lt_leaves',{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({name:entry.name,type:entry.type,dates:JSON.stringify(entry.dates),backup:entry.backup,added_by:addedBy})});
+  return fetch(SB_URL+'/rest/v1/lt_leaves',{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({name:entry.name,...payload})});
 }
 async function softDeleteLeave(name){
   return fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(name)+'&deleted=eq.false',{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({deleted:true,updated_at:new Date().toISOString()})});
@@ -209,9 +224,10 @@ function mergeCanvasAndUserLeaves(canvasMembers,userLeaves){
   for(const ul of userLeaves){
     if(ul.deleted){deletedNames.add(ul.name.toLowerCase());continue}
     let dates=[];try{dates=typeof ul.dates==='string'?JSON.parse(ul.dates):ul.dates||[]}catch{dates=[]}
+    let halfDays={};try{halfDays=typeof ul.half_days==='string'?JSON.parse(ul.half_days):ul.half_days||{}}catch{halfDays={}}
     const idx=merged.findIndex(m=>m.name.toLowerCase()===ul.name.toLowerCase());
-    if(idx>=0){const existingDates=new Set(merged[idx].dates);dates.forEach(d=>existingDates.add(d));merged[idx]={...merged[idx],dates:[...existingDates].filter(d=>d>=todayStr()).sort(),backup:ul.backup||merged[idx].backup,type:ul.type||merged[idx].type}}
-    else{merged.push({name:ul.name,dates:dates.filter(d=>d>=todayStr()).sort(),backup:ul.backup||'',type:ul.type||'PTO',raw:''})}
+    if(idx>=0){const existingDates=new Set(merged[idx].dates);dates.forEach(d=>existingDates.add(d));merged[idx]={...merged[idx],dates:[...existingDates].filter(d=>d>=todayStr()).sort(),backup:ul.backup||merged[idx].backup,type:ul.type||merged[idx].type,halfDays:{...(merged[idx].halfDays||{}),...halfDays}}}
+    else{merged.push({name:ul.name,dates:dates.filter(d=>d>=todayStr()).sort(),backup:ul.backup||'',type:ul.type||'PTO',raw:'',halfDays})}
   }
   return merged.filter(m=>!deletedNames.has(m.name.toLowerCase()));
 }
@@ -223,14 +239,16 @@ async function findUser(email){const d=await sbFetch('lt_user_logs?email=eq.'+en
 function buildPrintHtml(members,title,generatedAt){
   const rows=[];
   for(const m of members){
+    const hd=m.halfDays||{};
     const ranges=groupConsecutiveDates(m.dates);
-    const dateRangeStr=ranges.map(r=>r.start===r.end?fmtDate(r.start):fmtDate(r.start)+' – '+fmtDate(r.end)).join(', ');
+    const dateRangeStr=ranges.map(r=>r.start===r.end?fmtDateWithHalf(r.start,hd):fmtDateWithHalf(r.start,hd)+' – '+fmtDateWithHalf(r.end,hd)).join(', ');
+    const totalDays=countLeaveDays(m.dates,hd);
     const projects=parseProjectEntries(m.backup||'');
     if(projects.length===0){
-      rows.push(`<tr><td>${m.name}</td><td><span class="badge badge-${m.type.toLowerCase().replace(' ','-')}">${m.type}</span></td><td>${dateRangeStr}</td><td style="text-align:center">${m.dates.length}</td><td>—</td><td>—</td><td>—</td></tr>`);
+      rows.push(`<tr><td>${m.name}</td><td><span class="badge badge-${m.type.toLowerCase().replace(' ','-')}">${m.type}</span></td><td>${dateRangeStr}</td><td style="text-align:center">${totalDays}</td><td>—</td><td>—</td><td>—</td></tr>`);
     } else {
       projects.forEach((p,pi)=>{
-        rows.push(`<tr><td${pi>0?' style="border-top:none;color:#9a8576"':''}>${pi===0?m.name:''}</td><td${pi>0?' style="border-top:none"':''}>${pi===0?`<span class="badge badge-${m.type.toLowerCase().replace(' ','-')}">${m.type}</span>`:''}</td><td${pi>0?' style="border-top:none"':''}>${pi===0?dateRangeStr:''}</td><td${pi>0?' style="border-top:none"':''} style="text-align:center">${pi===0?m.dates.length:''}</td><td>${p.date?fmtDate(p.date):'—'}</td><td>${p.project||'—'}</td><td>${p.persons.join(', ')||'—'}</td></tr>`);
+        rows.push(`<tr><td${pi>0?' style="border-top:none;color:#9a8576"':''}>${pi===0?m.name:''}</td><td${pi>0?' style="border-top:none"':''}>${pi===0?`<span class="badge badge-${m.type.toLowerCase().replace(' ','-')}">${m.type}</span>`:''}</td><td${pi>0?' style="border-top:none"':''}>${pi===0?dateRangeStr:''}</td><td${pi>0?' style="border-top:none"':''} style="text-align:center">${pi===0?totalDays:''}</td><td>${p.date?fmtDateWithHalf(p.date,hd):'—'}</td><td>${p.project||'—'}</td><td>${p.persons.join(', ')||'—'}</td></tr>`);
       });
     }
   }
@@ -287,17 +305,19 @@ function buildCsvContent(members){
   const csvEscape=v=>{const s=String(v||'');return s.includes(',')||s.includes('"')||s.includes('\n')?'"'+s.replace(/"/g,'""')+'"':s};
   const rows=[['Employee Name','Leave Type','Leave Date Range','Total Leave Days','Leave Dates (all)','Project Date','Project Name','Backup Owner(s)','Agenda / Notes']];
   for(const m of members){
+    const hd=m.halfDays||{};
     const ranges=groupConsecutiveDates(m.dates);
-    const dateRangeStr=ranges.map(r=>r.start===r.end?fmtDate(r.start):fmtDate(r.start)+' – '+fmtDate(r.end)).join(' | ');
-    const allDates=m.dates.map(fmtDate).join(', ');
+    const dateRangeStr=ranges.map(r=>r.start===r.end?fmtDateWithHalf(r.start,hd):fmtDateWithHalf(r.start,hd)+' – '+fmtDateWithHalf(r.end,hd)).join(' | ');
+    const allDates=m.dates.map(d=>fmtDateWithHalf(d,hd)).join(', ');
+    const totalDays=countLeaveDays(m.dates,hd);
     const projects=parseProjectEntries(m.backup||'');
     if(projects.length===0){
-      rows.push([m.name,m.type,dateRangeStr,m.dates.length,allDates,'','','','']);
+      rows.push([m.name,m.type,dateRangeStr,totalDays,allDates,'','','','']);
     } else {
       projects.forEach((p,pi)=>{
         rows.push([
-          pi===0?m.name:'',pi===0?m.type:'',pi===0?dateRangeStr:'',pi===0?m.dates.length:'',pi===0?allDates:'',
-          p.date?fmtDate(p.date):'',p.project||'',p.persons.join(', ')||'',p.agenda||''
+          pi===0?m.name:'',pi===0?m.type:'',pi===0?dateRangeStr:'',pi===0?totalDays:'',pi===0?allDates:'',
+          p.date?fmtDateWithHalf(p.date,hd):'',p.project||'',p.persons.join(', ')||'',p.agenda||''
         ]);
       });
     }
@@ -332,8 +352,10 @@ function LoginScreen({onLogin}){
 // ─── SINGLE-MEMBER EXPORT MODAL ───
 function ExportModal({member,onClose}){
   const printRef=useRef(null);
+  const hd=member.halfDays||{};
   const ranges=groupConsecutiveDates(member.dates);
-  const dateRangeStr=ranges.map(r=>r.start===r.end?fmtDate(r.start):fmtDate(r.start)+' – '+fmtDate(r.end)).join(', ');
+  const dateRangeStr=ranges.map(r=>r.start===r.end?fmtDateWithHalf(r.start,hd):fmtDateWithHalf(r.start,hd)+' – '+fmtDateWithHalf(r.end,hd)).join(', ');
+  const totalDays=countLeaveDays(member.dates,hd);
   const projects=parseProjectEntries(member.backup||'',true);
   const generatedAt=new Date().toLocaleString();
 
@@ -373,7 +395,7 @@ function ExportModal({member,onClose}){
         </div>
       </div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
-        {[{label:'Total Leave Days',val:member.dates.length},{label:'Date Range',val:dateRangeStr}].map(s=><div key={s.label} style={{background:'var(--surface2)',borderRadius:8,padding:'10px 14px',border:'1px solid var(--border)'}}>
+        {[{label:'Total Leave Days',val:totalDays},{label:'Date Range',val:dateRangeStr}].map(s=><div key={s.label} style={{background:'var(--surface2)',borderRadius:8,padding:'10px 14px',border:'1px solid var(--border)'}}>
           <div style={{fontSize:10,color:'var(--text3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:3}}>{s.label}</div>
           <div style={{fontSize:13.5,fontWeight:600,color:'var(--text)'}}>{s.val}</div>
         </div>)}
@@ -381,7 +403,13 @@ function ExportModal({member,onClose}){
       <div style={{marginBottom:14}}>
         <div style={{fontSize:10,color:'var(--text3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:6}}>Leave Dates</div>
         <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
-          {member.dates.map(d=><span key={d} className={'chip '+(isToday(d)?'chip-today':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5}}>{fmtDate(d)}</span>)}
+          {member.dates.map(d=>{
+            const half=hd[d];
+            return(<span key={d} className={'chip '+(isToday(d)?'chip-today':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5,gap:3}}>
+              {fmtDate(d)}
+              {half&&half!=='full'&&<span style={{fontSize:9.5,background:'rgba(255,255,255,.25)',borderRadius:3,padding:'0 3px',fontFamily:'sans-serif'}}>{half==='first'?'AM':'PM'}</span>}
+            </span>);
+          })}
         </div>
       </div>
       {projects.length>0&&<div>
@@ -440,7 +468,7 @@ function BulkExportModal({members,filterDesc,onClose}){
     </div>}
 
     <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:14}}>
-      {[{label:'Employees',val:members.length},{label:'Total Leave Days',val:members.reduce((a,m)=>a+m.dates.length,0)},{label:'On Leave Today',val:members.filter(m=>m.dates.some(isToday)).length}].map(s=>(
+      {[{label:'Employees',val:members.length},{label:'Total Leave Days',val:members.reduce((a,m)=>a+countLeaveDays(m.dates,m.halfDays||{}),0)},{label:'On Leave Today',val:members.filter(m=>m.dates.some(isToday)).length}].map(s=>(
         <div key={s.label} style={{background:'var(--surface2)',borderRadius:8,padding:'10px 14px',border:'1px solid var(--border)',textAlign:'center'}}>
           <div style={{fontSize:22,fontWeight:700,color:'var(--accent)',fontFamily:"'JetBrains Mono',monospace"}}>{s.val}</div>
           <div style={{fontSize:10.5,color:'var(--text3)',marginTop:2}}>{s.label}</div>
@@ -456,11 +484,14 @@ function BulkExportModal({members,filterDesc,onClose}){
             const ranges=groupConsecutiveDates(m.dates);
             const rangeStr=ranges.map(r=>r.start===r.end?fmtDate(r.start):fmtDate(r.start)+' – '+fmtDate(r.end)).join(', ');
             const projects=parseProjectEntries(m.backup||'');
+            const mHd=m.halfDays||{};
+            const totalDays=countLeaveDays(m.dates,mHd);
+            const hasHalf=Object.values(mHd).some(v=>v&&v!=='full');
             return(<tr key={i}>
               <td style={{fontWeight:600,fontSize:13}}>{m.name}</td>
               <td><span className={'badge '+(tbc[m.type]||'badge-none')}>{m.type}</span></td>
               <td style={{fontSize:12}}>{rangeStr}</td>
-              <td style={{textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>{m.dates.length}</td>
+              <td style={{textAlign:'center',fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>{totalDays}{hasHalf&&<span style={{fontSize:9,color:'var(--text3)',display:'block'}}>½ days</span>}</td>
               <td style={{fontSize:11.5,color:'var(--text2)'}}>{projects.length>0?projects.map(p=>p.project||p.persons.join(',')).filter(Boolean).join(', '):'—'}</td>
             </tr>);
           })}
@@ -693,6 +724,8 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
   const[name]=useState(editData?editData.name:(userName||''));
   const[type,setType]=useState(editData?editData.type:'PTO');
   const[dates,setDates]=useState(editData?[...editData.dates]:[]);
+  // halfDays: {dateStr: 'first'|'second'|'full'}  — only stored for non-full days
+  const[halfDays,setHalfDays]=useState(()=>editData&&editData.halfDays?{...editData.halfDays}:{});
   const[rangeStart,setRangeStart]=useState('');
   const[rangeEnd,setRangeEnd]=useState('');
   const[dateInput,setDateInput]=useState('');
@@ -700,6 +733,13 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
   const[tab,setTab]=useState('dates');
   const[saveErr,setSaveErr]=useState('');
   const[editFilter,setEditFilter]=useState({date:'',project:''});
+
+  const setHalfDay=(dateStr,val)=>setHalfDays(hd=>{
+    const n={...hd};
+    if(val==='full'||!val)delete n[dateStr];
+    else n[dateStr]=val;
+    return n;
+  });
 
   // noCalls: set of dateStrs where user says no customer calls
   const[noCalls,setNoCalls]=useState(()=>{
@@ -804,6 +844,7 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
     setDates(ds=>ds.filter(d=>d!==dateStr));
     setEntries(e=>e.filter(en=>en.date!==dateStr));
     setNoCalls(s=>{const n=new Set(s);n.delete(dateStr);return n});
+    setHalfDays(hd=>{const n={...hd};delete n[dateStr];return n});
   };
 
   const filteredEntries=useMemo(()=>{
@@ -840,7 +881,7 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
       setTab('projects');
       return;
     }
-    onSave({name:name.trim(),type,dates,backup:buildFinalBackup()});
+    onSave({name:name.trim(),type,dates,backup:buildFinalBackup(),halfDays});
   };
 
   const lbl={fontSize:12,color:'var(--text2)',marginBottom:4,display:'block',fontWeight:500};
@@ -903,17 +944,48 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
       </div>
 
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-        <span style={{fontSize:11.5,color:'var(--text2)',fontWeight:500}}>{dates.length} date{dates.length!==1?'s':''} · {weekdays.length} weekday{weekdays.length!==1?'s':''}</span>
-        {dates.length>0&&<button className="btn btn-sm btn-danger" onClick={()=>{setDates([]);setEntries([]);setNoCalls(new Set())}} style={{fontSize:10,padding:'2px 8px'}}>Clear all</button>}
+        <span style={{fontSize:11.5,color:'var(--text2)',fontWeight:500}}>{dates.length} date{dates.length!==1?'s':''} · {weekdays.length} weekday{weekdays.length!==1?'s':''} · <span style={{color:'var(--accent)'}}>{countLeaveDays(dates,halfDays)} leave day{countLeaveDays(dates,halfDays)!==1?'s':''}</span></span>
+        {dates.length>0&&<button className="btn btn-sm btn-danger" onClick={()=>{setDates([]);setEntries([]);setNoCalls(new Set());setHalfDays({})}} style={{fontSize:10,padding:'2px 8px'}}>Clear all</button>}
       </div>
-      <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:8,minHeight:24}}>
-        {dates.length===0?<span style={{fontSize:12,color:'var(--text3)',fontStyle:'italic'}}>No dates added yet</span>:dates.map(d=>(
-          <span key={d} className={'chip '+(isToday(d)?'chip-today':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5}}>
-            {fmtDate(d)}{!isWeekday(d)&&<span style={{fontSize:9,opacity:.6}}> wknd</span>}
-            <span style={{cursor:'pointer',marginLeft:3,opacity:.6}} onClick={()=>deleteDateEntry(d)}>×</span>
-          </span>
-        ))}
+      <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:10,minHeight:24}}>
+        {dates.length===0?<span style={{fontSize:12,color:'var(--text3)',fontStyle:'italic'}}>No dates added yet</span>:dates.map(d=>{
+          const hd=halfDays[d];
+          return(<span key={d} className={'chip '+(isToday(d)?'chip-today':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5,gap:3}}>
+            {fmtDate(d)}
+            {!isWeekday(d)&&<span style={{fontSize:9,opacity:.6}}> wknd</span>}
+            {hd&&hd!=='full'&&<span style={{fontSize:9.5,background:'rgba(255,255,255,.3)',borderRadius:4,padding:'0 4px',marginLeft:2,fontFamily:'sans-serif'}}>{hd==='first'?'AM':'PM'}</span>}
+            <span style={{cursor:'pointer',marginLeft:2,opacity:.6}} onClick={()=>deleteDateEntry(d)}>×</span>
+          </span>);
+        })}
       </div>
+
+      {/* Half-day picker — shown when there are weekday dates */}
+      {weekdays.length>0&&<div style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:'10px 12px',marginBottom:10}}>
+        <div style={{fontSize:11.5,fontWeight:600,color:'var(--text2)',marginBottom:8}}>Half-day settings <span style={{fontSize:10,color:'var(--text3)',fontWeight:400}}>(optional — set per weekday if partial leave)</span></div>
+        <div style={{display:'flex',flexDirection:'column',gap:5}}>
+          {weekdays.map(d=>{
+            const hd=halfDays[d]||'full';
+            return(<div key={d} style={{display:'flex',alignItems:'center',gap:10,padding:'5px 8px',background:'var(--surface)',borderRadius:7,border:'1px solid var(--border)'}}>
+              <span style={{fontSize:11.5,fontFamily:"'JetBrains Mono',monospace",color:'var(--accent)',minWidth:58,flexShrink:0}}>{fmtDate(d)}</span>
+              <span style={{fontSize:11,color:'var(--text3)',flex:1}}>{new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'short'})}</span>
+              <div style={{display:'flex',gap:4}}>
+                {['full','first','second'].map(v=>(
+                  <button key={v} onClick={()=>setHalfDay(d,v)} style={{padding:'3px 9px',borderRadius:6,fontSize:11,fontWeight:500,border:'1px solid',cursor:'pointer',transition:'all .12s',
+                    borderColor:hd===v?'var(--accent)':'var(--border)',
+                    background:hd===v?'var(--accent)':'transparent',
+                    color:hd===v?'#fff':'var(--text2)'}}>
+                    {v==='full'?'Full':v==='first'?'½ AM':'½ PM'}
+                  </button>
+                ))}
+              </div>
+            </div>);
+          })}
+        </div>
+        {Object.values(halfDays).some(v=>v&&v!=='full')&&<div style={{fontSize:11,color:'var(--amber)',marginTop:8}}>
+          ⚠ Half-days count as 0.5 days each. Total: <strong>{countLeaveDays(dates,halfDays)} leave days</strong>
+        </div>}
+      </div>}
+
       {weekdays.length>0&&<div style={{display:'flex',alignItems:'center',gap:6,fontSize:11}}>
         <span style={{color:'var(--green)'}}>✓ {weekdays.length} weekday{weekdays.length!==1?'s':''} selected</span>
         <button className="btn btn-sm btn-secondary" onClick={()=>setTab('projects')} style={{fontSize:11,padding:'2px 10px',marginLeft:4}}>Go to Projects →</button>
@@ -1054,7 +1126,7 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
     {/* Footer */}
     {saveErr&&<div style={{padding:'8px 12px',background:'var(--red-bg)',border:'1px solid var(--red-border)',borderRadius:8,fontSize:12,color:'var(--red)',marginTop:10}}>⚠ {saveErr}</div>}
     <div style={{display:'flex',gap:8,marginTop:14,justifyContent:'space-between',alignItems:'center'}}>
-      <div style={{fontSize:11.5,color:'var(--text3)'}}>{dates.length} date{dates.length!==1?'s':''} · {noCalls.size} no-call · {entries.filter(e=>e.project||e.persons.length>0).length} project entries</div>
+      <div style={{fontSize:11.5,color:'var(--text3)'}}>{dates.length} date{dates.length!==1?'s':''} · {countLeaveDays(dates,halfDays)} leave day{countLeaveDays(dates,halfDays)!==1?'s':''} · {noCalls.size} no-call · {entries.filter(e=>e.project||e.persons.length>0).length} entries</div>
       <div style={{display:'flex',gap:8}}>
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
         <button className="btn btn-primary" onClick={handleSave} title={!allDaysDone&&weekdays.length>0?'Complete all weekdays first':''}>
@@ -1137,17 +1209,20 @@ function App(){
 
   const handleSaveLeave=async(entry)=>{
     const savedDates=entry.dates.filter(isFuture).sort();
+    const savedHalfDays=entry.halfDays||{};
+    // Clean halfDays to only keep entries for saved dates
+    const cleanHalfDays={};savedDates.forEach(d=>{if(savedHalfDays[d]&&savedHalfDays[d]!=='full')cleanHalfDays[d]=savedHalfDays[d]});
     const wasEditing=editingIdx!==null;
     if(wasEditing){
-      setData(d=>d.map((m,i)=>i===editingIdx?{...m,name:entry.name,type:entry.type,dates:savedDates,backup:entry.backup}:m));
+      setData(d=>d.map((m,i)=>i===editingIdx?{...m,name:entry.name,type:entry.type,dates:savedDates,backup:entry.backup,halfDays:cleanHalfDays}:m));
       setEditingIdx(null);
-      try{await upsertLeave({...entry,dates:savedDates},user?.email||'');toast('Updated & saved','success')}
+      try{await upsertLeave({...entry,dates:savedDates,halfDays:cleanHalfDays},user?.email||'');toast('Updated & saved','success')}
       catch{toast('Updated locally (save failed)','error')}
     }else{
       const ei=data.findIndex(m=>m.name.toLowerCase()===entry.name.toLowerCase());
-      if(ei>=0){setData(d=>d.map((m,i)=>{if(i!==ei)return m;const mg=new Set([...m.dates,...entry.dates]);return{...m,dates:[...mg].filter(isFuture).sort(),backup:entry.backup||m.backup,type:entry.type||m.type}}))}
-      else{setData(d=>[...d,{name:entry.name,dates:savedDates,backup:entry.backup,type:entry.type,raw:''}])}
-      try{await upsertLeave({...entry,dates:savedDates},user?.email||'');toast('Leave added & saved','success')}
+      if(ei>=0){setData(d=>d.map((m,i)=>{if(i!==ei)return m;const mg=new Set([...m.dates,...entry.dates]);return{...m,dates:[...mg].filter(isFuture).sort(),backup:entry.backup||m.backup,type:entry.type||m.type,halfDays:{...(m.halfDays||{}),...cleanHalfDays}}}))}
+      else{setData(d=>[...d,{name:entry.name,dates:savedDates,backup:entry.backup,type:entry.type,raw:'',halfDays:cleanHalfDays}])}
+      try{await upsertLeave({...entry,dates:savedDates,halfDays:cleanHalfDays},user?.email||'');toast('Leave added & saved','success')}
       catch{toast('Added locally (save failed)','error')}
     }
     setShowAddLeave(false);
@@ -1222,6 +1297,8 @@ function App(){
           </tr></thead><tbody>
             {filtered.length===0?<tr><td colSpan={8} style={{textAlign:'center',padding:40,color:'var(--text3)'}}>No matching records</td></tr>:filtered.map((m,i)=>{
               const oi=data.indexOf(m);const dc=m.dates.length;
+              const hd=m.halfDays||{};
+              const totalDays=countLeaveDays(m.dates,hd);
               const isMe=user&&m.name.toLowerCase()===user.name.toLowerCase();
               const projects=parseProjectEntries(m.backup||'');
               const rowSpan=Math.max(projects.length,1);
@@ -1229,8 +1306,17 @@ function App(){
                 <tr className="fade-in">
                   <td rowSpan={rowSpan} style={{fontWeight:600,whiteSpace:'nowrap',fontSize:13.5,verticalAlign:'top'}}>{m.name}{isMe&&<span style={{fontSize:10,color:'var(--accent)',marginLeft:4}}>(you)</span>}</td>
                   <td rowSpan={rowSpan} style={{verticalAlign:'top'}}><span className={'badge '+(tbc[m.type]||'badge-none')}>{m.type}</span></td>
-                  <td rowSpan={rowSpan} style={{maxWidth:260,verticalAlign:'top'}}><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{dc===0?<span style={{color:'var(--text3)',fontSize:12}}>No upcoming</span>:m.dates.slice(0,10).map(d=>(<span key={d} className={'chip '+(isToday(d)?'chip-today pulse':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5}}>{fmtDate(d)}</span>))}{dc>10&&<span className="chip chip-gray" style={{fontSize:10}}>+{dc-10}</span>}</div></td>
-                  <td rowSpan={rowSpan} style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,fontSize:14,textAlign:'center',verticalAlign:'top'}}><span style={dc>5?{color:'var(--amber)',background:'var(--amber-bg)',padding:'2px 8px',borderRadius:6}:{}}>{dc}</span></td>
+                  <td rowSpan={rowSpan} style={{maxWidth:260,verticalAlign:'top'}}><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{dc===0?<span style={{color:'var(--text3)',fontSize:12}}>No upcoming</span>:m.dates.slice(0,10).map(d=>{
+                    const half=hd[d];
+                    return(<span key={d} className={'chip '+(isToday(d)?'chip-today pulse':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5,gap:3}}>
+                      {fmtDate(d)}
+                      {half&&half!=='full'&&<span style={{fontSize:9,background:'rgba(255,255,255,.25)',borderRadius:3,padding:'0 3px',fontFamily:'sans-serif'}}>{half==='first'?'AM':'PM'}</span>}
+                    </span>);
+                  })}{dc>10&&<span className="chip chip-gray" style={{fontSize:10}}>+{dc-10}</span>}</div></td>
+                  <td rowSpan={rowSpan} style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,fontSize:14,textAlign:'center',verticalAlign:'top'}}>
+                    <span style={totalDays>5?{color:'var(--amber)',background:'var(--amber-bg)',padding:'2px 8px',borderRadius:6}:{}}>{totalDays}</span>
+                    {Object.values(hd).some(v=>v&&v!=='full')&&<div style={{fontSize:9.5,color:'var(--text3)',marginTop:2}}>½ day(s)</div>}
+                  </td>
                   <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].project&&projects[0].project!=='__NO_CALLS__'?projects[0].project:'':''}</td>
                   <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].persons.join(', ')||'':''}</td>
                   <td className="desktop-only" style={{fontSize:12,color:'var(--text3)'}}>{projects[0]?projects[0].isNoCalls?<span style={{color:'var(--cyan)',fontSize:11}}>📵 No customer calls</span>:projects[0].agenda||'':''}</td>
