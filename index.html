@@ -141,27 +141,42 @@ function parseCanvasMarkdown(md){
   }
   return members;
 }
-function parseProjectEntries(backupStr){
+function parseProjectEntries(backupStr,includeNoCalls){
   if(!backupStr)return[];
-  return backupStr.split('\n').filter(l=>l.trim()).map(line=>{
-    let project='',personStr='',agenda='',date='';
-    const dateMatch=line.match(/^\[(\d{4}-\d{2}-\d{2})\]\s*/);
+  return backupStr.split('\n').filter(l=>l.trim()).map(function(line){
+    var project='',personStr='',agenda='',date='',isNoCalls=false;
+    var dateMatch=line.match(/^\[(\d{4}-\d{2}-\d{2})\]\s*/);
     if(dateMatch){date=dateMatch[1];line=line.slice(dateMatch[0].length)}
-    const pipeParts=line.split('|').map(s=>s.trim());
-    const mainPart=pipeParts[0]||'';
-    agenda=(pipeParts[1]||'').replace(/^Agenda:\s*/i,'');
-    const dashIdx=mainPart.indexOf(' - ');
-    if(dashIdx>-1){project=mainPart.substring(0,dashIdx).trim();personStr=mainPart.substring(dashIdx+3).trim()}
-    else{const colonIdx=mainPart.indexOf(':');if(colonIdx>-1){project=mainPart.substring(0,colonIdx).trim();personStr=mainPart.substring(colonIdx+1).trim()}else personStr=mainPart}
-    const persons=personStr?personStr.split(/\s*,\s*/).filter(Boolean):[];
-    return{date,project,persons,agenda};
-  }).filter(p=>p.project||p.persons.length>0);
+    if(line.trim()==='__NO_CALLS__'){isNoCalls=true;project='__NO_CALLS__'}
+    else{
+      var pipeParts=line.split('|').map(function(s){return s.trim()});
+      var mainPart=pipeParts[0]||'';
+      agenda=(pipeParts[1]||'').replace(/^Agenda:\s*/i,'');
+      var dashIdx=mainPart.indexOf(' - ');
+      if(dashIdx>-1){project=mainPart.substring(0,dashIdx).trim();personStr=mainPart.substring(dashIdx+3).trim()}
+      else{var colonIdx=mainPart.indexOf(':');if(colonIdx>-1){project=mainPart.substring(0,colonIdx).trim();personStr=mainPart.substring(colonIdx+1).trim()}else personStr=mainPart}
+    }
+    var persons=personStr?personStr.split(/\s*,\s*/).filter(Boolean):[];
+    return{date:date,project:project,persons:persons,agenda:agenda,isNoCalls:isNoCalls};
+  }).filter(function(p){
+    if(p.isNoCalls)return includeNoCalls?true:false;
+    return p.project||p.persons.length>0;
+  });
+}
+function getNoCallsDates(backupStr){
+  if(!backupStr)return new Set();
+  var s=new Set();
+  backupStr.split('\n').forEach(function(line){
+    var m=line.match(/^\[(\d{4}-\d{2}-\d{2})\]\s*__NO_CALLS__/);
+    if(m)s.add(m[1]);
+  });
+  return s;
 }
 function buildBackupString(entries){
   return entries.filter(e=>e.project||e.persons.length>0).map(e=>{
     let s='';
     if(e.date)s+='['+e.date+'] ';
-    if(e.project){s+=e.project;if(e.persons.length>0)s+=' - '+e.persons.join(', ')}
+    if(e.project&&e.project!=='__NO_CALLS__'){s+=e.project;if(e.persons.length>0)s+=' - '+e.persons.join(', ')}
     else if(e.persons.length>0)s+=e.persons.join(', ');
     if(e.agenda)s+=' | Agenda: '+e.agenda;
     return s;
@@ -319,7 +334,7 @@ function ExportModal({member,onClose}){
   const printRef=useRef(null);
   const ranges=groupConsecutiveDates(member.dates);
   const dateRangeStr=ranges.map(r=>r.start===r.end?fmtDate(r.start):fmtDate(r.start)+' – '+fmtDate(r.end)).join(', ');
-  const projects=parseProjectEntries(member.backup||'');
+  const projects=parseProjectEntries(member.backup||'',true);
   const generatedAt=new Date().toLocaleString();
 
   const handlePdf=()=>{
@@ -373,7 +388,7 @@ function ExportModal({member,onClose}){
         <div style={{fontSize:10,color:'var(--text3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:6}}>Project Assignments</div>
         <div style={{border:'1px solid var(--border)',borderRadius:10,overflow:'hidden'}}>
           <table><thead><tr><th>Date</th><th>Project</th><th>Backup Owner</th><th>Agenda</th></tr></thead>
-          <tbody>{projects.map((p,i)=><tr key={i}><td style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:'nowrap'}}>{p.date?fmtDate(p.date):'—'}</td><td style={{fontWeight:500}}>{p.project||'—'}</td><td>{p.persons.join(', ')||'—'}</td><td style={{color:'var(--text2)'}}>{p.agenda||'—'}</td></tr>)}</tbody>
+          <tbody>{projects.map((p,i)=><tr key={i}><td style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:'nowrap'}}>{p.date?fmtDate(p.date):'—'}</td><td style={{fontWeight:500}}>{p.isNoCalls?'📵 No calls':p.project||'—'}</td><td>{p.persons.join(', ')||'—'}</td><td style={{color:'var(--text2)'}}>{p.agenda||'—'}</td></tr>)}</tbody>
           </table>
         </div>
       </div>}
@@ -517,7 +532,9 @@ function UserPickerModal({names,selected,onClose,onApply}){
 }
 
 // ─── ADD/EDIT LEAVE MODAL ───
-function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
+// dayStatus tracks per-weekday state: 'pending' | 'no_calls' | 'has_projects'
+// noCalls: Set of dateStr that have "No customer calls" checked
+function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserData}){
   const[name]=useState(editData?editData.name:(userName||''));
   const[type,setType]=useState(editData?editData.type:'PTO');
   const[dates,setDates]=useState(editData?[...editData.dates]:[]);
@@ -526,27 +543,77 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
   const[dateInput,setDateInput]=useState('');
   const[rangeErr,setRangeErr]=useState('');
   const[tab,setTab]=useState('dates');
+  const[saveErr,setSaveErr]=useState('');
   const[editFilter,setEditFilter]=useState({date:'',project:''});
 
+  // noCalls: set of dateStrs where user says no customer calls
+  const[noCalls,setNoCalls]=useState(()=>{
+    // On edit, restore from backup entries tagged __NO_CALLS__
+    if(!editData?.backup)return new Set();
+    const s=new Set();
+    editData.backup.split('\n').forEach(line=>{
+      const m=line.match(/^\[(\d{4}-\d{2}-\d{2})\]\s*__NO_CALLS__/);
+      if(m)s.add(m[1]);
+    });
+    return s;
+  });
+
+  // Load previous entries from editData, filtering out __NO_CALLS__ sentinels
   const parseInitialEntries=()=>{
     if(!editData?.backup)return[];
-    return parseProjectEntries(editData.backup).map(p=>({...p,newPerson:'',showPicker:false,pickerQ:''}));
+    return parseProjectEntries(editData.backup)
+      .filter(p=>p.project!=='__NO_CALLS__')
+      .map(p=>({...p,newPerson:'',showPicker:false,pickerQ:''}));
   };
   const[entries,setEntries]=useState(parseInitialEntries);
 
+  // previousEntries: all historical entries for this user across all saved data
+  // so user can reuse/edit old project info for new leave dates
+  const previousEntries=useMemo(()=>{
+    if(!allUserData)return[];
+    const myRecord=allUserData.find(m=>m.name.toLowerCase()===name.toLowerCase());
+    if(!myRecord?.backup)return[];
+    return parseProjectEntries(myRecord.backup).filter(p=>p.project&&p.project!=='__NO_CALLS__');
+  },[allUserData,name]);
+
   const weekdays=useMemo(()=>dates.filter(isWeekday).sort(),[dates]);
+
+  // ── Validation: each weekday must have either noCalls OR ≥1 project entry ──
+  const dayStatus=useMemo(()=>{
+    const s={};
+    weekdays.forEach(d=>{
+      if(noCalls.has(d)){s[d]='no_calls';return}
+      const hasProject=entries.some(e=>e.date===d&&(e.project.trim()||e.persons.length>0));
+      s[d]=hasProject?'has_projects':'pending';
+    });
+    return s;
+  },[weekdays,noCalls,entries]);
+
+  const allDaysDone=weekdays.length===0||weekdays.every(d=>dayStatus[d]!=='pending');
+  const pendingDays=weekdays.filter(d=>dayStatus[d]==='pending');
+
+  const toggleNoCalls=(dateStr)=>{
+    setNoCalls(prev=>{
+      const n=new Set(prev);
+      if(n.has(dateStr)){n.delete(dateStr)}
+      else{
+        n.add(dateStr);
+        // Remove any project entries for this day when marking no-calls
+        setEntries(e=>e.filter(en=>en.date!==dateStr));
+      }
+      return n;
+    });
+  };
 
   // ── Date range validation ──
   const handleRangeStartChange=v=>{
     setRangeStart(v);setRangeErr('');
-    // If end is already set and is before new start, clear it
     if(rangeEnd&&v&&rangeEnd<v){setRangeEnd('');setRangeErr('End date was before start — please re-select')}
   };
   const handleRangeEndChange=v=>{
     setRangeEnd(v);setRangeErr('');
     if(rangeStart&&v&&v<rangeStart){setRangeErr('End date must be on or after start date');setRangeEnd('')}
   };
-
   const applyRange=()=>{
     if(!rangeStart||!rangeEnd){setRangeErr('Select both start and end dates');return}
     if(rangeEnd<rangeStart){setRangeErr('End date must be on or after start date');return}
@@ -554,18 +621,31 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
     const newDates=new Set(dates);allInRange.forEach(d=>newDates.add(d));
     setDates([...newDates].sort());setRangeStart('');setRangeEnd('');setRangeErr('');
   };
-
   const rangePreviewDays=rangeStart&&rangeEnd&&rangeEnd>=rangeStart?expandDateRange(rangeStart,rangeEnd).length:0;
   const rangePreviewWeekdays=rangeStart&&rangeEnd&&rangeEnd>=rangeStart?getWeekdaysInRange(rangeStart,rangeEnd).length:0;
 
+  // ── Entry management ──
   const updateEntry=(idx,field,val)=>setEntries(e=>e.map((x,i)=>i===idx?{...x,[field]:val}:x));
   const removeEntry=idx=>setEntries(e=>e.filter((_,i)=>i!==idx));
   const addPersonToEntry=(idx,person)=>{setEntries(e=>e.map((x,i)=>{if(i!==idx)return x;if(x.persons.includes(person))return x;return{...x,persons:[...x.persons,person],showPicker:false,pickerQ:''}}))};
   const removePersonFromEntry=(idx,person)=>{setEntries(e=>e.map((x,i)=>i===idx?{...x,persons:x.persons.filter(p=>p!==person)}:x))};
   const addNewPersonToEntry=(idx)=>{setEntries(e=>e.map((x,i)=>{if(i!==idx||!x.newPerson.trim())return x;const np=x.newPerson.trim();if(x.persons.includes(np))return{...x,newPerson:''};return{...x,persons:[...x.persons,np],newPerson:''}}))};
-  const addEntryForDay=(dateStr)=>setEntries(e=>[...e,{date:dateStr,project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}]);
+
+  const addEntryForDay=(dateStr)=>{
+    setNoCalls(s=>{const n=new Set(s);n.delete(dateStr);return n});
+    setEntries(e=>[...e,{date:dateStr,project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}]);
+  };
+  // Copy a previous entry into a specific day (pre-fill)
+  const copyPrevEntryToDay=(dateStr,prev)=>{
+    setNoCalls(s=>{const n=new Set(s);n.delete(dateStr);return n});
+    setEntries(e=>[...e,{date:dateStr,project:prev.project,persons:[...prev.persons],newPerson:'',agenda:prev.agenda||'',showPicker:false,pickerQ:''}]);
+  };
   const addBlankEntry=()=>setEntries(e=>[...e,{date:'',project:'',persons:[],newPerson:'',agenda:'',showPicker:false,pickerQ:''}]);
-  const deleteDateEntry=(dateStr)=>{setDates(ds=>ds.filter(d=>d!==dateStr));setEntries(e=>e.filter(en=>en.date!==dateStr))};
+  const deleteDateEntry=(dateStr)=>{
+    setDates(ds=>ds.filter(d=>d!==dateStr));
+    setEntries(e=>e.filter(en=>en.date!==dateStr));
+    setNoCalls(s=>{const n=new Set(s);n.delete(dateStr);return n});
+  };
 
   const filteredEntries=useMemo(()=>{
     let e=entries;
@@ -574,16 +654,49 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
     return e;
   },[entries,editFilter]);
 
+  // ── Build backup string — includes __NO_CALLS__ sentinels ──
+  const buildFinalBackup=()=>{
+    const lines=[];
+    // No-calls sentinels (sorted)
+    [...noCalls].sort().forEach(d=>lines.push('['+d+'] __NO_CALLS__'));
+    // Regular project entries
+    entries.filter(e=>e.project||e.persons.length>0).forEach(e=>{
+      let s='';
+      if(e.date)s+='['+e.date+'] ';
+      if(e.project){s+=e.project;if(e.persons.length>0)s+=' - '+e.persons.join(', ')}
+      else if(e.persons.length>0)s+=e.persons.join(', ');
+      if(e.agenda)s+=' | Agenda: '+e.agenda;
+      lines.push(s);
+    });
+    return lines.join('\n');
+  };
+
+  // ── Save with validation ──
+  const handleSave=()=>{
+    if(!name.trim())return;
+    setSaveErr('');
+    if(weekdays.length>0&&!allDaysDone){
+      const missing=pendingDays.map(fmtDate).join(', ');
+      setSaveErr('Each weekday needs project info or "No customer calls": '+missing);
+      setTab('projects');
+      return;
+    }
+    onSave({name:name.trim(),type,dates,backup:buildFinalBackup()});
+  };
+
   const lbl={fontSize:12,color:'var(--text2)',marginBottom:4,display:'block',fontWeight:500};
   const subLbl={fontSize:11,color:'var(--text3)',marginBottom:3,display:'block'};
 
-  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:640}}>
+  // Status dot for tab indicator
+  const projectTabStatus=weekdays.length===0?'ok':allDaysDone?'ok':'warn';
+
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:660}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
       <h3 style={{fontSize:17,fontWeight:600}}>{editData?'Edit Leave':'Add Leave'}</h3>
       <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
     </div>
 
-    {editData&&<div style={{fontSize:12,color:'var(--text2)',marginBottom:12,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)'}}>Editing leave for <strong>{editData.name}</strong></div>}
+    {editData&&<div style={{fontSize:12,color:'var(--text2)',marginBottom:12,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)'}}>Editing leave for <strong>{editData.name}</strong> — you can also edit previous project agenda below.</div>}
     <div style={{marginBottom:14,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)',fontSize:14,fontWeight:600}}>{name||userName||'You'}</div>
 
     <label style={lbl}>Leave Type</label>
@@ -591,14 +704,21 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
       {['PTO','Sick','Business Travel','Mixed','Other'].map(t=>(<button key={t} onClick={()=>setType(t)} style={{padding:'5px 14px',borderRadius:999,fontSize:12,fontWeight:500,border:'1px solid',borderColor:type===t?'var(--accent)':'var(--border)',background:type===t?'var(--accent-light)':'transparent',color:type===t?'var(--accent)':'var(--text2)',cursor:'pointer',transition:'all .15s'}}>{t}</button>))}
     </div>
 
+    {/* Tab switcher with completion status */}
     <div style={{display:'flex',gap:2,background:'var(--surface2)',borderRadius:8,padding:2,border:'1px solid var(--border)',marginBottom:14}}>
-      {[{k:'dates',label:'📅 Leave Dates'+(dates.length>0?' ('+dates.length+')':'')},{k:'projects',label:'📋 Projects & Backup'+(entries.filter(e=>e.project||e.persons.length>0).length>0?' ('+entries.filter(e=>e.project||e.persons.length>0).length+')':'')}].map(t=>(
-        <button key={t.k} onClick={()=>setTab(t.k)} style={{flex:1,padding:'6px 12px',borderRadius:6,fontSize:12.5,fontWeight:500,border:'none',background:tab===t.k?'var(--accent)':'transparent',color:tab===t.k?'#fff':'var(--text2)',cursor:'pointer',transition:'all .15s'}}>{t.label}</button>
+      {[
+        {k:'dates',label:'📅 Leave Dates',badge:dates.length>0?dates.length:null,color:'var(--accent)'},
+        {k:'projects',label:'📋 Projects & Backup',badge:weekdays.length>0?(allDaysDone?'✓':pendingDays.length+' pending'):null,color:allDaysDone?'var(--green)':'var(--amber)'}
+      ].map(t=>(
+        <button key={t.k} onClick={()=>setTab(t.k)} style={{flex:1,padding:'6px 10px',borderRadius:6,fontSize:12.5,fontWeight:500,border:'none',background:tab===t.k?'var(--accent)':'transparent',color:tab===t.k?'#fff':'var(--text2)',cursor:'pointer',transition:'all .15s',display:'flex',alignItems:'center',justifyContent:'center',gap:5}}>
+          {t.label}
+          {t.badge!==null&&<span style={{fontSize:10,fontWeight:700,padding:'1px 6px',borderRadius:999,background:tab===t.k?'rgba(255,255,255,.25)':t.color,color:tab===t.k?'#fff':'#fff',minWidth:18,textAlign:'center'}}>{t.badge}</span>}
+        </button>
       ))}
     </div>
 
+    {/* ══ TAB: DATES ══ */}
     {tab==='dates'&&<div>
-      {/* Date range picker with validation */}
       <div style={{marginBottom:10,padding:'12px',background:'var(--surface2)',borderRadius:10,border:'1px solid var(--border)'}}>
         <label style={{...lbl,marginBottom:8}}>Add Date Range</label>
         <div style={{display:'flex',gap:6,alignItems:'flex-start',flexWrap:'wrap'}}>
@@ -608,13 +728,13 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
           </div>
           <div style={{paddingTop:22,color:'var(--text3)',fontSize:13,flexShrink:0}}>→</div>
           <div style={{flex:1,minWidth:130}}>
-            <div style={{fontSize:10.5,color:'var(--text3)',marginBottom:3}}>End date {rangeStart&&<span style={{color:'var(--accent)'}}>(must be ≥ {fmtDate(rangeStart)})</span>}</div>
+            <div style={{fontSize:10.5,color:'var(--text3)',marginBottom:3}}>End date{rangeStart&&<span style={{color:'var(--accent)'}}> (≥ {fmtDate(rangeStart)})</span>}</div>
             <input type="date" className={'input'+(rangeErr?' input-error':'')} value={rangeEnd} min={rangeStart||undefined} onChange={e=>handleRangeEndChange(e.target.value)}/>
           </div>
           <div style={{paddingTop:20,flexShrink:0}}><button className="btn btn-sm btn-primary" onClick={applyRange} disabled={!rangeStart||!rangeEnd}>Add</button></div>
         </div>
         {rangeErr&&<div className="date-validation-hint">⚠ {rangeErr}</div>}
-        {!rangeErr&&rangePreviewDays>0&&<div style={{fontSize:11,color:'var(--text2)',marginTop:5}}>{rangePreviewDays} days ({rangePreviewWeekdays} weekdays) will be added to your leave</div>}
+        {!rangeErr&&rangePreviewDays>0&&<div style={{fontSize:11,color:'var(--text2)',marginTop:5}}>{rangePreviewDays} days ({rangePreviewWeekdays} weekdays)</div>}
       </div>
 
       <div style={{display:'flex',gap:8,marginBottom:8}}>
@@ -625,9 +745,9 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
 
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
         <span style={{fontSize:11.5,color:'var(--text2)',fontWeight:500}}>{dates.length} date{dates.length!==1?'s':''} · {weekdays.length} weekday{weekdays.length!==1?'s':''}</span>
-        {dates.length>0&&<button className="btn btn-sm btn-danger" onClick={()=>setDates([])} style={{fontSize:10,padding:'2px 8px'}}>Clear all</button>}
+        {dates.length>0&&<button className="btn btn-sm btn-danger" onClick={()=>{setDates([]);setEntries([]);setNoCalls(new Set())}} style={{fontSize:10,padding:'2px 8px'}}>Clear all</button>}
       </div>
-      <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:6,minHeight:24}}>
+      <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:8,minHeight:24}}>
         {dates.length===0?<span style={{fontSize:12,color:'var(--text3)',fontStyle:'italic'}}>No dates added yet</span>:dates.map(d=>(
           <span key={d} className={'chip '+(isToday(d)?'chip-today':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5}}>
             {fmtDate(d)}{!isWeekday(d)&&<span style={{fontSize:9,opacity:.6}}> wknd</span>}
@@ -635,44 +755,100 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
           </span>
         ))}
       </div>
-      {weekdays.length>0&&<div style={{fontSize:11,color:'var(--green)'}}>✓ {weekdays.length} weekday{weekdays.length!==1?'s':''} ready for project assignment</div>}
+      {weekdays.length>0&&<div style={{display:'flex',alignItems:'center',gap:6,fontSize:11}}>
+        <span style={{color:'var(--green)'}}>✓ {weekdays.length} weekday{weekdays.length!==1?'s':''} selected</span>
+        <button className="btn btn-sm btn-secondary" onClick={()=>setTab('projects')} style={{fontSize:11,padding:'2px 10px',marginLeft:4}}>Go to Projects →</button>
+      </div>}
     </div>}
 
+    {/* ══ TAB: PROJECTS ══ */}
     {tab==='projects'&&<div>
       {weekdays.length===0&&<div style={{padding:16,background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)',textAlign:'center',marginBottom:12}}>
-        <div style={{fontSize:13,color:'var(--text2)',marginBottom:4}}>No weekdays selected</div>
-        <div style={{fontSize:12,color:'var(--text3)'}}>Add dates in the Leave Dates tab first.</div>
+        <div style={{fontSize:13,color:'var(--text2)',marginBottom:4}}>No weekdays selected yet</div>
+        <div style={{fontSize:12,color:'var(--text3)',marginBottom:10}}>Add leave dates first, then assign projects per day.</div>
+        <button className="btn btn-sm btn-secondary" onClick={()=>setTab('dates')}>← Go to Dates</button>
       </div>}
 
       {weekdays.length>0&&<div>
-        {editData&&<div style={{display:'flex',gap:8,marginBottom:10,flexWrap:'wrap'}}>
+        {/* Mandatory-fill notice */}
+        {!allDaysDone&&<div style={{padding:'10px 12px',background:'var(--amber-bg)',border:'1px solid rgba(230,119,0,.25)',borderRadius:8,marginBottom:12,fontSize:12,color:'var(--amber)',display:'flex',alignItems:'flex-start',gap:8}}>
+          <span style={{fontSize:15,flexShrink:0}}>⚠</span>
+          <div><strong>Required for all weekdays:</strong> Add at least one project entry, or check "No customer calls on this date" for each day before saving.</div>
+        </div>}
+        {allDaysDone&&<div style={{padding:'8px 12px',background:'var(--green-bg)',border:'1px solid rgba(43,138,62,.25)',borderRadius:8,marginBottom:12,fontSize:12,color:'var(--green)',display:'flex',alignItems:'center',gap:6}}>
+          ✓ All {weekdays.length} weekday{weekdays.length!==1?'s':''} accounted for — ready to save.
+        </div>}
+
+        {/* Filter bar */}
+        <div style={{display:'flex',gap:8,marginBottom:10,flexWrap:'wrap'}}>
           <select className="input" value={editFilter.date} onChange={e=>setEditFilter(f=>({...f,date:e.target.value}))} style={{flex:1,fontSize:12,padding:'5px 28px 5px 10px'}}>
             <option value="">All dates</option>
-            {weekdays.map(d=><option key={d} value={d}>{fmtDate(d)}</option>)}
+            {weekdays.map(d=><option key={d} value={d}>{fmtDate(d)} {dayStatus[d]==='no_calls'?'(no calls)':dayStatus[d]==='has_projects'?'✓':'⚠'}</option>)}
           </select>
           <input className="input" placeholder="Filter by project..." value={editFilter.project} onChange={e=>setEditFilter(f=>({...f,project:e.target.value}))} style={{flex:1,fontSize:12}}/>
           {(editFilter.date||editFilter.project)&&<button className="btn btn-sm btn-secondary" onClick={()=>setEditFilter({date:'',project:''})} style={{fontSize:11}}>Clear</button>}
+        </div>
+
+        {/* Previous entries reuse panel (shown when there's historical data and this is a new leave) */}
+        {previousEntries.length>0&&!editFilter.date&&!editFilter.project&&<div style={{marginBottom:12,padding:'10px 12px',background:'var(--indigo-bg)',border:'1px solid rgba(92,71,224,.18)',borderRadius:10}}>
+          <div style={{fontSize:11.5,fontWeight:600,color:'var(--indigo)',marginBottom:8}}>📂 Your previous project entries — click to reuse on a date</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+            {previousEntries.slice(0,8).map((p,pi)=>(
+              <div key={pi} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,padding:'5px 10px',fontSize:11.5,cursor:'default',display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontWeight:500,color:'var(--text)'}}>{p.project}</span>
+                {p.persons.length>0&&<span style={{color:'var(--text3)'}}>→ {p.persons.join(', ')}</span>}
+                {weekdays.filter(d=>dayStatus[d]==='pending').length>0&&<select
+                  onChange={e=>{if(e.target.value){copyPrevEntryToDay(e.target.value,p);e.target.value=''}}}
+                  style={{fontSize:10,padding:'2px 4px',borderRadius:5,border:'1px solid var(--border)',background:'var(--accent)',color:'#fff',cursor:'pointer'}}
+                >
+                  <option value="">+ Add to day</option>
+                  {weekdays.filter(d=>dayStatus[d]==='pending').map(d=><option key={d} value={d}>{fmtDate(d)}</option>)}
+                </select>}
+              </div>
+            ))}
+          </div>
         </div>}
 
-        {weekdays.map(dayStr=>{
-          const relevantEntries=editData
-            ?(filteredEntries.filter(e=>e.date===dayStr||(!e.date&&!editFilter.date))).map(e=>({...e,_idx:entries.indexOf(e)}))
-            :entries.map((e,i)=>({...e,_idx:i})).filter(e=>e.date===dayStr);
+        {/* One card per weekday */}
+        {weekdays.filter(d=>!editFilter.date||d===editFilter.date).map(dayStr=>{
+          const status=dayStatus[dayStr];
+          const isNoCallsDay=noCalls.has(dayStr);
+          const dayEntries=entries.map((e,i)=>({...e,_idx:i})).filter(e=>e.date===dayStr&&(!editFilter.project||e.project.toLowerCase().includes(editFilter.project.toLowerCase())));
 
-          return(<div key={dayStr} className="day-entry-card">
+          const statusColor=status==='no_calls'?'var(--cyan)':status==='has_projects'?'var(--green)':'var(--amber)';
+          const statusIcon=status==='no_calls'?'📵':status==='has_projects'?'✓':'⚠';
+
+          return(<div key={dayStr} className="day-entry-card" style={{borderColor:status==='pending'?'rgba(230,119,0,.35)':status==='has_projects'?'rgba(43,138,62,.3)':'rgba(12,133,153,.3)'}}>
             <div className="day-entry-header">
-              <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,flex:1,minWidth:0}}>
                 <span className="day-label">{fmtDate(dayStr)}</span>
                 <span style={{fontSize:11,color:'var(--text3)'}}>{new Date(dayStr+'T00:00:00').toLocaleDateString('en-US',{weekday:'long'})}</span>
+                <span style={{fontSize:11,fontWeight:600,color:statusColor,marginLeft:'auto',flexShrink:0}}>{statusIcon} {status==='pending'?'Needs info':status==='no_calls'?'No calls':''}</span>
               </div>
-              <button className="btn btn-sm btn-secondary" onClick={()=>addEntryForDay(dayStr)} style={{fontSize:11,padding:'2px 8px'}}><Icon name="plus" size={11}/> Add Project</button>
             </div>
-            {relevantEntries.length===0&&<div style={{fontSize:12,color:'var(--text3)',fontStyle:'italic',padding:'2px 0'}}>No projects — click "Add Project"</div>}
-            {relevantEntries.map(entry=>{
+
+            {/* "No customer calls" toggle */}
+            <label style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',background:isNoCallsDay?'rgba(12,133,153,.08)':'var(--surface2)',borderRadius:8,border:'1px solid',borderColor:isNoCallsDay?'rgba(12,133,153,.3)':'var(--border)',cursor:'pointer',marginBottom:8,userSelect:'none'}}>
+              <input type="checkbox" checked={isNoCallsDay} onChange={()=>toggleNoCalls(dayStr)} style={{accentColor:'var(--cyan)',width:15,height:15,flexShrink:0}}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12.5,fontWeight:500,color:isNoCallsDay?'var(--cyan)':'var(--text)'}}>No customer calls on this date</div>
+                {isNoCallsDay&&<div style={{fontSize:11,color:'var(--text3)',marginTop:1}}>You can still add project updates below if needed</div>}
+              </div>
+            </label>
+
+            {/* Project entries for this day */}
+            {!isNoCallsDay&&dayEntries.length===0&&<div style={{fontSize:12,color:'var(--text3)',fontStyle:'italic',padding:'4px 0 2px'}}>
+              No projects added yet — required unless "No customer calls" is checked
+            </div>}
+
+            {dayEntries.map(entry=>{
               const idx=entry._idx;
-              return(<div key={idx} className="fade-in" style={{background:'var(--surface)',borderRadius:8,padding:10,marginTop:8,border:'1px solid var(--border)'}}>
+              return(<div key={idx} className="fade-in" style={{background:'var(--surface)',borderRadius:8,padding:10,marginTop:6,border:'1px solid var(--border)'}}>
                 <div style={{display:'flex',gap:8,marginBottom:6}}>
-                  <div style={{flex:1}}><label style={subLbl}>Project Name</label><input className="input" placeholder="e.g. Shield Roofing" value={entry.project} onChange={e=>updateEntry(idx,'project',e.target.value)} style={{fontSize:13}}/></div>
+                  <div style={{flex:1}}>
+                    <label style={subLbl}>Project Name <span style={{color:'var(--red)'}}>*</span></label>
+                    <input className={'input'+(entry._touched&&!entry.project.trim()?' input-error':'')} placeholder="e.g. Shield Roofing" value={entry.project} onChange={e=>updateEntry(idx,'project',e.target.value)} onBlur={()=>updateEntry(idx,'_touched',true)} style={{fontSize:13}}/>
+                  </div>
                   <button className="btn-icon" onClick={()=>removeEntry(idx)} style={{width:26,height:26,color:'var(--red)',marginTop:17,flexShrink:0}}><Icon name="trash" size={12}/></button>
                 </div>
                 <label style={subLbl}>Backup Person(s)</label>
@@ -693,22 +869,53 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName}){
                   </div>
                 </div>}
                 <label style={subLbl}>Agenda / Notes</label>
-                <input className="input" placeholder="Meeting agenda, handoff notes..." value={entry.agenda} onChange={e=>updateEntry(idx,'agenda',e.target.value)} style={{fontSize:13}}/>
+                <textarea className="input" placeholder="Meeting agenda, handoff notes, updates..." value={entry.agenda} onChange={e=>updateEntry(idx,'agenda',e.target.value)} style={{fontSize:12.5,minHeight:52,resize:'vertical',lineHeight:1.5}}/>
               </div>);
             })}
+
+            {/* Always show "Add Project" button — even when no-calls is checked (for updates) */}
+            <button className="btn btn-sm btn-secondary" onClick={()=>addEntryForDay(dayStr)} style={{fontSize:11,padding:'4px 10px',marginTop:8,width:'100%'}}>
+              <Icon name="plus" size={11}/> {isNoCallsDay?'Add project update anyway':'Add Project'}
+            </button>
           </div>);
         })}
-        <div style={{marginTop:8,display:'flex',justifyContent:'center'}}>
-          <button className="btn btn-sm btn-secondary" onClick={addBlankEntry} style={{fontSize:12}}><Icon name="plus" size={12}/> Add multi-day project entry</button>
-        </div>
+
+        {/* Undated / multi-day entries */}
+        {!editFilter.date&&!editFilter.project&&<div style={{marginTop:10}}>
+          {entries.filter(e=>!e.date).map((entry,rawIdx)=>{
+            const idx=entries.indexOf(entry);
+            return(<div key={idx} className="fade-in day-entry-card" style={{borderStyle:'dashed'}}>
+              <div className="day-entry-header">
+                <span style={{fontSize:12,color:'var(--text3)',fontStyle:'italic'}}>Multi-day / undated entry</span>
+                <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <select className="input" value={entry.date||''} onChange={e=>updateEntry(idx,'date',e.target.value)} style={{fontSize:11,padding:'3px 24px 3px 8px',width:'auto'}}>
+                    <option value="">No specific date</option>
+                    {weekdays.map(d=><option key={d} value={d}>{fmtDate(d)}</option>)}
+                  </select>
+                  <button className="btn-icon" onClick={()=>removeEntry(idx)} style={{width:24,height:24,color:'var(--red)'}}><Icon name="trash" size={11}/></button>
+                </div>
+              </div>
+              <div style={{display:'flex',gap:8,marginBottom:6}}>
+                <div style={{flex:1}}><label style={subLbl}>Project</label><input className="input" placeholder="Project name" value={entry.project} onChange={e=>updateEntry(idx,'project',e.target.value)} style={{fontSize:13}}/></div>
+              </div>
+              <label style={subLbl}>Agenda / Notes</label>
+              <textarea className="input" placeholder="Notes..." value={entry.agenda} onChange={e=>updateEntry(idx,'agenda',e.target.value)} style={{fontSize:12.5,minHeight:42,resize:'vertical'}}/>
+            </div>);
+          })}
+          <button className="btn btn-sm btn-secondary" onClick={addBlankEntry} style={{fontSize:11,marginTop:4}}><Icon name="plus" size={11}/> Add undated/multi-day entry</button>
+        </div>}
       </div>}
     </div>}
 
-    <div style={{display:'flex',gap:8,marginTop:18,justifyContent:'space-between',alignItems:'center'}}>
-      <span style={{fontSize:11.5,color:'var(--text3)'}}>{dates.length} date{dates.length!==1?'s':''} · {entries.filter(e=>e.project||e.persons.length>0).length} entries</span>
+    {/* Footer */}
+    {saveErr&&<div style={{padding:'8px 12px',background:'var(--red-bg)',border:'1px solid var(--red-border)',borderRadius:8,fontSize:12,color:'var(--red)',marginTop:10}}>⚠ {saveErr}</div>}
+    <div style={{display:'flex',gap:8,marginTop:14,justifyContent:'space-between',alignItems:'center'}}>
+      <div style={{fontSize:11.5,color:'var(--text3)'}}>{dates.length} date{dates.length!==1?'s':''} · {noCalls.size} no-call · {entries.filter(e=>e.project||e.persons.length>0).length} project entries</div>
       <div style={{display:'flex',gap:8}}>
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-        <button className="btn btn-primary" onClick={()=>{if(!name.trim())return;onSave({name:name.trim(),type,dates,backup:buildBackupString(entries)})}}>{editData?'Update':'Save'}</button>
+        <button className="btn btn-primary" onClick={handleSave} title={!allDaysDone&&weekdays.length>0?'Complete all weekdays first':''}>
+          {editData?'Update':'Save'}
+        </button>
       </div>
     </div>
   </div></div>);
@@ -878,9 +1085,9 @@ function App(){
                   <td rowSpan={rowSpan} style={{verticalAlign:'top'}}><span className={'badge '+(tbc[m.type]||'badge-none')}>{m.type}</span></td>
                   <td rowSpan={rowSpan} style={{maxWidth:260,verticalAlign:'top'}}><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{dc===0?<span style={{color:'var(--text3)',fontSize:12}}>No upcoming</span>:m.dates.slice(0,10).map(d=>(<span key={d} className={'chip '+(isToday(d)?'chip-today pulse':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5}}>{fmtDate(d)}</span>))}{dc>10&&<span className="chip chip-gray" style={{fontSize:10}}>+{dc-10}</span>}</div></td>
                   <td rowSpan={rowSpan} style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,fontSize:14,textAlign:'center',verticalAlign:'top'}}><span style={dc>5?{color:'var(--amber)',background:'var(--amber-bg)',padding:'2px 8px',borderRadius:6}:{}}>{dc}</span></td>
-                  <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].project||'':''}</td>
+                  <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].project&&projects[0].project!=='__NO_CALLS__'?projects[0].project:'':''}</td>
                   <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].persons.join(', ')||'':''}</td>
-                  <td className="desktop-only" style={{fontSize:12,color:'var(--text3)'}}>{projects[0]?projects[0].agenda||'':''}</td>
+                  <td className="desktop-only" style={{fontSize:12,color:'var(--text3)'}}>{projects[0]?projects[0].isNoCalls?<span style={{color:'var(--cyan)',fontSize:11}}>📵 No customer calls</span>:projects[0].agenda||'':''}</td>
                   <td rowSpan={rowSpan} style={{verticalAlign:'top'}}>
                     <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
                       {/* Per-row export (always visible) */}
@@ -894,9 +1101,9 @@ function App(){
                 </tr>
                 {projects.slice(1).map((p,pi)=>(
                   <tr key={m.name+'-proj-'+pi} className="fade-in">
-                    <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.project||''}</td>
+                    <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.project&&p.project!=='__NO_CALLS__'?p.project:''}</td>
                     <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.persons.join(', ')||''}</td>
-                    <td className="desktop-only" style={{fontSize:12,color:'var(--text3)'}}>{p.agenda||''}</td>
+                    <td className="desktop-only" style={{fontSize:12,color:'var(--text3)'}}>{p.isNoCalls?<span style={{color:'var(--cyan)',fontSize:11}}>📵 No customer calls</span>:p.agenda||''}</td>
                   </tr>
                 ))}
               </React.Fragment>);
@@ -910,7 +1117,7 @@ function App(){
       </div>
     </main>
 
-    {showAddLeave&&<AddLeaveModal onClose={()=>{setShowAddLeave(false);setEditingIdx(null)}} onSave={handleSaveLeave} existingNames={allNames} editData={editingIdx!==null?data[editingIdx]:null} userName={user.name}/>}
+    {showAddLeave&&<AddLeaveModal onClose={()=>{setShowAddLeave(false);setEditingIdx(null)}} onSave={handleSaveLeave} existingNames={allNames} editData={editingIdx!==null?data[editingIdx]:null} userName={user.name} allUserData={data}/>}
     {showUserPicker&&<UserPickerModal names={allNames} selected={selectedUsers} onClose={()=>setShowUserPicker(false)} onApply={sel=>{setSelectedUsers(sel);setShowUserPicker(false)}}/>}
     {showOoo&&oooData&&<OooActionsModal name={oooData.name} dates={oooData.dates} onClose={()=>{setShowOoo(false);setOooData(null)}}/>}
     {showExport&&<ExportModal member={showExport} onClose={()=>setShowExport(null)}/>}
