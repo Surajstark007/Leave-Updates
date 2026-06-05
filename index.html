@@ -204,17 +204,53 @@ async function readCache(){
   return data&&data[0]?{markdown:data[0].markdown_content,updated_at:data[0].updated_at}:null;
 }
 async function fetchUserLeaves(){
-  const r=await fetch(SB_URL+'/rest/v1/lt_leaves?deleted=eq.false&order=created_at.desc',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
-  if(!r.ok)return[];return r.json();
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/lt_leaves?deleted=eq.false&order=created_at.desc',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+    if(!r.ok)throw new Error('fetch failed: '+r.status);
+    const data=await r.json();
+    // Cache in localStorage as fallback
+    localStorage.setItem('cx_lt_leaves_cache',JSON.stringify(data));
+    return data;
+  }catch(e){
+    console.warn('fetchUserLeaves fallback to localStorage:',e.message);
+    try{return JSON.parse(localStorage.getItem('cx_lt_leaves_cache')||'[]')}catch{return[]}
+  }
 }
 async function upsertLeave(entry,addedBy){
   const existing=await fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(entry.name)+'&deleted=eq.false&limit=1',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
   const existingData=await existing.json();
-  const payload={type:entry.type,dates:JSON.stringify(entry.dates),backup:entry.backup,half_days:JSON.stringify(entry.halfDays||{}),updated_at:new Date().toISOString(),added_by:addedBy};
-  if(existingData&&existingData.length>0){
-    return fetch(SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingData[0].id,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)});
+
+  // Try with half_days first; if that fails (column may not exist), retry without it
+  const tryUpsert=async(withHalfDays)=>{
+    const payload={
+      type:entry.type,
+      dates:JSON.stringify(entry.dates),
+      backup:entry.backup,
+      updated_at:new Date().toISOString(),
+      added_by:addedBy,
+      ...(withHalfDays?{half_days:JSON.stringify(entry.halfDays||{})}:{})
+    };
+    if(existingData&&existingData.length>0){
+      const r=await fetch(SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingData[0].id,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)});
+      if(!r.ok){const txt=await r.text();throw new Error(txt)}
+      return r.json();
+    }else{
+      const r=await fetch(SB_URL+'/rest/v1/lt_leaves',{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({name:entry.name,...payload})});
+      if(!r.ok){const txt=await r.text();throw new Error(txt)}
+      return r.json();
+    }
+  };
+
+  try{
+    return await tryUpsert(true);
+  }catch(e1){
+    // If it failed due to unknown column half_days, retry without it
+    if(e1.message.includes('half_days')||e1.message.includes('column')){
+      console.warn('half_days column missing, retrying without it');
+      return await tryUpsert(false);
+    }
+    throw e1;
   }
-  return fetch(SB_URL+'/rest/v1/lt_leaves',{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({name:entry.name,...payload})});
 }
 async function softDeleteLeave(name){
   return fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(name)+'&deleted=eq.false',{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({deleted:true,updated_at:new Date().toISOString()})});
@@ -260,15 +296,66 @@ async function deleteProjectEntry(id){
   const cache=JSON.parse(localStorage.getItem('cx_lt_proj_cache')||'[]');
   localStorage.setItem('cx_lt_proj_cache',JSON.stringify(cache.filter(x=>x.id!==id)));
 }
+
+// Sync leave-linked project entries into lt_projects master table
+// Called after every leave save so the Projects & Agenda view is always complete
+async function syncLeaveProjectsToMaster(userName,backupStr){
+  if(!backupStr||!backupStr.trim())return;
+  const entries=parseProjectEntries(backupStr,false); // skip __NO_CALLS__
+  if(entries.length===0)return;
+  // Delete old leave-linked entries for this user first (source='leave_sync')
+  try{
+    await fetch(SB_URL+'/rest/v1/lt_projects?name=ilike.'+encodeURIComponent(userName)+'&source=eq.leave_sync',{
+      method:'PATCH',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify({deleted:true,updated_at:new Date().toISOString()})
+    });
+  }catch(e){console.warn('syncLeaveProjects delete failed:',e.message)}
+  // Insert fresh entries
+  for(const e of entries){
+    try{
+      await fetch(SB_URL+'/rest/v1/lt_projects',{
+        method:'POST',
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+        body:JSON.stringify({
+          name:userName,
+          date:e.date||'',
+          project:e.project||'',
+          next_call:'',
+          backup:e.persons.join(', ')||'',
+          agenda:e.agenda||'',
+          source:'leave_sync'
+        })
+      });
+    }catch(e2){console.warn('syncLeaveProjects insert failed:',e2.message)}
+  }
+}
 function mergeCanvasAndUserLeaves(canvasMembers,userLeaves){
   const merged=[...canvasMembers];const deletedNames=new Set();
   for(const ul of userLeaves){
     if(ul.deleted){deletedNames.add(ul.name.toLowerCase());continue}
-    let dates=[];try{dates=typeof ul.dates==='string'?JSON.parse(ul.dates):ul.dates||[]}catch{dates=[]}
-    let halfDays={};try{halfDays=typeof ul.half_days==='string'?JSON.parse(ul.half_days):ul.half_days||{}}catch{halfDays={}}
+    let dates=[];
+    try{dates=typeof ul.dates==='string'?JSON.parse(ul.dates):ul.dates||[]}catch{dates=[]}
+    let halfDays={};
+    try{halfDays=typeof ul.half_days==='string'?JSON.parse(ul.half_days):ul.half_days||{}}catch{halfDays={}}
+    // Keep all user-saved dates — do NOT filter by isFuture here.
+    // The view filters handle display (upcoming/today/week/all).
+    // Filtering here causes data to vanish after the leave date passes.
+    const validDates=dates.filter(d=>d&&d.match(/^\d{4}-\d{2}-\d{2}$/));
     const idx=merged.findIndex(m=>m.name.toLowerCase()===ul.name.toLowerCase());
-    if(idx>=0){const existingDates=new Set(merged[idx].dates);dates.forEach(d=>existingDates.add(d));merged[idx]={...merged[idx],dates:[...existingDates].filter(d=>d>=todayStr()).sort(),backup:ul.backup||merged[idx].backup,type:ul.type||merged[idx].type,halfDays:{...(merged[idx].halfDays||{}),...halfDays}}}
-    else{merged.push({name:ul.name,dates:dates.filter(d=>d>=todayStr()).sort(),backup:ul.backup||'',type:ul.type||'PTO',raw:'',halfDays})}
+    if(idx>=0){
+      // Merge dates: keep canvas dates (already future-filtered on canvas side) + all user dates
+      const mergedDates=new Set([...merged[idx].dates,...validDates]);
+      merged[idx]={
+        ...merged[idx],
+        dates:[...mergedDates].sort(),
+        backup:ul.backup||merged[idx].backup,
+        type:ul.type||merged[idx].type,
+        halfDays:{...(merged[idx].halfDays||{}),...halfDays}
+      };
+    }else{
+      merged.push({name:ul.name,dates:validDates.sort(),backup:ul.backup||'',type:ul.type||'PTO',raw:'',halfDays});
+    }
   }
   return merged.filter(m=>!deletedNames.has(m.name.toLowerCase()));
 }
@@ -565,11 +652,9 @@ function ProjectsAgendaModal({members,userName,allNames,onClose}){
   useEffect(()=>{
     fetchProjectEntries().then(data=>{
       setProjEntries(data||[]);
-      // Pre-populate My Entries with existing entries for current user
-      const mine=(data||[]).filter(e=>e.name&&e.name.toLowerCase()===userName.toLowerCase());
-      if(mine.length>0){
-        setDraftEntries(mine.map(e=>({...e,showPicker:false,pickerQ:'',_dirty:false})));
-      }
+      // Pre-populate My Entries with manual (non-leave_sync) entries for current user
+      const mine=(data||[]).filter(e=>e.name&&e.name.toLowerCase()===userName.toLowerCase()&&e.source!=='leave_sync'&&!e.deleted);
+      setDraftEntries(mine.length>0?mine.map(e=>({...e,showPicker:false,pickerQ:'',_dirty:false})):[blankEntry()]);
       setLoading(false);
     });
   },[userName]);
@@ -620,20 +705,26 @@ function ProjectsAgendaModal({members,userName,allNames,onClose}){
     setSaving(false);
   };
 
-  // Merge: leave-linked entries + standalone entries for team view
+  // Merge: lt_projects entries (both standalone + leave_sync) for team view
+  // Deduplicate: if an entry exists in both lt_projects AND in the backup string, prefer lt_projects version
   const allTeamEntries=useMemo(()=>{
     const rows=[];
-    // Standalone project entries from lt_projects
+    const seenKeys=new Set(); // member+date+project dedup
+    // First: all lt_projects entries (standalone + leave_sync)
     projEntries.forEach(e=>{
-      if(!e.deleted)rows.push({
-        member:e.name||'',source:'standalone',type:'—',rangeStr:'',
+      if(e.deleted)return;
+      const src=e.source==='leave_sync'?'leave_sync':'standalone';
+      const key=(e.name||'').toLowerCase()+'|'+(e.date||'')+'|'+(e.project||'').toLowerCase();
+      seenKeys.add(key);
+      rows.push({
+        member:e.name||'',source:src,type:'—',rangeStr:'',
         date:e.date||'',project:e.project||'',
         next_call:e.next_call||'',
         backup:e.backup?e.backup.split(',').map(s=>s.trim()).filter(Boolean):[],
         agenda:e.agenda||'',isNoCalls:false,noProjects:false
       });
     });
-    // Leave-linked entries from backup strings
+    // Second: Leave-linked entries from backup strings not already in lt_projects
     members.forEach(m=>{
       const projs=parseProjectEntries(m.backup||'',true);
       const ranges=groupConsecutiveDates(m.dates);
@@ -642,7 +733,10 @@ function ProjectsAgendaModal({members,userName,allNames,onClose}){
         rows.push({member:m.name,source:'leave',type:m.type,rangeStr,date:'',project:'',next_call:'',backup:[],agenda:'',isNoCalls:false,noProjects:true});
       }else{
         projs.forEach(p=>{
-          rows.push({member:m.name,source:'leave',type:m.type,rangeStr,date:p.date,project:p.project,next_call:'',backup:p.persons,agenda:p.agenda,isNoCalls:p.isNoCalls,noProjects:false});
+          const key=m.name.toLowerCase()+'|'+(p.date||'')+'|'+(p.project||'').toLowerCase();
+          if(!seenKeys.has(key)){
+            rows.push({member:m.name,source:'leave',type:m.type,rangeStr,date:p.date,project:p.project,next_call:'',backup:p.persons,agenda:p.agenda,isNoCalls:p.isNoCalls,noProjects:false});
+          }
         });
       }
     });
@@ -853,7 +947,7 @@ td{padding:8px 10px;border-bottom:1px solid #e0d5c7;vertical-align:top;font-size
               ?<tr><td colSpan={7} style={{textAlign:'center',padding:32,color:'var(--text3)'}}>No entries match the filters</td></tr>
               :filteredTeam.map((e,i)=>(
               <tr key={i} style={{background:e.source==='standalone'?'rgba(92,71,224,.03)':i%2===0?'transparent':'var(--surface2)'}}>
-                <td style={{fontSize:14,textAlign:'center',paddingLeft:8}} title={e.source==='standalone'?'Standalone entry':'Leave-linked entry'}>{e.source==='standalone'?'🗂️':'📅'}</td>
+                <td style={{fontSize:14,textAlign:'center',paddingLeft:8}} title={e.source==='standalone'?'Standalone entry':e.source==='leave_sync'?'Auto-synced from leave':'Leave-linked entry'}>{e.source==='standalone'?'🗂️':e.source==='leave_sync'?'🔗':'📅'}</td>
                 <td style={{fontWeight:600,fontSize:12.5,whiteSpace:'nowrap'}}>{e.member||'—'}</td>
                 <td style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5,whiteSpace:'nowrap',color:'var(--accent)'}}>{e.date?fmtDate(e.date):'—'}</td>
                 <td style={{fontSize:12,fontWeight:e.isNoCalls?400:500,color:e.isNoCalls?'var(--cyan)':e.noProjects?'var(--text3)':'var(--text)',fontStyle:e.noProjects?'italic':'normal'}}>
@@ -868,13 +962,202 @@ td{padding:8px 10px;border-bottom:1px solid #e0d5c7;vertical-align:top;font-size
         </table>
       </div>
       <div style={{marginTop:8,fontSize:11,color:'var(--text3)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-        <span>🗂️ Standalone &nbsp;·&nbsp; 📅 Leave-linked</span>
+        <span>🗂️ Standalone &nbsp;·&nbsp; 🔗 Auto-synced from leave &nbsp;·&nbsp; 📅 Leave-linked</span>
         <span>CX Leave Tracker · {generatedAt}</span>
       </div>
     </div>}
   </div></div>);
 }
 
+
+// ─── IMPORT LEAVE MODAL (CSV / Excel) ───
+function ImportLeaveModal({onClose,onImport,userName}){
+  const[step,setStep]=useState('upload');
+  const[parseErr,setParseErr]=useState('');
+  const[parsed,setParsed]=useState(null);
+  const[importing,setImporting]=useState(false);
+  const[importLog,setImportLog]=useState([]);
+  const[dragOver,setDragOver]=useState(false);
+  const fileRef=useRef(null);
+
+  const downloadTemplate=()=>{
+    const cols=['Date (YYYY-MM-DD)','Leave Type (PTO/Sick/Mixed/Business Travel)','Half Day (full/first/second)','Project Name','Backup Person(s) (comma separated)','Agenda / Notes'];
+    const rows=[cols,['2025-06-10','PTO','full','Shield Roofing','Sundeep, Balaje','Review Q2 pipeline and hand off open tickets'],['2025-06-11','PTO','full','Acme Corp','Kari','Weekly sync — Kari to cover'],['2025-06-12','PTO','first','','','No customer calls']];
+    const csv=rows.map(r=>r.map(v=>{const s=String(v);return s.includes(',')||s.includes('"')?'"'+s.replace(/"/g,'""')+'"':s}).join(',')).join('\r\n');
+    const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');
+    a.href=url;a.download='cx-leave-import-template.csv';
+    document.body.appendChild(a);a.click();setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url)},100);
+  };
+
+  const parseCsvText=(text)=>{
+    const lines=text.split(/\r?\n/).filter(l=>l.trim());
+    if(lines.length<2)return{error:'File is empty or has no data rows'};
+    const parseRow=(line)=>{
+      const cells=[];let cur='';let inQ=false;
+      for(let i=0;i<line.length;i++){
+        const c=line[i];
+        if(c==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++}else inQ=!inQ}
+        else if(c===','&&!inQ){cells.push(cur.trim());cur=''}
+        else cur+=c;
+      }
+      cells.push(cur.trim());return cells;
+    };
+    const header=parseRow(lines[0]).map(h=>h.toLowerCase().replace(/[^a-z0-9]/g,''));
+    const rows=[];
+    for(let i=1;i<lines.length;i++){
+      const cells=parseRow(lines[i]);
+      if(cells.every(c=>!c.trim()))continue;
+      const row={};header.forEach((h,j)=>{row[h]=cells[j]||''});rows.push(row);
+    }
+    return{header,rows};
+  };
+
+  const normaliseRows=(rows)=>{
+    const dates=[];const halfDays={};const entries=[];let type='PTO';
+    const typeMap={'pto':'PTO','sick':'Sick','mixed':'Mixed','businesstravel':'Business Travel','bt':'Business Travel','business':'Business Travel'};
+    rows.forEach(row=>{
+      const rawDate=row['dateyyyyymmdd']||row['date']||row['leavedate']||'';
+      const dm=rawDate.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+      if(!dm)return;
+      const dateStr=dm[1]+'-'+String(dm[2]).padStart(2,'0')+'-'+String(dm[3]).padStart(2,'0');
+      if(!dates.includes(dateStr))dates.push(dateStr);
+      const rawType=(row['leavetypepto']||row['leavetype']||row['type']||'').trim().toLowerCase().replace(/[^a-z]/g,'');
+      if(rawType&&typeMap[rawType])type=typeMap[rawType];
+      const rawHalf=(row['halfdayfull']||row['halfday']||row['half']||'').trim().toLowerCase();
+      if(rawHalf==='first'||rawHalf==='1st'||rawHalf==='am')halfDays[dateStr]='first';
+      else if(rawHalf==='second'||rawHalf==='2nd'||rawHalf==='pm')halfDays[dateStr]='second';
+      const project=(row['projectname']||row['project']||'').trim();
+      const backupRaw=(row['backuppersons']||row['backup']||row['backuppersonscommaseparated']||'').trim();
+      const agenda=(row['agendanotes']||row['agenda']||row['notes']||'').trim();
+      const persons=backupRaw?backupRaw.split(/[,;]+/).map(s=>s.trim()).filter(Boolean):[];
+      const isNoCalls=!project&&!persons.length&&(agenda.toLowerCase().includes('no customer call')||agenda.toLowerCase().includes('no call'));
+      entries.push({date:dateStr,project,persons,agenda,isNoCalls});
+    });
+    dates.sort();return{dates,type,halfDays,entries,rowCount:rows.length};
+  };
+
+  const handleFile=async(file)=>{
+    if(!file)return;setParseErr('');
+    const ext=file.name.split('.').pop().toLowerCase();
+    try{
+      let text='';
+      if(ext==='csv'||ext==='txt'){
+        text=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsText(file,'UTF-8')});
+      }else if(ext==='xlsx'||ext==='xls'){
+        if(!window.XLSX){const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';await new Promise((res,rej)=>{s.onload=res;s.onerror=rej;document.head.appendChild(s)})}
+        const buf=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsArrayBuffer(file)});
+        const wb=window.XLSX.read(buf,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];
+        text=window.XLSX.utils.sheet_to_csv(ws);
+      }else{setParseErr('Unsupported file type. Use .csv, .xlsx, or .xls');return}
+      const{error,rows}=parseCsvText(text);
+      if(error){setParseErr(error);return}
+      const result=normaliseRows(rows);
+      if(result.dates.length===0){setParseErr('No valid dates found. Make sure Date column uses YYYY-MM-DD format, e.g. 2025-06-10');return}
+      setParsed(result);setStep('preview');
+    }catch(e){setParseErr('Could not read file: '+e.message)}
+  };
+
+  const confirmImport=async()=>{
+    if(!parsed)return;
+    setImporting(true);setStep('importing');setImportLog([]);
+    const backupStr=parsed.entries.filter(e=>e.project||e.persons.length>0||e.isNoCalls).map(e=>{
+      if(e.isNoCalls)return'['+e.date+'] __NO_CALLS__';
+      let s='['+e.date+'] ';
+      if(e.project){s+=e.project;if(e.persons.length>0)s+=' - '+e.persons.join(', ')}
+      else if(e.persons.length>0)s+=e.persons.join(', ');
+      if(e.agenda)s+=' | Agenda: '+e.agenda;
+      return s;
+    }).join('\n');
+    setImportLog(l=>[...l,'Parsed '+parsed.dates.length+' leave dates ('+parsed.type+')']);
+    setImportLog(l=>[...l,parsed.entries.filter(e=>e.project||e.isNoCalls).length+' project / agenda entries']);
+    await onImport({name:userName,type:parsed.type,dates:parsed.dates,backup:backupStr,halfDays:parsed.halfDays});
+    setImportLog(l=>[...l,'Saved to database ✓']);
+    setImporting(false);setStep('done');
+  };
+
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:640}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+      <div>
+        <h3 style={{fontSize:17,fontWeight:600}}>📥 Import Leave from File</h3>
+        <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>Upload a CSV or Excel file to bulk-add leave dates, projects and agendas</div>
+      </div>
+      <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
+    </div>
+
+    {step==='upload'&&<div>
+      <div style={{padding:'10px 14px',background:'var(--indigo-bg)',border:'1px solid rgba(92,71,224,.18)',borderRadius:10,marginBottom:14,display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
+        <div>
+          <div style={{fontSize:12.5,fontWeight:600,color:'var(--indigo)'}}>Download the template first</div>
+          <div style={{fontSize:11.5,color:'var(--text2)',marginTop:2}}>Pre-filled with example rows and correct column names</div>
+        </div>
+        <button className="btn btn-sm" onClick={downloadTemplate} style={{background:'var(--indigo)',color:'#fff',border:'none',flexShrink:0}}><Icon name="download" size={13}/> Template CSV</button>
+      </div>
+      <div onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)} onDrop={e=>{e.preventDefault();setDragOver(false);const f=e.dataTransfer.files[0];if(f)handleFile(f)}} onClick={()=>fileRef.current&&fileRef.current.click()}
+        style={{border:'2px dashed',borderColor:dragOver?'var(--accent)':'var(--border)',borderRadius:12,padding:'32px 20px',textAlign:'center',cursor:'pointer',transition:'all .2s',background:dragOver?'var(--accent-light)':'var(--surface2)',marginBottom:14}}>
+        <div style={{fontSize:32,marginBottom:8}}>📂</div>
+        <div style={{fontSize:14,fontWeight:600,color:dragOver?'var(--accent)':'var(--text)',marginBottom:4}}>Drop file here, or click to browse</div>
+        <div style={{fontSize:12,color:'var(--text3)'}}>.csv · .xlsx · .xls</div>
+        <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,.txt" style={{display:'none'}} onChange={e=>handleFile(e.target.files[0])}/>
+      </div>
+      {parseErr&&<div style={{padding:'10px 14px',background:'var(--red-bg)',border:'1px solid var(--red-border)',borderRadius:8,fontSize:12.5,color:'var(--red)',marginBottom:12}}>⚠ {parseErr}</div>}
+      <div style={{fontSize:11.5,color:'var(--text3)'}}>
+        <div style={{fontWeight:600,color:'var(--text2)',marginBottom:6}}>Expected columns (header row required):</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 16px'}}>
+          {[['Date','YYYY-MM-DD — required'],['Leave Type','PTO / Sick / Mixed / Business Travel'],['Half Day','full / first / second'],['Project Name','Customer or project name'],['Backup Person(s)','Comma-separated'],['Agenda / Notes','Handoff notes, topics']].map(([k,v])=>(
+            <div key={k}><span style={{color:'var(--text)',fontWeight:500}}>{k}:</span> {v}</div>
+          ))}
+        </div>
+      </div>
+    </div>}
+
+    {step==='preview'&&parsed&&<div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:14}}>
+        {[{label:'Leave Dates',val:parsed.dates.length,c:'var(--accent)'},{label:'Project Entries',val:parsed.entries.filter(e=>e.project||e.isNoCalls).length,c:'var(--indigo)'},{label:'Leave Type',val:parsed.type,c:'var(--green)'}].map(s=>(
+          <div key={s.label} style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 12px',textAlign:'center'}}>
+            <div style={{fontSize:20,fontWeight:700,color:s.c,fontFamily:"'JetBrains Mono',monospace"}}>{s.val}</div>
+            <div style={{fontSize:10.5,color:'var(--text3)',marginTop:2}}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{border:'1px solid var(--border)',borderRadius:10,overflow:'hidden',maxHeight:280,overflowY:'auto',marginBottom:14}}>
+        <table>
+          <thead><tr><th>Date</th><th>Half Day</th><th>Project</th><th>Backup</th><th>Agenda</th></tr></thead>
+          <tbody>
+            {parsed.dates.map(d=>{
+              const e=parsed.entries.find(x=>x.date===d)||{project:'',persons:[],agenda:'',isNoCalls:false};
+              const half=parsed.halfDays[d];
+              return(<tr key={d}>
+                <td style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:'nowrap',color:'var(--accent)'}}>{fmtDate(d)}</td>
+                <td style={{fontSize:11,color:'var(--text3)'}}>{half==='first'?'½ AM':half==='second'?'½ PM':'Full'}</td>
+                <td style={{fontSize:12,color:e.isNoCalls?'var(--cyan)':e.project?'var(--text)':'var(--text3)',fontStyle:e.project||e.isNoCalls?'normal':'italic'}}>{e.isNoCalls?'📵 No calls':e.project||'—'}</td>
+                <td style={{fontSize:11.5,color:'var(--text2)'}}>{e.persons.join(', ')||'—'}</td>
+                <td style={{fontSize:11,color:'var(--text3)',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.agenda||'—'}</td>
+              </tr>);
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{padding:'8px 12px',background:'var(--amber-bg)',border:'1px solid rgba(230,119,0,.25)',borderRadius:8,fontSize:12,color:'var(--amber)',marginBottom:14}}>
+        ⚠ This will save leave for <strong>{userName}</strong> for the {parsed.dates.length} dates shown. Existing leave dates will be merged, not overwritten.
+      </div>
+      <div style={{display:'flex',gap:8,justifyContent:'space-between'}}>
+        <button className="btn btn-secondary" onClick={()=>{setStep('upload');setParsed(null)}}>← Back</button>
+        <button className="btn btn-primary" onClick={confirmImport}>Confirm & Import</button>
+      </div>
+    </div>}
+
+    {(step==='importing'||step==='done')&&<div style={{textAlign:'center',padding:'24px 0'}}>
+      {step==='importing'&&<div className="spin" style={{width:36,height:36,border:'3px solid var(--border)',borderTopColor:'var(--accent)',borderRadius:'50%',margin:'0 auto 16px'}}/>}
+      {step==='done'&&<div style={{fontSize:36,marginBottom:12}}>✅</div>}
+      <div style={{fontSize:15,fontWeight:600,marginBottom:12,color:step==='done'?'var(--green)':'var(--text)'}}>{step==='importing'?'Importing…':'Import complete!'}</div>
+      <div style={{display:'flex',flexDirection:'column',gap:4,marginBottom:16}}>
+        {importLog.map((l,i)=><div key={i} style={{fontSize:12.5,color:'var(--text2)',textAlign:'left',padding:'4px 12px',background:'var(--surface2)',borderRadius:6}}>✓ {l}</div>)}
+      </div>
+      {step==='done'&&<button className="btn btn-primary" onClick={onClose}>Done</button>}
+    </div>}
+  </div></div>);
+}
 
 function getAutoReplyText(name,dates){
   const sorted=[...dates].sort();const ranges=groupConsecutiveDates(sorted);
@@ -1370,20 +1653,39 @@ function App(){
   const[showExport,setShowExport]=useState(null);  // single member export
   const[showBulkExport,setShowBulkExport]=useState(false);
   const[showProjectsAgenda,setShowProjectsAgenda]=useState(false);
+  const[showImport,setShowImport]=useState(false);
   const[refreshing,setRefreshing]=useState(false);
   const toast=(msg,type='info')=>{const id=Date.now();setToasts(t=>[...t,{id,msg,type}]);setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),4000)};
 
-  const loadAllData=async()=>{
+  const loadAllData=async(showToast=false)=>{
     let canvasMembers=[];
-    try{const c=await readCache();if(c){canvasMembers=parseCanvasMarkdown(c.markdown);setLastSync(new Date(c.updated_at).toLocaleString())}}catch{}
-    try{const ul=await fetchUserLeaves();const merged=mergeCanvasAndUserLeaves(canvasMembers,ul);setData(merged)}catch{setData(canvasMembers)}
+    let syncLabel='Loading...';
+    try{
+      const c=await readCache();
+      if(c){canvasMembers=parseCanvasMarkdown(c.markdown);syncLabel=new Date(c.updated_at).toLocaleString()}
+    }catch(e){console.warn('Canvas cache read failed:',e.message)}
+    try{
+      const ul=await fetchUserLeaves();
+      const merged=mergeCanvasAndUserLeaves(canvasMembers,ul);
+      setData(merged);
+      setLastSync(syncLabel);
+      if(showToast)toast('Data refreshed','success');
+    }catch(e){
+      console.error('loadAllData error:',e.message);
+      // Try localStorage fallback
+      try{
+        const cached=JSON.parse(localStorage.getItem('cx_lt_leaves_cache')||'[]');
+        setData(mergeCanvasAndUserLeaves(canvasMembers,cached));
+        setLastSync(syncLabel+' (offline)');
+        if(showToast)toast('Using cached data — network unavailable','info');
+      }catch{setData(canvasMembers);setLastSync('Error loading')}
+    }
   };
   useEffect(()=>{loadAllData()},[]);
 
   const handleRefresh=async()=>{
     setRefreshing(true);
-    try{await loadAllData();toast('Refreshed','success')}
-    catch(e){toast('Refresh failed: '+e.message,'error')}
+    await loadAllData(true);
     setRefreshing(false);
   };
 
@@ -1392,11 +1694,12 @@ function App(){
   const filtered=useMemo(()=>{
     let r=data;
     if(view==='today')r=r.filter(m=>m.dates.some(isToday));
-    else if(view==='upcoming')r=r.filter(m=>m.dates.length>0);
+    else if(view==='upcoming')r=r.filter(m=>m.dates.some(d=>d>=todayStr())); // includes today
     else if(view==='week')r=r.filter(m=>m.dates.some(d=>inWeek(d,weekDate)));
+    // 'all' shows everyone including past dates
     if(typeFilter!=='All')r=r.filter(m=>m.type===typeFilter);
     if(selectedUsers.length>0)r=r.filter(m=>selectedUsers.includes(m.name));
-    if(search.trim()){const q=search.toLowerCase();r=r.filter(m=>m.name.toLowerCase().includes(q)||m.backup.toLowerCase().includes(q)||m.dates.some(d=>d.includes(q)))}
+    if(search.trim()){const q=search.toLowerCase();r=r.filter(m=>m.name.toLowerCase().includes(q)||(m.backup||'').toLowerCase().includes(q)||m.dates.some(d=>d.includes(q)))}
     return[...r].sort((a,b)=>{const aMe=user&&a.name.toLowerCase()===user.name.toLowerCase();const bMe=user&&b.name.toLowerCase()===user.name.toLowerCase();if(aMe&&!bMe)return-1;if(!aMe&&bMe)return 1;return a.name.localeCompare(b.name)});
   },[data,view,weekDate,typeFilter,selectedUsers,search,user]);
 
@@ -1424,25 +1727,56 @@ function App(){
   };
 
   const handleSaveLeave=async(entry)=>{
-    const savedDates=entry.dates.filter(isFuture).sort();
+    // Do NOT filter by isFuture — user may save today's leave or back-dated entries
+    const savedDates=[...new Set(entry.dates)].filter(d=>d&&d.match(/^\d{4}-\d{2}-\d{2}$/)).sort();
     const savedHalfDays=entry.halfDays||{};
-    // Clean halfDays to only keep entries for saved dates
-    const cleanHalfDays={};savedDates.forEach(d=>{if(savedHalfDays[d]&&savedHalfDays[d]!=='full')cleanHalfDays[d]=savedHalfDays[d]});
+    const cleanHalfDays={};
+    savedDates.forEach(d=>{if(savedHalfDays[d]&&savedHalfDays[d]!=='full')cleanHalfDays[d]=savedHalfDays[d]});
+
+    const finalEntry={...entry,dates:savedDates,halfDays:cleanHalfDays};
     const wasEditing=editingIdx!==null;
+
+    // 1. Optimistically update local state immediately so UI shows data right away
     if(wasEditing){
-      setData(d=>d.map((m,i)=>i===editingIdx?{...m,name:entry.name,type:entry.type,dates:savedDates,backup:entry.backup,halfDays:cleanHalfDays}:m));
+      setData(d=>d.map((m,i)=>i===editingIdx?{...m,...finalEntry}:m));
       setEditingIdx(null);
-      try{await upsertLeave({...entry,dates:savedDates,halfDays:cleanHalfDays},user?.email||'');toast('Updated & saved','success')}
-      catch{toast('Updated locally (save failed)','error')}
     }else{
       const ei=data.findIndex(m=>m.name.toLowerCase()===entry.name.toLowerCase());
-      if(ei>=0){setData(d=>d.map((m,i)=>{if(i!==ei)return m;const mg=new Set([...m.dates,...entry.dates]);return{...m,dates:[...mg].filter(isFuture).sort(),backup:entry.backup||m.backup,type:entry.type||m.type,halfDays:{...(m.halfDays||{}),...cleanHalfDays}}}))}
-      else{setData(d=>[...d,{name:entry.name,dates:savedDates,backup:entry.backup,type:entry.type,raw:'',halfDays:cleanHalfDays}])}
-      try{await upsertLeave({...entry,dates:savedDates,halfDays:cleanHalfDays},user?.email||'');toast('Leave added & saved','success')}
-      catch{toast('Added locally (save failed)','error')}
+      if(ei>=0){
+        setData(d=>d.map((m,i)=>{
+          if(i!==ei)return m;
+          const mg=new Set([...m.dates,...savedDates]);
+          return{...m,dates:[...mg].sort(),backup:finalEntry.backup||m.backup,type:finalEntry.type||m.type,halfDays:{...(m.halfDays||{}),...cleanHalfDays}};
+        }));
+      }else{
+        setData(d=>[...d,{name:finalEntry.name,dates:savedDates,backup:finalEntry.backup,type:finalEntry.type,raw:'',halfDays:cleanHalfDays}]);
+      }
     }
     setShowAddLeave(false);
-    if(savedDates.length>0){setTimeout(()=>{setOooData({name:entry.name,dates:savedDates});setShowOoo(true)},150)}
+
+    // 2. Persist to Supabase and confirm
+    try{
+      await upsertLeave(finalEntry,user?.email||'');
+      // Sync project entries into the master lt_projects table
+      syncLeaveProjectsToMaster(finalEntry.name,finalEntry.backup).catch(e=>console.warn('sync projects:',e.message));
+      // 3. Reload from DB to confirm data is actually there
+      const freshLeaves=await fetchUserLeaves();
+      const canvasMembers=data.filter(m=>m.raw!==undefined&&m.raw!=='');
+      const freshMerged=mergeCanvasAndUserLeaves(
+        canvasMembers.map(m=>({...m})),
+        freshLeaves
+      );
+      setData(freshMerged);
+      toast('Leave saved ✓','success');
+    }catch(e){
+      // Data is still in local state but not persisted — warn clearly
+      console.error('upsertLeave failed:',e.message);
+      toast('⚠ Saved locally only — database error: '+e.message.slice(0,60),'error');
+    }
+
+    if(savedDates.length>0){
+      setTimeout(()=>{setOooData({name:finalEntry.name,dates:savedDates});setShowOoo(true)},200);
+    }
   };
 
   if(!user)return<LoginScreen onLogin={setUser}/>;
@@ -1458,6 +1792,7 @@ function App(){
       </div>
       <div style={{display:'flex',alignItems:'center',gap:8}}>
         <button className="btn btn-secondary btn-sm" onClick={handleRefresh} disabled={refreshing}><span className={refreshing?'spin':''} style={{display:'inline-flex'}}><Icon name="refresh" size={14}/></span> {refreshing?'…':'Refresh'}</button>
+        <button className="btn btn-sm" onClick={()=>setShowImport(true)} style={{background:'var(--green-bg)',color:'var(--green)',border:'1px solid rgba(43,138,62,.25)'}}><Icon name="download" size={14}/> Import</button>
         <button className="btn btn-sm" onClick={()=>setShowProjectsAgenda(true)} style={{background:'var(--indigo-bg)',color:'var(--indigo)',border:'1px solid rgba(92,71,224,.2)'}}><Icon name="clipboard" size={14}/> Projects &amp; Agenda</button>
         <button className="btn btn-primary btn-sm" onClick={()=>{setEditingIdx(null);setShowAddLeave(true)}}><Icon name="plus" size={14}/> Add My Leave</button>
         <button className="theme-toggle" onClick={()=>setTheme(t=>t==='light'?'dark':'light')}/>
@@ -1571,6 +1906,7 @@ function App(){
     {showExport&&<ExportModal member={showExport} onClose={()=>setShowExport(null)}/>}
     {showBulkExport&&<BulkExportModal members={filtered} filterDesc={filterDesc} onClose={()=>setShowBulkExport(false)}/>}
     {showProjectsAgenda&&<ProjectsAgendaModal members={data} userName={user.name} allNames={allNames} onClose={()=>setShowProjectsAgenda(false)}/>}
+    {showImport&&<ImportLeaveModal userName={user.name} onClose={()=>setShowImport(false)} onImport={handleSaveLeave}/>}
     {showDeleteConfirm!==null&&data[showDeleteConfirm]&&<div className="overlay" onClick={()=>setShowDeleteConfirm(null)}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:420}}>
       <h3 style={{fontSize:17,fontWeight:600,marginBottom:12,color:'var(--red)'}}>Delete Leave Record</h3>
       <p style={{fontSize:13.5,marginBottom:8}}>Remove <strong>{data[showDeleteConfirm].name}</strong>?</p>
