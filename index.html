@@ -1268,26 +1268,38 @@ function ImportLeaveModal({onClose,onImport,userName,allNames}){
 
   const tabularToResult=(rows,rawHeader,header)=>{
     const typeMap={'pto':'PTO','sick':'Sick','mixed':'Mixed','businesstravel':'Business Travel','bt':'Business Travel','business':'Business Travel'};
+
+    // Try to find the date column — check headers, then scan all cells of first data row
     const dateColIdx=(()=>{
+      // Header contains 'date'
       const i=header.findIndex(h=>h.includes('date'));if(i>=0)return i;
       const j=(rawHeader||[]).findIndex(h=>h.toLowerCase().includes('date'));if(j>=0)return j;
+      // Scan first row for any cell that parses as a date
       if(rows[0]){for(let k=0;k<(rows[0]._cells||[]).length;k++){if(parseAnyDate(rows[0]._cells[k]))return k}}
-      return 0;
+      return -1; // unknown
     })();
+
     const dates=[];const halfDays={};const entries=[];let type='PTO';const skipped=[];
     rows.forEach(row=>{
-      const rawDate=row[header[dateColIdx]]||row['dateddmmyyyy']||row['date']||row['leavedate']||(row._cells||[])[dateColIdx]||'';
+      // Get date value: try detected column, then common key names, then scan ALL cells
+      let rawDate='';
+      if(dateColIdx>=0)rawDate=(row._cells||[])[dateColIdx]||'';
+      if(!rawDate)rawDate=row['dateddmmyyyy']||row['date']||row['leavedate']||row['dateyyyyymmdd']||row['leavedateddmmyyyy']||'';
+      // Last resort: scan every cell for something that looks like a date
+      if(!rawDate&&row._cells){
+        for(const cell of row._cells){if(cell&&parseAnyDate(cell)){rawDate=cell;break}}
+      }
       const dateStr=parseAnyDate(rawDate);
       if(!dateStr){if(rawDate&&rawDate.trim())skipped.push(rawDate.trim());return}
       if(!dates.includes(dateStr))dates.push(dateStr);
-      const rt=(row['leavetypepto']||row['leavetype']||row['type']||row['leave']||'').toLowerCase().replace(/[^a-z]/g,'');
+      const rt=(row['leavetypepto']||row['leavetype']||row['type']||row['leave']||row['leavetype1']||'').toLowerCase().replace(/[^a-z]/g,'');
       if(rt&&typeMap[rt])type=typeMap[rt];
-      const rh=(row['halfdayfull']||row['halfday']||row['half']||'').toLowerCase();
-      if(/first|1st|^am$/.test(rh))halfDays[dateStr]='first';
-      else if(/second|2nd|^pm$/.test(rh))halfDays[dateStr]='second';
-      const project=(row['projectname']||row['project']||row['customer']||'').trim();
-      const backupRaw=(row['backuppersons']||row['backup']||row['backupowner']||row['dri']||'').trim();
-      const agenda=(row['agendanotes']||row['agenda']||row['notes']||'').trim();
+      const rh=(row['halfdayfull']||row['halfday']||row['half']||row['halfdayfullhalf']||'').toLowerCase();
+      if(/first|1st|^am$|firsthalf/.test(rh))halfDays[dateStr]='first';
+      else if(/second|2nd|^pm$|secondhalf/.test(rh))halfDays[dateStr]='second';
+      const project=(row['projectname']||row['project']||row['customer']||row['customername']||row['projectname1']||'').trim();
+      const backupRaw=(row['backuppersons']||row['backup']||row['backupowner']||row['dri']||row['backuppersonscommaseparated']||row['backupresource']||'').trim();
+      const agenda=(row['agendanotes']||row['agenda']||row['notes']||row['note']||row['agendanotes1']||'').trim();
       const persons=backupRaw?backupRaw.split(/[,;]+/).map(s=>s.trim()).filter(Boolean):[];
       const isNoCalls=!project&&!persons.length&&/no.{0,10}call/.test(agenda.toLowerCase());
       entries.push({date:dateStr,project,persons,agenda,isNoCalls});
@@ -1445,9 +1457,15 @@ function ImportLeaveModal({onClose,onImport,userName,allNames}){
         if(!rows||rows.length===0){setParseErr('File has a header row but no data rows were found.');setParsing(false);return}
         result=tabularToResult(rows,rawHeader||[],header||[]);
         if(result.dates.length===0){
-          const sample=((rows[0]&&rows[0]._cells?rows[0]._cells:null)||[]).slice(0,4).join(' | ');
+          // Build a detailed diagnostic showing exactly what was seen
+          const firstRow=rows[0]||{};
+          const colInfo=(rawHeader||[]).map((rh,i)=>{
+            const val=(firstRow._cells||[])[i]||'';
+            return rh+': "'+val.slice(0,20)+'"';
+          }).join(' | ');
           const sv=result.skipped.slice(0,4).join(', ');
-          setParseErr(`No valid dates found.${sv?` Values seen: "${sv}".`:''} First row: ${sample||'(empty)'}. Expected date format: DD-MM-YYYY (e.g. 10-06-2025).`);
+          const hint=sv?`Values tried as dates: "${sv}". `:'';
+          setParseErr(`No valid dates found. ${hint}Columns & first values: ${colInfo||'(none)'}. Date formats supported: DD-MM-YYYY, YYYY-MM-DD, "10 Jun 2025".`);
           setParsing(false);return;
         }
       }else{
