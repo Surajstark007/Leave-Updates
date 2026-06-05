@@ -78,8 +78,8 @@ const SU={'U076358T0Q5':'Dinesh MS','U037YB1SD6Y':'Sundeep','U072FRECZ41':'Balaj
 // ─── HELPERS ───
 const todayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const parseDate=s=>{if(!s)return null;const m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?new Date(+m[1],+m[2]-1,+m[3]):null};
-const fmtDate=ds=>{const d=parseDate(ds);return d?d.toLocaleDateString('en-US',{month:'short',day:'numeric'}):'?'};
-const fmtDateFull=ds=>{const d=parseDate(ds);return d?d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}):'?'};
+const fmtDate=ds=>{const d=parseDate(ds);if(!d)return'?';return String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+d.getFullYear()};
+const fmtDateFull=ds=>{const d=parseDate(ds);return d?d.toLocaleDateString('en-GB',{weekday:'long',month:'long',day:'numeric',year:'numeric'}):'?'};
 const isToday=ds=>ds===todayStr();
 const isFuture=ds=>ds>=todayStr();
 const isWeekday=ds=>{const d=parseDate(ds);if(!d)return false;return d.getDay()!==0&&d.getDay()!==6};
@@ -228,7 +228,7 @@ async function upsertLeave(entry,addedBy){
       backup:entry.backup,
       updated_at:new Date().toISOString(),
       added_by:addedBy,
-      ...(withHalfDays?{half_days:JSON.stringify(entry.halfDays||{})}:{})
+      ...(withHalfDays?{half_days:JSON.stringify(entry.halfDays||{}),date_types:JSON.stringify(entry.dateTypes||{})}:{})
     };
     if(existingData&&existingData.length>0){
       const r=await fetch(SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingData[0].id,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)});
@@ -338,23 +338,25 @@ function mergeCanvasAndUserLeaves(canvasMembers,userLeaves){
     try{dates=typeof ul.dates==='string'?JSON.parse(ul.dates):ul.dates||[]}catch{dates=[]}
     let halfDays={};
     try{halfDays=typeof ul.half_days==='string'?JSON.parse(ul.half_days):ul.half_days||{}}catch{halfDays={}}
+    let dateTypes={};
+    try{dateTypes=typeof ul.date_types==='string'?JSON.parse(ul.date_types):ul.date_types||{}}catch{dateTypes={}}
     // Keep all user-saved dates — do NOT filter by isFuture here.
     // The view filters handle display (upcoming/today/week/all).
     // Filtering here causes data to vanish after the leave date passes.
     const validDates=dates.filter(d=>d&&d.match(/^\d{4}-\d{2}-\d{2}$/));
     const idx=merged.findIndex(m=>m.name.toLowerCase()===ul.name.toLowerCase());
     if(idx>=0){
-      // Merge dates: keep canvas dates (already future-filtered on canvas side) + all user dates
       const mergedDates=new Set([...merged[idx].dates,...validDates]);
       merged[idx]={
         ...merged[idx],
         dates:[...mergedDates].sort(),
         backup:ul.backup||merged[idx].backup,
         type:ul.type||merged[idx].type,
-        halfDays:{...(merged[idx].halfDays||{}),...halfDays}
+        halfDays:{...(merged[idx].halfDays||{}),...halfDays},
+        dateTypes:{...(merged[idx].dateTypes||{}),...dateTypes}
       };
     }else{
-      merged.push({name:ul.name,dates:validDates.sort(),backup:ul.backup||'',type:ul.type||'PTO',raw:'',halfDays});
+      merged.push({name:ul.name,dates:validDates.sort(),backup:ul.backup||'',type:ul.type||'PTO',raw:'',halfDays,dateTypes});
     }
   }
   return merged.filter(m=>!deletedNames.has(m.name.toLowerCase()));
@@ -365,6 +367,8 @@ async function findUser(email){const d=await sbFetch('lt_user_logs?email=eq.'+en
 
 // ─── EXPORT UTILITIES ───
 function buildPrintHtml(members,title,generatedAt){
+  // Safely encode text for HTML — newlines → <br>, no HTML injection
+  const esc=s=>{if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>').replace(/\|/g,' · ')};
   const rows=[];
   for(const m of members){
     const hd=m.halfDays||{};
@@ -373,10 +377,20 @@ function buildPrintHtml(members,title,generatedAt){
     const totalDays=countLeaveDays(m.dates,hd);
     const projects=parseProjectEntries(m.backup||'');
     if(projects.length===0){
-      rows.push(`<tr><td>${m.name}</td><td><span class="badge badge-${m.type.toLowerCase().replace(' ','-')}">${m.type}</span></td><td>${dateRangeStr}</td><td style="text-align:center">${totalDays}</td><td>—</td><td>—</td><td>—</td></tr>`);
-    } else {
+      rows.push(`<tr><td>${esc(m.name)}</td><td><span class="badge badge-${m.type.toLowerCase().replace(/\s+/g,'-')}">${esc(m.type)}</span></td><td>${esc(dateRangeStr)}</td><td class="num">${totalDays}</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`);
+    }else{
       projects.forEach((p,pi)=>{
-        rows.push(`<tr><td${pi>0?' style="border-top:none;color:#9a8576"':''}>${pi===0?m.name:''}</td><td${pi>0?' style="border-top:none"':''}>${pi===0?`<span class="badge badge-${m.type.toLowerCase().replace(' ','-')}">${m.type}</span>`:''}</td><td${pi>0?' style="border-top:none"':''}>${pi===0?dateRangeStr:''}</td><td${pi>0?' style="border-top:none"':''} style="text-align:center">${pi===0?totalDays:''}</td><td>${p.date?fmtDateWithHalf(p.date,hd):'—'}</td><td>${p.project||'—'}</td><td>${p.persons.join(', ')||'—'}</td></tr>`);
+        const isFirst=pi===0;
+        rows.push(`<tr>
+<td${isFirst?'':' class="cont"'}>${isFirst?esc(m.name):''}</td>
+<td${isFirst?'':' class="cont"'}>${isFirst?`<span class="badge badge-${m.type.toLowerCase().replace(/\s+/g,'-')}">${esc(m.type)}</span>`:''}</td>
+<td${isFirst?'':' class="cont"'}>${isFirst?esc(dateRangeStr):''}</td>
+<td class="num${isFirst?'':' cont'}">${isFirst?totalDays:''}</td>
+<td class="mono">${p.date?esc(fmtDateWithHalf(p.date,hd)):'—'}</td>
+<td>${p.isNoCalls?'<span class="nocall">📵 No customer calls</span>':esc(p.project)||'—'}</td>
+<td>${esc(p.persons.join(', '))||'—'}</td>
+<td class="agenda">${esc(p.agenda)||'—'}</td>
+</tr>`);
       });
     }
   }
@@ -384,53 +398,63 @@ function buildPrintHtml(members,title,generatedAt){
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'DM Sans',sans-serif;padding:36px 40px;color:#2c1810;font-size:13px;line-height:1.6}
-.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:16px;border-bottom:3px solid #e8590c}
-.header h1{font-size:22px;font-weight:700;color:#2c1810}
-.header .meta{font-size:11px;color:#9a8576;margin-top:4px}
-.filters-used{background:#faf7f4;border:1px solid #e0d5c7;border-radius:8px;padding:10px 14px;margin-bottom:20px;font-size:12px;color:#6b5344}
-.filters-used strong{color:#e8590c}
-table{width:100%;border-collapse:collapse;margin-top:0}
-th{text-align:left;padding:9px 12px;background:#f7f3ee;font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:#9a8576;border-bottom:2px solid #e0d5c7;white-space:nowrap}
-td{padding:9px 12px;border-bottom:1px solid #e0d5c7;vertical-align:top}
-tr:last-child td{border-bottom:none}
+body{font-family:'DM Sans',sans-serif;padding:32px 36px;color:#2c1810;font-size:12.5px;line-height:1.5}
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:14px;border-bottom:3px solid #e8590c}
+h1{font-size:20px;font-weight:700;color:#2c1810}
+.meta{font-size:11px;color:#9a8576;margin-top:3px}
+.print-btn{padding:7px 16px;background:#e8590c;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;white-space:nowrap}
+.summary{display:flex;gap:20px;margin-bottom:20px;flex-wrap:wrap}
+.summary-item{background:#f7f3ee;border:1px solid #e0d5c7;border-radius:8px;padding:10px 16px;text-align:center;min-width:90px}
+.summary-item .val{font-size:20px;font-weight:700;color:#e8590c;font-family:monospace}
+.summary-item .lbl{font-size:10px;color:#9a8576;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:8px 10px;background:#f7f3ee;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#9a8576;border-bottom:2px solid #e0d5c7;white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid #e0d5c7;vertical-align:top;word-break:break-word}
+td.cont{border-top:none;color:#9a8576}
+td.num{text-align:center;font-family:monospace;font-weight:600}
+td.mono{font-family:monospace;font-size:11px;white-space:nowrap;color:#e8590c}
+td.agenda{max-width:260px;color:#6b5344;font-size:12px;line-height:1.55}
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:#fff}
 .badge-pto{background:#5c47e0}.badge-sick{background:#e03131}.badge-mixed{background:#e67700}.badge-business-travel,.badge-bt{background:#0c8599}.badge-other{background:#c2255c}
-.footer{margin-top:28px;padding-top:12px;border-top:1px solid #e0d5c7;font-size:10px;color:#9a8576;display:flex;justify-content:space-between}
-.summary{display:flex;gap:24px;margin-bottom:20px}
-.summary-item{background:#f7f3ee;border:1px solid #e0d5c7;border-radius:8px;padding:10px 16px;text-align:center}
-.summary-item .val{font-size:22px;font-weight:700;color:#e8590c;font-family:monospace}
-.summary-item .lbl{font-size:10px;color:#9a8576;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
-@media print{body{padding:20px 24px}.no-print{display:none}}
+.nocall{color:#0c8599;font-size:11.5px}
+.footer{margin-top:24px;padding-top:12px;border-top:1px solid #e0d5c7;font-size:10px;color:#9a8576;display:flex;justify-content:space-between}
+@media print{body{padding:16px 20px}.print-btn{display:none}td{font-size:11px}th{font-size:9px}}
 </style></head><body>
 <div class="header">
   <div>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-      <div style="width:32px;height:32px;border-radius:8px;background:#e8590c;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;font-weight:700">CX</div>
-      <h1>${title}</h1>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px">
+      <div style="width:30px;height:30px;border-radius:7px;background:#e8590c;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-weight:700">CX</div>
+      <h1>${esc(title)}</h1>
     </div>
     <div class="meta">CX Leave Tracker · Generated ${generatedAt}</div>
   </div>
-  <button class="no-print" onclick="window.print()" style="padding:8px 16px;background:#e8590c;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500">Print / Save PDF</button>
+  <button class="print-btn no-print" onclick="window.print()">Print / Save PDF</button>
 </div>
 <div class="summary">
   <div class="summary-item"><div class="val">${members.length}</div><div class="lbl">Employees</div></div>
-  <div class="summary-item"><div class="val">${members.reduce((a,m)=>a+m.dates.length,0)}</div><div class="lbl">Total Leave Days</div></div>
+  <div class="summary-item"><div class="val">${members.reduce((a,m)=>a+countLeaveDays(m.dates,m.halfDays||{}),0)}</div><div class="lbl">Total Days</div></div>
   <div class="summary-item"><div class="val">${members.filter(m=>m.dates.some(isToday)).length}</div><div class="lbl">On Leave Today</div></div>
 </div>
 <table>
-<thead><tr><th>Employee</th><th>Type</th><th>Leave Dates</th><th style="text-align:center">Days</th><th>Project Date</th><th>Project</th><th>Backup Owner</th></tr></thead>
-<tbody>${rows.join('')}</tbody>
+<thead><tr><th>Employee</th><th>Type</th><th>Leave Dates</th><th style="text-align:center">Days</th><th>Date</th><th>Project</th><th>Backup Owner</th><th>Agenda / Notes</th></tr></thead>
+<tbody>${rows.join('\n')}</tbody>
 </table>
-<div class="footer">
-  <span>CX Leave Tracker</span>
-  <span>${generatedAt}</span>
-</div>
+<div class="footer"><span>CX Leave Tracker</span><span>${generatedAt}</span></div>
 </body></html>`;
 }
 
 function buildCsvContent(members){
-  const csvEscape=v=>{const s=String(v||'');return s.includes(',')||s.includes('"')||s.includes('\n')?'"'+s.replace(/"/g,'""')+'"':s};
+  // csvCell: wraps value in quotes and escapes internal quotes; newlines within a cell
+  // are kept as literal \n inside quotes (RFC 4180 compliant — Excel/Sheets handle this correctly)
+  const csvCell=v=>{
+    const s=String(v==null?'':v)
+      .replace(/\r\n/g,'\n').replace(/\r/g,'\n') // normalize line endings
+      .replace(/\|/g,' · ');                      // pipe chars become · (avoid csv confusion)
+    // Always quote if contains comma, quote, newline, or leading/trailing space
+    if(s.includes(',')||s.includes('"')||s.includes('\n')||s!==s.trim())
+      return'"'+s.replace(/"/g,'""')+'"';
+    return s;
+  };
   const rows=[['Employee Name','Leave Type','Leave Date Range','Total Leave Days','Leave Dates (all)','Project Date','Project Name','Backup Owner(s)','Agenda / Notes']];
   for(const m of members){
     const hd=m.halfDays||{};
@@ -441,16 +465,25 @@ function buildCsvContent(members){
     const projects=parseProjectEntries(m.backup||'');
     if(projects.length===0){
       rows.push([m.name,m.type,dateRangeStr,totalDays,allDates,'','','','']);
-    } else {
+    }else{
       projects.forEach((p,pi)=>{
+        // Agenda: normalise — strip pipe prefixes ("Agenda: "), keep bullet lines together
+        const agendaClean=(p.agenda||'').replace(/^Agenda:\s*/i,'').trim();
         rows.push([
-          pi===0?m.name:'',pi===0?m.type:'',pi===0?dateRangeStr:'',pi===0?totalDays:'',pi===0?allDates:'',
-          p.date?fmtDateWithHalf(p.date,hd):'',p.project||'',p.persons.join(', ')||'',p.agenda||''
+          pi===0?m.name:'',
+          pi===0?m.type:'',
+          pi===0?dateRangeStr:'',
+          pi===0?totalDays:'',
+          pi===0?allDates:'',
+          p.date?fmtDateWithHalf(p.date,hd):'',
+          p.isNoCalls?'No customer calls':p.project||'',
+          p.persons.join(', ')||'',
+          agendaClean
         ]);
       });
     }
   }
-  return rows.map(r=>r.map(csvEscape).join(',')).join('\r\n');
+  return rows.map(r=>r.map(csvCell).join(',')).join('\r\n');
 }
 
 function downloadCsv(content,filename){
@@ -768,32 +801,34 @@ function ProjectsAgendaModal({members,userName,allNames,onClose}){
   };
 
   const handlePdf=()=>{
+    const esc=s=>{if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>').replace(/\|/g,' · ')};
     const rows=filteredTeam.map(e=>`<tr>
-      <td style="font-size:10px;color:#888">${e.source==='standalone'?'🗂️':'📅'}</td>
-      <td style="font-weight:600">${e.member||'—'}</td>
+      <td style="font-size:11px;color:#888;text-align:center">${e.source==='standalone'?'🗂️':e.source==='leave_sync'?'🔗':'📅'}</td>
+      <td style="font-weight:600">${esc(e.member)||'—'}</td>
       <td style="font-family:monospace;font-size:11px;white-space:nowrap;color:#e8590c">${e.date?fmtDate(e.date):'—'}</td>
-      <td style="font-weight:500;color:${e.isNoCalls?'#0c8599':'inherit'}">${e.isNoCalls?'📵 No calls':e.project||'—'}</td>
-      <td style="font-size:11px;color:#0c8599">${e.next_call||'—'}</td>
-      <td>${(e.backup||[]).join(', ')||'—'}</td>
-      <td style="color:#6b5344">${e.agenda||'—'}</td>
+      <td style="font-weight:500;color:${e.isNoCalls?'#0c8599':'inherit'}">${e.isNoCalls?'📵 No calls':esc(e.project)||'—'}</td>
+      <td style="font-size:11px;color:#0c8599;white-space:nowrap">${esc(e.next_call)||'—'}</td>
+      <td>${esc((e.backup||[]).join(', '))||'—'}</td>
+      <td style="color:#6b5344;max-width:220px;line-height:1.5">${esc(e.agenda)||'—'}</td>
     </tr>`).join('');
     const w=window.open('','_blank');
     w.document.write(`<!DOCTYPE html><html><head><title>Projects & Agenda — CX Leave Tracker</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'DM Sans',sans-serif;padding:32px 36px;color:#2c1810;font-size:13px;line-height:1.6}
-.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:14px;border-bottom:3px solid #e8590c}
-h1{font-size:20px;font-weight:700}.meta{font-size:11px;color:#9a8576;margin-top:3px}
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'DM Sans',sans-serif;padding:28px 32px;color:#2c1810;font-size:12px;line-height:1.55}
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:12px;border-bottom:3px solid #e8590c}
+h1{font-size:18px;font-weight:700}.meta{font-size:11px;color:#9a8576;margin-top:3px}
 .print-btn{padding:7px 14px;background:#e8590c;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12px}
 table{width:100%;border-collapse:collapse}
-th{text-align:left;padding:8px 10px;background:#f7f3ee;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#9a8576;border-bottom:2px solid #e0d5c7;white-space:nowrap}
-td{padding:8px 10px;border-bottom:1px solid #e0d5c7;vertical-align:top;font-size:12px}
-.footer{margin-top:24px;font-size:10px;color:#9a8576;border-top:1px solid #e0d5c7;padding-top:10px;display:flex;justify-content:space-between}
-@media print{.print-btn{display:none}}</style></head><body>
+th{text-align:left;padding:7px 9px;background:#f7f3ee;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:#9a8576;border-bottom:2px solid #e0d5c7;white-space:nowrap}
+td{padding:7px 9px;border-bottom:1px solid #e0d5c7;vertical-align:top;font-size:11.5px;word-break:break-word}
+td:last-child{max-width:220px}
+.footer{margin-top:20px;font-size:10px;color:#9a8576;border-top:1px solid #e0d5c7;padding-top:10px;display:flex;justify-content:space-between}
+@media print{.print-btn{display:none}td,th{font-size:10px;padding:5px 7px}}</style></head><body>
 <div class="header"><div><h1>📋 Projects &amp; Agenda</h1><div class="meta">CX Leave Tracker · ${generatedAt}</div></div>
 <button class="print-btn" onclick="window.print()">Print / Save PDF</button></div>
 <table><thead><tr><th></th><th>Employee</th><th>Date</th><th>Project</th><th>Next Call</th><th>Backup Owner</th><th>Agenda / Notes</th></tr></thead>
 <tbody>${rows}</tbody></table>
-<div class="footer"><span>CX Leave Tracker · Projects &amp; Agenda</span><span>${generatedAt}</span></div>
+<div class="footer"><span>🗂️ Standalone · 🔗 Leave-synced · 📅 Leave-linked</span><span>${generatedAt}</span></div>
 </body></html>`);
     w.document.close();
   };
@@ -970,206 +1005,467 @@ td{padding:8px 10px;border-bottom:1px solid #e0d5c7;vertical-align:top;font-size
 }
 
 
-// ─── IMPORT LEAVE MODAL (CSV / Excel) ───
-function ImportLeaveModal({onClose,onImport,userName}){
+// ─── INLINE PERSON PICKER (used in import preview backup column) ───
+// Compact chip-based person picker that fits inside a table cell.
+// Dropdown uses fixed positioning so it escapes table overflow clipping.
+function InlinePersonPicker({persons,allNames,onChange,iStyle}){
+  const[open,setOpen]=useState(false);
+  const[q,setQ]=useState('');
+  const[newName,setNewName]=useState('');
+  const[dropPos,setDropPos]=useState({top:0,left:0,width:320});
+  const triggerRef=useRef(null);
+  const dropRef=useRef(null);
+
+  // Recompute dropdown position whenever it opens
+  const openDropdown=()=>{
+    if(triggerRef.current){
+      const r=triggerRef.current.getBoundingClientRect();
+      const vpH=window.innerHeight;
+      const dropH=320; // expected dropdown height
+      // Open downward unless too close to bottom
+      const top=r.bottom+4+dropH>vpH?Math.max(4,r.top-dropH-4):r.bottom+4;
+      const width=Math.max(300,r.width);
+      // Keep left edge within viewport
+      const left=Math.min(r.left,window.innerWidth-width-8);
+      setDropPos({top,left,width});
+    }
+    setOpen(true);
+  };
+
+  // Close on outside click
+  useEffect(()=>{
+    if(!open)return;
+    const handler=e=>{
+      if(triggerRef.current&&!triggerRef.current.contains(e.target)&&
+         dropRef.current&&!dropRef.current.contains(e.target))
+        setOpen(false);
+    };
+    document.addEventListener('mousedown',handler);
+    return()=>document.removeEventListener('mousedown',handler);
+  },[open]);
+
+  const add=(name)=>{
+    const n=name.trim();
+    if(!n||persons.some(p=>p.toLowerCase()===n.toLowerCase()))return;
+    onChange([...persons,n]);
+    setQ('');setNewName('');
+  };
+  const remove=(name)=>onChange(persons.filter(p=>p.toLowerCase()!==name.toLowerCase()));
+
+  // Merge allNames with any already-selected persons so parsed names always appear
+  const knownNames=useMemo(()=>{
+    const all=new Set((allNames||[]).map(n=>n.toLowerCase()));
+    const extra=persons.filter(p=>!all.has(p.toLowerCase()));
+    return extra.length>0?[...(allNames||[]),...extra]:(allNames||[]);
+  },[allNames,persons]);
+
+  const filtered=knownNames.filter(n=>
+    !persons.some(p=>p.toLowerCase()===n.toLowerCase())&&
+    (!q||n.toLowerCase().includes(q.toLowerCase()))
+  );
+
+  return(
+    <div ref={triggerRef} style={{position:'relative',minWidth:0}}>
+      {/* Chip display + open trigger */}
+      <div
+        style={{display:'flex',flexWrap:'wrap',gap:3,alignItems:'center',
+          background:'var(--input-bg)',border:'1px solid '+(open?'var(--accent)':'var(--border)'),
+          borderRadius:5,padding:'3px 5px',cursor:'pointer',minHeight:26,transition:'border-color .15s'}}
+        onClick={openDropdown}
+      >
+        {persons.map(p=>(
+          <span key={p} style={{display:'inline-flex',alignItems:'center',gap:2,
+            background:'var(--chip-future-bg)',color:'var(--chip-future-text)',
+            border:'1px solid var(--chip-future-border)',borderRadius:999,
+            padding:'0 6px',fontSize:10,lineHeight:'18px',whiteSpace:'nowrap'}}>
+            {p}
+            <span onClick={ev=>{ev.stopPropagation();remove(p)}}
+              style={{cursor:'pointer',opacity:.6,marginLeft:1,fontSize:11,lineHeight:1}}>×</span>
+          </span>
+        ))}
+        {persons.length===0&&<span style={{fontSize:11,color:'var(--text3)'}}>Select or type…</span>}
+        <span style={{marginLeft:'auto',fontSize:10,color:'var(--text3)',flexShrink:0}}>▾</span>
+      </div>
+
+      {/* Fixed-position dropdown — escapes table cell clipping */}
+      {open&&typeof document!=='undefined'&&ReactDOM.createPortal(
+        <div ref={dropRef} style={{
+          position:'fixed',top:dropPos.top,left:dropPos.left,width:dropPos.width,
+          zIndex:9999,background:'var(--surface)',border:'1px solid var(--border)',
+          borderRadius:10,boxShadow:'0 8px 32px rgba(0,0,0,.18)',overflow:'hidden',
+          animation:'fadeIn .15s ease-out'
+        }}>
+          {/* Search */}
+          <div style={{padding:'8px 10px',borderBottom:'1px solid var(--border)',background:'var(--surface2)'}}>
+            <input autoFocus className="input" placeholder="Search team members…"
+              value={q} onChange={e=>setQ(e.target.value)}
+              onKeyDown={e=>{
+                if(e.key==='Enter'&&filtered.length>0){add(filtered[0]);setQ('')}
+                if(e.key==='Escape')setOpen(false);
+              }}
+              style={{fontSize:12.5,padding:'6px 10px'}}
+              onClick={ev=>ev.stopPropagation()}
+            />
+          </div>
+
+          {/* Members list */}
+          <div style={{maxHeight:200,overflowY:'auto'}}>
+            {filtered.length===0&&!q&&<div style={{padding:'10px 12px',fontSize:12,color:'var(--text3)',fontStyle:'italic'}}>All members already added</div>}
+            {filtered.length===0&&q&&<div style={{padding:'10px 12px',fontSize:12,color:'var(--text3)'}}>No match for "{q}"</div>}
+            {filtered.map(n=>(
+              <div key={n} onClick={()=>{add(n);setQ('')}}
+                style={{padding:'7px 12px',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:8,transition:'background .1s'}}
+                onMouseEnter={e=>e.currentTarget.style.background='var(--accent-light)'}
+                onMouseLeave={e=>e.currentTarget.style.background='transparent'}
+              >
+                <span style={{width:24,height:24,borderRadius:'50%',background:'var(--indigo-bg)',
+                  border:'1px solid var(--chip-future-border)',display:'inline-flex',alignItems:'center',
+                  justifyContent:'center',fontSize:11,color:'var(--indigo)',fontWeight:600,flexShrink:0}}>
+                  {n.charAt(0).toUpperCase()}
+                </span>
+                <span>{n}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Add new person */}
+          <div style={{padding:'8px 10px',borderTop:'1px solid var(--border)',background:'var(--surface2)'}}>
+            <div style={{fontSize:10.5,color:'var(--text3)',marginBottom:5,fontWeight:600,textTransform:'uppercase',letterSpacing:'.4px'}}>Add new person</div>
+            <div style={{display:'flex',gap:6}}>
+              <input className="input" placeholder="Type full name…"
+                value={newName} onChange={e=>setNewName(e.target.value)}
+                onKeyDown={e=>{
+                  if(e.key==='Enter'&&newName.trim()){add(newName);setOpen(false)}
+                  if(e.key==='Escape')setOpen(false);
+                }}
+                style={{fontSize:12.5,padding:'6px 10px',flex:1}}
+                onClick={ev=>ev.stopPropagation()}
+              />
+              <button className="btn btn-sm btn-primary"
+                onClick={()=>{if(newName.trim()){add(newName);setOpen(false)}}}
+                style={{flexShrink:0}}>Add</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+// ─── IMPORT LEAVE MODAL — accepts any file format ───
+function ImportLeaveModal({onClose,onImport,userName,allNames}){
   const[step,setStep]=useState('upload');
   const[parseErr,setParseErr]=useState('');
+  const[parseWarnings,setParseWarnings]=useState([]);
   const[parsed,setParsed]=useState(null);
   const[importing,setImporting]=useState(false);
   const[importLog,setImportLog]=useState([]);
   const[dragOver,setDragOver]=useState(false);
+  const[fileName,setFileName]=useState('');
+  const[parsing,setParsing]=useState(false);
   const fileRef=useRef(null);
 
+  // ── Template download ──
   const downloadTemplate=()=>{
-    const cols=['Date (YYYY-MM-DD)','Leave Type (PTO/Sick/Mixed/Business Travel)','Half Day (full/first/second)','Project Name','Backup Person(s) (comma separated)','Agenda / Notes'];
-    const rows=[cols,['2025-06-10','PTO','full','Shield Roofing','Sundeep, Balaje','Review Q2 pipeline and hand off open tickets'],['2025-06-11','PTO','full','Acme Corp','Kari','Weekly sync — Kari to cover'],['2025-06-12','PTO','first','','','No customer calls']];
+    const cols=['Date (DD-MM-YYYY)','Leave Type (PTO/Sick/Mixed/Business Travel)','Half Day (full/first/second)','Project Name','Backup Person(s) (comma separated)','Agenda / Notes'];
+    const rows=[cols,['10-06-2025','PTO','full','Shield Roofing','Sundeep, Balaje','Review Q2 pipeline and hand off open tickets'],['11-06-2025','PTO','full','Acme Corp','Kari','Weekly sync — Kari to cover'],['12-06-2025','PTO','first','','','No customer calls']];
     const csv=rows.map(r=>r.map(v=>{const s=String(v);return s.includes(',')||s.includes('"')?'"'+s.replace(/"/g,'""')+'"':s}).join(',')).join('\r\n');
     const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
     const url=URL.createObjectURL(blob);const a=document.createElement('a');
     a.href=url;a.download='cx-leave-import-template.csv';
-    document.body.appendChild(a);a.click();setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url)},100);
+    document.body.appendChild(a);a.click();setTimeout(()=>removeChild(a),100);
+    function removeChild(a){document.body.removeChild(a);URL.revokeObjectURL(url)}
   };
 
+  // ── Date parsers ──
+  const excelSerialToDate=(n)=>{
+    if(n<1000||n>100000)return null;
+    const d=new Date(Date.UTC(1900,0,1)+(n-2)*86400*1000);
+    return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+  };
+  const MONTHS={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12',
+    january:'01',february:'02',march:'03',april:'04',june:'06',july:'07',august:'08',september:'09',october:'10',november:'11',december:'12'};
+  const parseAnyDate=(raw)=>{
+    if(!raw)return null;
+    const s=String(raw).trim();
+    // DD-MM-YYYY / DD/MM/YYYY (preferred)
+    let m=s.match(/^(\d{1,2})[-\/\.](\d{1,2})[-\/\.](\d{4})$/);
+    if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+    // YYYY-MM-DD
+    m=s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+    if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+    // DD Mon YYYY / DD-Mon-YYYY / DD Month YYYY
+    m=s.match(/^(\d{1,2})[\s\-\/]([a-zA-Z]+)[\s\-\/](\d{2,4})$/);
+    if(m){const mn=MONTHS[m[2].toLowerCase()];const yr=m[3].length===2?'20'+m[3]:m[3];if(mn)return yr+'-'+mn+'-'+m[1].padStart(2,'0')}
+    // Mon DD YYYY / Month DD, YYYY
+    m=s.match(/^([a-zA-Z]+)[\s\-](\d{1,2})[,\s]+(\d{4})$/);
+    if(m){const mn=MONTHS[m[1].toLowerCase()];if(mn)return m[3]+'-'+mn+'-'+m[2].padStart(2,'0')}
+    // Excel serial
+    if(/^\d{5}$/.test(s))return excelSerialToDate(parseInt(s));
+    // ISO with time
+    m=s.match(/^(\d{4}-\d{2}-\d{2})T/);
+    if(m)return m[1];
+    // Short DD/MM/YY
+    m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/);
+    if(m)return'20'+m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+    return null;
+  };
+
+  // ── CSV/tabular parser — RFC 4180 compliant (preserves \n inside quoted cells) ──
   const parseCsvText=(text)=>{
-    // Normalize line endings and split
-    const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
-    // Find first non-empty line as header
-    const nonEmpty=lines.map((l,i)=>({l,i})).filter(x=>x.l.trim());
-    if(nonEmpty.length<2)return{error:'File is empty or has no data rows'};
-    const parseRow=(line)=>{
-      const cells=[];let cur='';let inQ=false;
-      for(let i=0;i<line.length;i++){
-        const c=line[i];
-        if(c==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++}else inQ=!inQ}
-        else if(c===','&&!inQ){cells.push(cur.trim());cur=''}
-        else cur+=c;
+    const normalized=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+    if(!normalized.trim())return{error:'File appears empty — no data rows found'};
+
+    // Detect separator from first line
+    const firstNewline=normalized.indexOf('\n');
+    const firstLine=firstNewline>=0?normalized.slice(0,firstNewline):normalized;
+    const sep=firstLine.includes('\t')?'\t':firstLine.includes(';')?';':',';
+
+    // Full RFC 4180 tokeniser — handles \n inside quoted fields
+    const parseAllRows=(src,s)=>{
+      const allRows=[];let row=[];let cur='';let inQ=false;
+      for(let i=0;i<src.length;i++){
+        const c=src[i];
+        if(inQ){
+          if(c==='"'&&src[i+1]==='"'){cur+='"';i++}           // escaped quote
+          else if(c==='"'){inQ=false}                          // closing quote
+          else cur+=c;                                         // content (including \n)
+        }else{
+          if(c==='"'){inQ=true}
+          else if(c===s){row.push(cur);cur=''}                 // field separator
+          else if(c==='\n'){row.push(cur);allRows.push(row);row=[];cur=''}  // row separator
+          else cur+=c;
+        }
       }
-      cells.push(cur.trim());return cells;
+      if(cur||row.length)row.push(cur);
+      if(row.some(c=>c.trim()))allRows.push(row);
+      return allRows;
     };
-    // Try comma first; if only 1 column try tab, then semicolon
-    const headerLine=nonEmpty[0].l;
-    let sep=',';
-    if(parseRow(headerLine).length<2){
-      if(headerLine.includes('\t'))sep='\t';
-      else if(headerLine.includes(';'))sep=';';
-    }
-    const parseRowSep=(line)=>{
-      if(sep===',')return parseRow(line);
-      return line.split(sep).map(c=>c.trim().replace(/^"|"$/g,''));
-    };
-    const rawHeader=parseRowSep(nonEmpty[0].l);
-    // Normalize header keys: lowercase, strip non-alphanumeric, keep for fuzzy matching
-    const header=rawHeader.map(h=>h.toLowerCase().replace(/[^a-z0-9]/g,''));
+
+    const allRows=parseAllRows(normalized,sep);
+    if(allRows.length<2)return{error:'File appears empty — no data rows found'};
+
+    const rawHeader=allRows[0].map(h=>h.trim());
+    const header=rawHeader.map(x=>x.toLowerCase().replace(/[^a-z0-9]/g,''));
     const rows=[];
-    for(let i=1;i<nonEmpty.length;i++){
-      const cells=parseRowSep(nonEmpty[i].l);
+    for(let i=1;i<allRows.length;i++){
+      const cells=allRows[i];
       if(cells.every(c=>!c.trim()))continue;
       const row={};
-      header.forEach((h,j)=>{row[h]=(cells[j]||'').trim()});
-      // Also store with original header for fallback
-      rawHeader.forEach((h,j)=>{row['_raw_'+h.toLowerCase()]=(cells[j]||'').trim()});
-      row['_cells']=cells; // positional fallback
+      // For agenda/notes fields: keep internal newlines, only trim leading/trailing whitespace
+      header.forEach((k,j)=>{
+        const raw=cells[j]||'';
+        // Preserve newlines inside agenda-type fields; trim edges
+        row[k]=raw.trim();
+      });
+      rawHeader.forEach((k,j)=>{row['_r_'+k.toLowerCase().trim()]=(cells[j]||'').trim()});
+      row['_cells']=cells;
       rows.push(row);
     }
     return{header,rawHeader,rows};
   };
 
-  // Convert Excel date serial number to YYYY-MM-DD
-  const excelSerialToDate=(serial)=>{
-    if(!serial||isNaN(serial))return null;
-    const n=Number(serial);
-    if(n<1000||n>100000)return null; // not a plausible serial
-    // Excel epoch: Jan 1 1900 = 1, with the 1900 leap year bug
-    const d=new Date(Date.UTC(1900,0,1)+(n-2)*86400*1000);
-    return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
-  };
-
-  // Parse a date string in any common format → YYYY-MM-DD or null
-  const parseAnyDate=(raw)=>{
-    if(!raw||!raw.trim())return null;
-    const s=raw.trim();
-    // YYYY-MM-DD or YYYY/MM/DD
-    let m=s.match(/^(\d{4})[-\/\.](\d{1,2})[-\/\.](\d{1,2})$/);
-    if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
-    // DD-MM-YYYY or DD/MM/YYYY (European)
-    m=s.match(/^(\d{1,2})[-\/\.](\d{1,2})[-\/\.](\d{4})$/);
-    if(m){
-      // Disambiguate: if first part >12 it must be day
-      const a=parseInt(m[1]),b=parseInt(m[2]);
-      if(a>12)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'); // DD/MM/YYYY
-      // Assume DD/MM/YYYY (common in India/UK)
-      return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
-    }
-    // MM/DD/YYYY (US)
-    m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if(m)return m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0');
-    // DD-Mon-YYYY or DD Mon YYYY (e.g. 10-Jun-2025)
-    const months={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
-    m=s.match(/^(\d{1,2})[-\s]([a-zA-Z]{3,})[-\s](\d{2,4})$/);
-    if(m){const mn=months[m[2].toLowerCase().slice(0,3)];const yr=m[3].length===2?'20'+m[3]:m[3];if(mn)return yr+'-'+mn+'-'+m[1].padStart(2,'0')}
-    // Excel serial number
-    if(/^\d{5}$/.test(s))return excelSerialToDate(parseInt(s));
-    // ISO with time: 2025-06-10T...
-    m=s.match(/^(\d{4}-\d{2}-\d{2})T/);
-    if(m)return m[1];
-    return null;
-  };
-
-  // Find the date column index — try header matching first, then scan first row for date-like values
-  const findDateColumnIdx=(header,rawHeader,firstRow)=>{
-    // Priority: header contains 'date'
-    const byName=header.findIndex(h=>h.includes('date'));
-    if(byName>=0)return byName;
-    // Try raw header
-    const byRaw=rawHeader.findIndex(h=>h.toLowerCase().includes('date'));
-    if(byRaw>=0)return byRaw;
-    // Scan first data row for a parseable date value
-    if(firstRow&&firstRow._cells){
-      for(let i=0;i<firstRow._cells.length;i++){
-        if(parseAnyDate(firstRow._cells[i]))return i;
-      }
-    }
-    return 0; // fallback: assume first column
-  };
-
-  const normaliseRows=(rows,rawHeader,header)=>{
-    const dates=[];const halfDays={};const entries=[];let type='PTO';
+  const tabularToResult=(rows,rawHeader,header)=>{
     const typeMap={'pto':'PTO','sick':'Sick','mixed':'Mixed','businesstravel':'Business Travel','bt':'Business Travel','business':'Business Travel'};
-
-    const dateColIdx=findDateColumnIdx(header,rawHeader,rows[0]);
-    const skipped=[];
-
+    const dateColIdx=(()=>{
+      const i=header.findIndex(h=>h.includes('date'));if(i>=0)return i;
+      const j=(rawHeader||[]).findIndex(h=>h.toLowerCase().includes('date'));if(j>=0)return j;
+      if(rows[0]){for(let k=0;k<(rows[0]._cells||[]).length;k++){if(parseAnyDate(rows[0]._cells[k]))return k}}
+      return 0;
+    })();
+    const dates=[];const halfDays={};const entries=[];let type='PTO';const skipped=[];
     rows.forEach(row=>{
-      // Get raw date value — try mapped key first, then positional
-      const dateKey=header[dateColIdx]||'';
-      const rawDate=row[dateKey]||row['dateyyyyymmdd']||row['date']||row['leavedate']||row['_cells']?.[dateColIdx]||'';
+      const rawDate=row[header[dateColIdx]]||row['dateddmmyyyy']||row['date']||row['leavedate']||(row._cells||[])[dateColIdx]||'';
       const dateStr=parseAnyDate(rawDate);
-      if(!dateStr){if(rawDate)skipped.push(rawDate);return}
+      if(!dateStr){if(rawDate&&rawDate.trim())skipped.push(rawDate.trim());return}
       if(!dates.includes(dateStr))dates.push(dateStr);
-
-      // Leave type — check multiple possible header keys
-      const rawType=(row['leavetypepto']||row['leavetype']||row['type']||row['leave']||'').trim().toLowerCase().replace(/[^a-z]/g,'');
-      if(rawType&&typeMap[rawType])type=typeMap[rawType];
-
-      // Half day
-      const rawHalf=(row['halfdayfull']||row['halfday']||row['half']||row['halfdayfullhalf']||'').trim().toLowerCase();
-      if(rawHalf==='first'||rawHalf==='1st'||rawHalf==='am'||rawHalf==='firsthalf')halfDays[dateStr]='first';
-      else if(rawHalf==='second'||rawHalf==='2nd'||rawHalf==='pm'||rawHalf==='secondhalf')halfDays[dateStr]='second';
-
-      // Project
-      const project=(row['projectname']||row['project']||row['customer']||row['customername']||'').trim();
-      const backupRaw=(row['backuppersons']||row['backup']||row['backuppersonscommaseparated']||row['backupowner']||row['dri']||row['backupresource']||'').trim();
-      const agenda=(row['agendanotes']||row['agenda']||row['notes']||row['note']||row['handoffnotes']||'').trim();
+      const rt=(row['leavetypepto']||row['leavetype']||row['type']||row['leave']||'').toLowerCase().replace(/[^a-z]/g,'');
+      if(rt&&typeMap[rt])type=typeMap[rt];
+      const rh=(row['halfdayfull']||row['halfday']||row['half']||'').toLowerCase();
+      if(/first|1st|^am$/.test(rh))halfDays[dateStr]='first';
+      else if(/second|2nd|^pm$/.test(rh))halfDays[dateStr]='second';
+      const project=(row['projectname']||row['project']||row['customer']||'').trim();
+      const backupRaw=(row['backuppersons']||row['backup']||row['backupowner']||row['dri']||'').trim();
+      const agenda=(row['agendanotes']||row['agenda']||row['notes']||'').trim();
       const persons=backupRaw?backupRaw.split(/[,;]+/).map(s=>s.trim()).filter(Boolean):[];
-      const isNoCalls=!project&&!persons.length&&(agenda.toLowerCase().includes('no customer call')||agenda.toLowerCase().includes('no call'));
+      const isNoCalls=!project&&!persons.length&&/no.{0,10}call/.test(agenda.toLowerCase());
       entries.push({date:dateStr,project,persons,agenda,isNoCalls});
     });
-
     dates.sort();
     return{dates,type,halfDays,entries,rowCount:rows.length,skipped};
   };
 
+  // ── Freeform text parser (for .txt, .doc, .docx, .rtf, .md, .pdf) ──
+  const parseFreeformText=(text)=>{
+    const warnings=[];
+    const dates=[];const halfDays={};const entries=[];
+    const typeMap={'pto':'PTO','sick':'Sick','sickleave':'Sick','mixed':'Mixed','businesstravel':'Business Travel','business':'Business Travel'};
+    let type='PTO';
+
+    // 1. Extract all date mentions anywhere in the document
+    const dateHits=new Map(); // dateStr → context line
+    const lines=text.split(/\n/).map(l=>l.trim());
+
+    // Scan every line for dates
+    lines.forEach(line=>{
+      if(!line)return;
+      // Try to find all date patterns in the line
+      const patterns=[
+        /\b(\d{1,2})[-\/\.](\d{1,2})[-\/\.](\d{4})\b/g,       // DD-MM-YYYY
+        /\b(\d{4})[-\/](\d{2})[-\/](\d{2})\b/g,                // YYYY-MM-DD
+        /\b(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{4})\b/gi,
+        /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})[,\s]+(\d{4})\b/gi,
+        /\b(\d{1,2})\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})\b/gi,
+      ];
+      patterns.forEach(re=>{
+        let m;re.lastIndex=0;
+        while((m=re.exec(line))!==null){
+          const ds=parseAnyDate(m[0]);
+          if(ds&&!dateHits.has(ds))dateHits.set(ds,line);
+        }
+      });
+    });
+
+    // 2. Detect leave type keywords
+    const fullText=text.toLowerCase();
+    for(const[key,val]of Object.entries(typeMap)){if(fullText.includes(key)){type=val;break}}
+
+    // 3. Detect half-day keywords
+    let halfDefault=null;
+    if(/first.half|morning.half|half.day.morning|am.half/.test(fullText))halfDefault='first';
+    else if(/second.half|afternoon.half|half.day.afternoon|pm.half/.test(fullText))halfDefault='second';
+
+    // 4. For each found date, extract surrounding context for project/backup/agenda
+    // Strategy: find the line containing the date and the next 3–5 non-empty lines
+    const contextWindow=5;
+    const sortedDates=[...dateHits.keys()].sort();
+    sortedDates.forEach(ds=>{
+      dates.push(ds);
+      if(halfDefault)halfDays[ds]=halfDefault;
+
+      const ctxLine=dateHits.get(ds)||'';
+      // Find its index in lines array
+      const lineIdx=lines.findIndex(l=>l.includes(ctxLine)||parseAnyDate(l));
+      const ctx=lines.slice(Math.max(0,lineIdx),Math.min(lines.length,lineIdx+contextWindow)).join(' ');
+
+      // Extract project — look for patterns like "Project: X", "Customer: X", or a capitalised name
+      let project='';
+      let m=ctx.match(/project[:\s]+([^\n,\.]{2,40})/i)||ctx.match(/customer[:\s]+([^\n,\.]{2,40})/i)||ctx.match(/client[:\s]+([^\n,\.]{2,40})/i)||ctx.match(/account[:\s]+([^\n,\.]{2,40})/i);
+      if(m)project=m[1].trim();
+
+      // Extract backup — look for "backup: X", "cover: X", "DRI: X", "@Name"
+      let persons=[];
+      const bkp=ctx.match(/backup[:\s]+([^\n,\.]{2,40})/i)||ctx.match(/cover(?:ed by|ing)[:\s]+([^\n,\.]{2,40})/i)||ctx.match(/dri[:\s]+([^\n,\.]{2,40})/i)||ctx.match(/poc[:\s]+([^\n,\.]{2,40})/i);
+      if(bkp)persons=bkp[1].split(/[,&]+/).map(s=>s.trim()).filter(Boolean);
+
+      // Extract agenda — "Agenda: X", "Notes: X", "Discussion: X"
+      let agenda='';
+      const ag=ctx.match(/agenda[:\s]+([^\n]{4,120})/i)||ctx.match(/notes[:\s]+([^\n]{4,120})/i)||ctx.match(/discuss[^\s]*[:\s]+([^\n]{4,120})/i)||ctx.match(/handoff[:\s]+([^\n]{4,120})/i);
+      if(ag)agenda=ag[1].trim();
+
+      // No-calls detection
+      const isNoCalls=/no.{0,10}call/.test(ctx.toLowerCase());
+
+      entries.push({date:ds,project,persons,agenda,isNoCalls});
+    });
+
+    if(dates.length===0){
+      return{error:'No dates found in the document. The app looked for formats like "10-06-2025", "10 June 2025", "Jun 10 2025". Please make sure dates are mentioned in the file.'};
+    }
+
+    if(dates.length>0&&entries.filter(e=>e.project).length===0){
+      warnings.push('No project names were found — you can add them in the editable preview below.');
+    }
+    return{dates,type,halfDays,entries,rowCount:dates.length,skipped:[],warnings};
+  };
+
+  // ── Extract text from various file formats ──
+  const extractText=async(file,ext)=>{
+    if(['csv','txt','md','rtf'].includes(ext)){
+      let t=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsText(file,'UTF-8')});
+      if(t.charCodeAt(0)===0xFEFF)t=t.slice(1);
+      // Strip RTF control words if needed
+      if(ext==='rtf')t=t.replace(/\{[^}]*\}|\\[a-z]+\d*\s?/g,' ').replace(/\s+/g,' ');
+      return{text:t,tabular:ext==='csv'};
+    }
+    if(['xlsx','xls'].includes(ext)){
+      if(!window.XLSX){
+        const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        await new Promise((res,rej)=>{s.onload=res;s.onerror=rej;document.head.appendChild(s)});
+      }
+      const buf=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsArrayBuffer(file)});
+      const wb=window.XLSX.read(buf,{type:'array',cellDates:true,dateNF:'dd-mm-yyyy'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      return{text:window.XLSX.utils.sheet_to_csv(ws,{dateNF:'dd-mm-yyyy'}),tabular:true};
+    }
+    if(ext==='docx'){
+      // Use mammoth.js for .docx text extraction
+      if(!window.mammoth){
+        const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+        await new Promise((res,rej)=>{s.onload=res;s.onerror=rej;document.head.appendChild(s)});
+      }
+      const buf=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsArrayBuffer(file)});
+      const result=await window.mammoth.extractRawText({arrayBuffer:buf});
+      return{text:result.value,tabular:false};
+    }
+    if(ext==='pdf'){
+      // Use pdf.js for text extraction
+      if(!window.pdfjsLib){
+        const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+        await new Promise((res,rej)=>{s.onload=res;s.onerror=rej;document.head.appendChild(s)});
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      }
+      const buf=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsArrayBuffer(file)});
+      const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
+      let text='';
+      for(let i=1;i<=pdf.numPages;i++){const pg=await pdf.getPage(i);const tc=await pg.getTextContent();text+=tc.items.map(t=>t.str).join(' ')+'\n';}
+      return{text,tabular:false};
+    }
+    if(ext==='doc'){
+      // .doc is binary — best effort: read as text and strip binary chars
+      const t=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsText(file,'windows-1252')});
+      const cleaned=t.replace(/[^\x20-\x7E\n\r\t]/g,' ').replace(/\s+/g,' ');
+      return{text:cleaned,tabular:false};
+    }
+    throw new Error('Unsupported file type: .'+ext+'. Supported: CSV, XLSX, XLS, TXT, DOCX, DOC, PDF, RTF, MD');
+  };
+
+  // ── Main file handler ──
   const handleFile=async(file)=>{
-    if(!file)return;setParseErr('');
+    if(!file)return;
+    setParseErr('');setParseWarnings([]);setParsing(true);setFileName(file.name);
     const ext=file.name.split('.').pop().toLowerCase();
     try{
-      let text='';
-      if(ext==='csv'||ext==='txt'){
-        // Try UTF-8 first, fall back to latin1 for Excel-exported CSVs
-        text=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsText(file,'UTF-8')});
-        // Strip UTF-8 BOM if present
-        if(text.charCodeAt(0)===0xFEFF)text=text.slice(1);
-      }else if(ext==='xlsx'||ext==='xls'){
-        if(!window.XLSX){
-          const s=document.createElement('script');
-          s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-          await new Promise((res,rej)=>{s.onload=res;s.onerror=rej;document.head.appendChild(s)});
+      const{text,tabular}=await extractText(file,ext);
+      let result;
+      if(tabular){
+        const{error,rows,rawHeader,header}=parseCsvText(text);
+        if(error){setParseErr(error);setParsing(false);return}
+        if(!rows||rows.length===0){setParseErr('File has a header row but no data rows were found.');setParsing(false);return}
+        result=tabularToResult(rows,rawHeader||[],header||[]);
+        if(result.dates.length===0){
+          const sample=((rows[0]&&rows[0]._cells?rows[0]._cells:null)||[]).slice(0,4).join(' | ');
+          const sv=result.skipped.slice(0,4).join(', ');
+          setParseErr(`No valid dates found.${sv?` Values seen: "${sv}".`:''} First row: ${sample||'(empty)'}. Expected date format: DD-MM-YYYY (e.g. 10-06-2025).`);
+          setParsing(false);return;
         }
-        const buf=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsArrayBuffer(file)});
-        const wb=window.XLSX.read(buf,{type:'array',cellDates:true,dateNF:'yyyy-mm-dd'});
-        const ws=wb.Sheets[wb.SheetNames[0]];
-        // Use sheet_to_csv with dateNF to get ISO dates, not serial numbers
-        text=window.XLSX.utils.sheet_to_csv(ws,{dateNF:'yyyy-mm-dd'});
-      }else{setParseErr('Unsupported file type. Use .csv, .xlsx, or .xls');return}
-
-      const{error,rows,rawHeader,header}=parseCsvText(text);
-      if(error){setParseErr(error);return}
-      if(!rows||rows.length===0){setParseErr('File has a header row but no data rows');return}
-
-      const result=normaliseRows(rows,rawHeader||[],header||[]);
-      if(result.dates.length===0){
-        // Give helpful diagnostics
-        const sample=rows[0]?JSON.stringify(rows[0]._cells||rows[0]).slice(0,200):'(no rows)';
-        const skippedNote=result.skipped.length>0?` Values seen in date column: ${result.skipped.slice(0,4).join(', ')}.`:'';
-        setParseErr(`No valid dates found.${skippedNote} First row values: ${sample}. Supported formats: YYYY-MM-DD, DD/MM/YYYY, DD-Mon-YYYY.`);
-        return;
+      }else{
+        const fr=parseFreeformText(text);
+        if(fr.error){setParseErr(fr.error);setParsing(false);return}
+        result=fr;
+        if(fr.warnings&&fr.warnings.length>0)setParseWarnings(fr.warnings);
       }
-      // Warn if some rows were skipped
-      if(result.skipped.length>0){
-        console.warn('Skipped date values:',result.skipped);
-      }
+      if(result.skipped&&result.skipped.length>0)
+        setParseWarnings(w=>[...w,`${result.skipped.length} row(s) skipped — unreadable date values: ${result.skipped.slice(0,3).join(', ')}`]);
       setParsed(result);setStep('preview');
-    }catch(e){setParseErr('Could not read file: '+e.message)}
+    }catch(e){setParseErr(e.message||'Could not read file')}
+    setParsing(false);
+  };
+
+  const triggerNewFile=()=>{
+    setParseErr('');setParseWarnings([]);setFileName('');setParsed(null);
+    if(fileRef.current){fileRef.current.value='';fileRef.current.click()}
   };
 
   const confirmImport=async()=>{
@@ -1183,84 +1479,215 @@ function ImportLeaveModal({onClose,onImport,userName}){
       if(e.agenda)s+=' | Agenda: '+e.agenda;
       return s;
     }).join('\n');
-    setImportLog(l=>[...l,'Parsed '+parsed.dates.length+' leave dates ('+parsed.type+')']);
+    setImportLog(l=>[...l,parsed.dates.length+' leave dates ('+parsed.type+')']);
     setImportLog(l=>[...l,parsed.entries.filter(e=>e.project||e.isNoCalls).length+' project / agenda entries']);
-    await onImport({name:userName,type:parsed.type,dates:parsed.dates,backup:backupStr,halfDays:parsed.halfDays});
+    await onImport({name:userName,type:parsed.type,dates:parsed.dates,backup:backupStr,halfDays:parsed.halfDays,dateTypes:parsed.dateTypes||{}});
     setImportLog(l=>[...l,'Saved to database ✓']);
     setImporting(false);setStep('done');
   };
 
-  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:640}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+  // Shared inline input style
+  const iStyle={width:'100%',background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:5,padding:'3px 6px',fontSize:11,color:'var(--text)',outline:'none'};
+
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:860,width:'96%',maxHeight:'92vh',display:'flex',flexDirection:'column',padding:0,overflow:'hidden'}}>
+    <div style={{padding:'18px 24px 14px',borderBottom:'1px solid var(--border)',flexShrink:0}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
       <div>
         <h3 style={{fontSize:17,fontWeight:600}}>📥 Import Leave from File</h3>
-        <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>Upload a CSV or Excel file to bulk-add leave dates, projects and agendas</div>
+        <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>Upload any file — CSV, Excel, Word, PDF, Notepad, or plain text</div>
       </div>
       <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
     </div>
+    </div>
+    <div style={{flex:1,overflowY:'auto',overflowX:'hidden',padding:'16px 24px',minHeight:0}}>
 
+    {/* ── STEP: UPLOAD ── */}
     {step==='upload'&&<div>
       <div style={{padding:'10px 14px',background:'var(--indigo-bg)',border:'1px solid rgba(92,71,224,.18)',borderRadius:10,marginBottom:14,display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
         <div>
-          <div style={{fontSize:12.5,fontWeight:600,color:'var(--indigo)'}}>Download the template first</div>
-          <div style={{fontSize:11.5,color:'var(--text2)',marginTop:2}}>Pre-filled with example rows and correct column names</div>
+          <div style={{fontSize:12.5,fontWeight:600,color:'var(--indigo)'}}>Structured files: use the template</div>
+          <div style={{fontSize:11.5,color:'var(--text2)',marginTop:1}}>For CSV/Excel — columns: Date · Type · Half Day · Project · Backup · Agenda</div>
         </div>
         <button className="btn btn-sm" onClick={downloadTemplate} style={{background:'var(--indigo)',color:'#fff',border:'none',flexShrink:0}}><Icon name="download" size={13}/> Template CSV</button>
       </div>
-      <div onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)} onDrop={e=>{e.preventDefault();setDragOver(false);const f=e.dataTransfer.files[0];if(f)handleFile(f)}} onClick={()=>fileRef.current&&fileRef.current.click()}
-        style={{border:'2px dashed',borderColor:dragOver?'var(--accent)':'var(--border)',borderRadius:12,padding:'32px 20px',textAlign:'center',cursor:'pointer',transition:'all .2s',background:dragOver?'var(--accent-light)':'var(--surface2)',marginBottom:14}}>
-        <div style={{fontSize:32,marginBottom:8}}>📂</div>
-        <div style={{fontSize:14,fontWeight:600,color:dragOver?'var(--accent)':'var(--text)',marginBottom:4}}>Drop file here, or click to browse</div>
-        <div style={{fontSize:12,color:'var(--text3)'}}>.csv · .xlsx · .xls</div>
-        <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,.txt" style={{display:'none'}} onChange={e=>handleFile(e.target.files[0])}/>
+
+      {/* Drop zone */}
+      <div onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)}
+        onDrop={e=>{e.preventDefault();setDragOver(false);const f=e.dataTransfer.files[0];if(f)handleFile(f)}}
+        onClick={()=>!parsing&&fileRef.current&&fileRef.current.click()}
+        style={{border:'2px dashed',borderColor:dragOver?'var(--accent)':parseErr?'var(--red)':'var(--border)',borderRadius:12,padding:'28px 20px',textAlign:'center',cursor:parsing?'wait':'pointer',transition:'all .2s',background:dragOver?'var(--accent-light)':parseErr?'var(--red-bg)':'var(--surface2)',marginBottom:12}}>
+        {parsing?<div>
+          <div className="spin" style={{width:28,height:28,border:'3px solid var(--border)',borderTopColor:'var(--accent)',borderRadius:'50%',margin:'0 auto 10px'}}/>
+          <div style={{fontSize:13,color:'var(--text2)'}}>Parsing {fileName}…</div>
+        </div>:<div>
+          <div style={{fontSize:28,marginBottom:6}}>{parseErr?'⚠️':'📂'}</div>
+          <div style={{fontSize:13.5,fontWeight:600,color:parseErr?'var(--red)':dragOver?'var(--accent)':'var(--text)',marginBottom:4}}>
+            {parseErr?'Upload failed — drop a new file or click to try again':'Drop any file here, or click to browse'}
+          </div>
+          <div style={{fontSize:11.5,color:'var(--text3)'}}>CSV · XLSX · XLS · DOCX · DOC · PDF · TXT · RTF · MD</div>
+          {fileName&&!parseErr&&<div style={{fontSize:11,color:'var(--text3)',marginTop:4}}>Last file: {fileName}</div>}
+        </div>}
+        <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,.txt,.docx,.doc,.pdf,.rtf,.md" style={{display:'none'}} onChange={e=>{if(e.target.files[0])handleFile(e.target.files[0])}}/>
       </div>
-      {parseErr&&<div style={{padding:'10px 14px',background:'var(--red-bg)',border:'1px solid var(--red-border)',borderRadius:8,fontSize:12.5,color:'var(--red)',marginBottom:12}}>⚠ {parseErr}</div>}
-      <div style={{fontSize:11.5,color:'var(--text3)'}}>
-        <div style={{fontWeight:600,color:'var(--text2)',marginBottom:6}}>Expected columns (header row required):</div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 16px'}}>
-          {[['Date','YYYY-MM-DD — required'],['Leave Type','PTO / Sick / Mixed / Business Travel'],['Half Day','full / first / second'],['Project Name','Customer or project name'],['Backup Person(s)','Comma-separated'],['Agenda / Notes','Handoff notes, topics']].map(([k,v])=>(
-            <div key={k}><span style={{color:'var(--text)',fontWeight:500}}>{k}:</span> {v}</div>
-          ))}
+
+      {/* Error panel */}
+      {parseErr&&<div style={{padding:'12px 14px',background:'var(--red-bg)',border:'1px solid var(--red-border)',borderRadius:10,marginBottom:12}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:10,flexWrap:'wrap'}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12.5,fontWeight:600,color:'var(--red)',marginBottom:4}}>⚠ Could not parse this file</div>
+            <div style={{fontSize:12,color:'var(--red)',lineHeight:1.55}}>{parseErr}</div>
+          </div>
+          <button className="btn btn-sm" onClick={triggerNewFile} style={{background:'var(--red)',color:'#fff',border:'none',flexShrink:0,whiteSpace:'nowrap'}}>
+            Try a different file
+          </button>
         </div>
+      </div>}
+
+      {/* Supported format hints */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 20px',fontSize:11,color:'var(--text3)',marginTop:4}}>
+        <div><span style={{color:'var(--text)',fontWeight:500}}>Structured (CSV/Excel):</span> columns detected automatically</div>
+        <div><span style={{color:'var(--text)',fontWeight:500}}>Freeform (Word/TXT/PDF):</span> dates & keywords extracted</div>
+        <div><span style={{color:'var(--text)',fontWeight:500}}>Date formats:</span> DD-MM-YYYY, YYYY-MM-DD, "10 Jun 2025"</div>
+        <div><span style={{color:'var(--text)',fontWeight:500}}>Keywords detected:</span> Project:, Backup:, Agenda:, No customer calls</div>
       </div>
     </div>}
 
+    {/* ── STEP: PREVIEW (editable) ── */}
     {step==='preview'&&parsed&&<div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:14}}>
+      {/* Summary row */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:10}}>
         {[{label:'Leave Dates',val:parsed.dates.length,c:'var(--accent)'},{label:'Project Entries',val:parsed.entries.filter(e=>e.project||e.isNoCalls).length,c:'var(--indigo)'},{label:'Leave Type',val:parsed.type,c:'var(--green)'}].map(s=>(
-          <div key={s.label} style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 12px',textAlign:'center'}}>
-            <div style={{fontSize:20,fontWeight:700,color:s.c,fontFamily:"'JetBrains Mono',monospace"}}>{s.val}</div>
-            <div style={{fontSize:10.5,color:'var(--text3)',marginTop:2}}>{s.label}</div>
+          <div key={s.label} style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 12px',textAlign:'center'}}>
+            <div style={{fontSize:18,fontWeight:700,color:s.c,fontFamily:"'JetBrains Mono',monospace"}}>{s.val}</div>
+            <div style={{fontSize:10,color:'var(--text3)',marginTop:2}}>{s.label}</div>
           </div>
         ))}
       </div>
-      <div style={{border:'1px solid var(--border)',borderRadius:10,overflow:'hidden',maxHeight:280,overflowY:'auto',marginBottom:14}}>
-        <table>
-          <thead><tr><th>Date</th><th>Half Day</th><th>Project</th><th>Backup</th><th>Agenda</th></tr></thead>
+
+      {/* Warnings */}
+      {parseWarnings.length>0&&<div style={{padding:'8px 12px',background:'var(--amber-bg)',border:'1px solid rgba(230,119,0,.25)',borderRadius:8,marginBottom:10,fontSize:12,color:'var(--amber)'}}>
+        {parseWarnings.map((w,i)=><div key={i}>⚠ {w}</div>)}
+      </div>}
+
+      {/* File / re-upload */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,flexWrap:'wrap',gap:8}}>
+        <div style={{fontSize:12,fontWeight:600,color:'var(--text2)'}}>Review &amp; edit before importing{fileName&&<span style={{fontWeight:400,color:'var(--text3)'}}> · {fileName}</span>}</div>
+        <div style={{display:'flex',gap:6}}>
+          <button className="btn btn-sm btn-secondary" onClick={()=>{setStep('upload');setParsed(null);setParseWarnings([])}} style={{fontSize:11}}>← Re-upload file</button>
+          <button className="btn btn-sm btn-secondary" onClick={()=>{
+            const nd=todayStr();
+            setParsed(p=>({...p,dates:[...p.dates,nd].sort(),entries:[...p.entries,{date:nd,project:'',persons:[],agenda:'',isNoCalls:false}],dateTypes:p.dateTypes||{}}));
+          }} style={{fontSize:11}}><Icon name="plus" size={11}/> Add row</button>
+        </div>
+      </div>
+
+      {/* Editable table — grows with rows; modal scroll handles overflow */}
+      <div style={{border:'1px solid var(--border)',borderRadius:10,overflow:'hidden',marginBottom:10}}>
+        <table style={{tableLayout:'fixed',width:'100%',borderCollapse:'separate',borderSpacing:0}}>
+          <thead><tr>
+            <th style={{width:110,position:'sticky',top:0,zIndex:2}}>Date <span style={{fontSize:9,fontWeight:400,color:'var(--text3)'}}>(DD-MM-YYYY)</span></th>
+            <th style={{width:68,position:'sticky',top:0,zIndex:2}}>Half Day</th>
+            <th style={{width:160,position:'sticky',top:0,zIndex:2}}>Leave Type</th>
+            <th style={{width:'18%',position:'sticky',top:0,zIndex:2}}>Project</th>
+            <th style={{width:'18%',position:'sticky',top:0,zIndex:2}}>Backup</th>
+            <th style={{position:'sticky',top:0,zIndex:2}}>Agenda / Notes</th>
+            <th style={{width:32,position:'sticky',top:0,zIndex:2}}></th>
+          </tr></thead>
           <tbody>
-            {parsed.dates.map(d=>{
-              const e=parsed.entries.find(x=>x.date===d)||{project:'',persons:[],agenda:'',isNoCalls:false};
-              const half=parsed.halfDays[d];
-              return(<tr key={d}>
-                <td style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:'nowrap',color:'var(--accent)'}}>{fmtDate(d)}</td>
-                <td style={{fontSize:11,color:'var(--text3)'}}>{half==='first'?'½ AM':half==='second'?'½ PM':'Full'}</td>
-                <td style={{fontSize:12,color:e.isNoCalls?'var(--cyan)':e.project?'var(--text)':'var(--text3)',fontStyle:e.project||e.isNoCalls?'normal':'italic'}}>{e.isNoCalls?'📵 No calls':e.project||'—'}</td>
-                <td style={{fontSize:11.5,color:'var(--text2)'}}>{e.persons.join(', ')||'—'}</td>
-                <td style={{fontSize:11,color:'var(--text3)',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.agenda||'—'}</td>
+            {parsed.dates.map((d,di)=>{
+              const eIdx=parsed.entries.findIndex(x=>x.date===d);
+              const e=eIdx>=0?parsed.entries[eIdx]:{project:'',persons:[],agenda:'',isNoCalls:false};
+              const half=parsed.halfDays[d]||'full';
+              const dt=(parsed.dateTypes&&parsed.dateTypes[d])||parsed.type||'PTO';
+              const typeColors={PTO:'var(--indigo)',Sick:'var(--red)','Business Travel':'var(--cyan)',Mixed:'var(--amber)',Other:'var(--pink)'};
+              const typeBg={PTO:'var(--indigo-bg)',Sick:'var(--red-bg)','Business Travel':'rgba(12,133,153,.08)',Mixed:'var(--amber-bg)',Other:'rgba(194,37,92,.08)'};
+              const upd=(field,val)=>setParsed(p=>{
+                const ne=[...p.entries];
+                if(eIdx>=0)ne[eIdx]={...ne[eIdx],[field]:val};
+                else ne.push({date:d,project:'',persons:[],agenda:'',isNoCalls:false,[field]:val});
+                return{...p,entries:ne};
+              });
+              const setDateType=(val)=>setParsed(p=>{
+                const ndt={...(p.dateTypes||{})};
+                if(val===p.type)delete ndt[d]; else ndt[d]=val;
+                return{...p,dateTypes:ndt};
+              });
+              return(<tr key={d+di}>
+                <td style={{padding:'4px 5px'}}>
+                  <input type="date" value={d} style={iStyle} onChange={ev=>{
+                    const nd=ev.target.value;if(!nd)return;
+                    setParsed(p=>{
+                      const nds=p.dates.map((x,i)=>i===di?nd:x).sort();
+                      const ne=p.entries.map(x=>x.date===d?{...x,date:nd}:x);
+                      const nh={...p.halfDays};if(nh[d]){nh[nd]=nh[d];delete nh[d]}
+                      const ndt={...(p.dateTypes||{})};if(ndt[d]){ndt[nd]=ndt[d];delete ndt[d]}
+                      return{...p,dates:nds,entries:ne,halfDays:nh,dateTypes:ndt};
+                    });
+                  }}/>
+                </td>
+                <td style={{padding:'4px 5px'}}>
+                  <select value={half} style={{...iStyle,appearance:'none',paddingRight:4}} onChange={ev=>setParsed(p=>{const h={...p.halfDays};ev.target.value==='full'?delete h[d]:h[d]=ev.target.value;return{...p,halfDays:h}})}>
+                    <option value="full">Full</option>
+                    <option value="first">½ AM</option>
+                    <option value="second">½ PM</option>
+                  </select>
+                </td>
+                <td style={{padding:'4px 5px'}}>
+                  <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
+                    {[['PTO','PTO'],['Sick','Sick'],['BT','Business Travel'],['Mix','Mixed'],['Other','Other']].map(([label,val])=>{
+                      const isActive=dt===val;
+                      return(<button key={val} onClick={()=>setDateType(val)}
+                        style={{padding:'2px 6px',borderRadius:999,fontSize:10,fontWeight:500,border:'1px solid',cursor:'pointer',transition:'all .1s',whiteSpace:'nowrap',
+                          borderColor:isActive?typeColors[val]:'var(--border)',
+                          background:isActive?typeBg[val]:'transparent',
+                          color:isActive?typeColors[val]:'var(--text3)'}}>
+                        {label}
+                      </button>);
+                    })}
+                  </div>
+                </td>
+                <td style={{padding:'4px 5px'}}><input value={e.project||''} placeholder="Project…" style={iStyle} onChange={ev=>upd('project',ev.target.value)}/></td>
+                <td style={{padding:'4px 5px',position:'relative'}}>
+                  <InlinePersonPicker
+                    persons={e.persons||[]}
+                    allNames={allNames||[]}
+                    onChange={persons=>upd('persons',persons)}
+                    iStyle={iStyle}
+                  />
+                </td>
+                <td style={{padding:'4px 5px'}}>
+                  <textarea value={e.agenda||''} placeholder="Agenda…"
+                    rows={Math.max(2,((e.agenda||'').match(/\n/g)||[]).length+1)}
+                    style={{...iStyle,resize:'vertical',minHeight:40,lineHeight:1.5,whiteSpace:'pre-wrap'}}
+                    onChange={ev=>upd('agenda',ev.target.value)}/>
+                </td>
+                <td style={{padding:'4px 3px',textAlign:'center'}}>
+                  <button onClick={()=>setParsed(p=>({...p,dates:p.dates.filter((_,i)=>i!==di),entries:p.entries.filter(x=>x.date!==d),halfDays:Object.fromEntries(Object.entries(p.halfDays).filter(([k])=>k!==d)),dateTypes:Object.fromEntries(Object.entries(p.dateTypes||{}).filter(([k])=>k!==d))}))}
+                    style={{width:22,height:22,borderRadius:4,border:'none',background:'var(--red-bg)',color:'var(--red)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',padding:0}}>
+                    <Icon name="x" size={11}/>
+                  </button>
+                </td>
               </tr>);
             })}
           </tbody>
         </table>
       </div>
-      <div style={{padding:'8px 12px',background:'var(--amber-bg)',border:'1px solid rgba(230,119,0,.25)',borderRadius:8,fontSize:12,color:'var(--amber)',marginBottom:14}}>
-        ⚠ This will save leave for <strong>{userName}</strong> for the {parsed.dates.length} dates shown. Existing leave dates will be merged, not overwritten.
-      </div>
-      <div style={{display:'flex',gap:8,justifyContent:'space-between'}}>
-        <button className="btn btn-secondary" onClick={()=>{setStep('upload');setParsed(null)}}>← Back</button>
-        <button className="btn btn-primary" onClick={confirmImport}>Confirm & Import</button>
+
+      <div style={{position:'sticky',bottom:0,background:'var(--modal-bg)',paddingTop:8,marginTop:4}}>
+        <div style={{padding:'7px 12px',background:'var(--amber-bg)',border:'1px solid rgba(230,119,0,.25)',borderRadius:8,fontSize:11.5,color:'var(--amber)',marginBottom:10}}>
+          ⚠ Importing for <strong>{userName}</strong> · {parsed.dates.length} date{parsed.dates.length!==1?'s':''} · existing leave will be merged, not overwritten
+        </div>
+        <div style={{display:'flex',gap:8,justifyContent:'space-between',alignItems:'center',flexWrap:'wrap'}}>
+          <button className="btn btn-secondary btn-sm" onClick={()=>{setStep('upload');setParsed(null);setParseWarnings([])}}>← Back</button>
+          <div style={{display:'flex',gap:8}}>
+            <button className="btn btn-sm btn-secondary" onClick={triggerNewFile} style={{fontSize:12}}>Upload different file</button>
+            <button className="btn btn-primary" onClick={confirmImport} disabled={parsed.dates.length===0}>Confirm &amp; Import</button>
+          </div>
+        </div>
       </div>
     </div>}
 
+    {/* ── STEP: IMPORTING / DONE ── */}
     {(step==='importing'||step==='done')&&<div style={{textAlign:'center',padding:'24px 0'}}>
       {step==='importing'&&<div className="spin" style={{width:36,height:36,border:'3px solid var(--border)',borderTopColor:'var(--accent)',borderRadius:'50%',margin:'0 auto 16px'}}/>}
       {step==='done'&&<div style={{fontSize:36,marginBottom:12}}>✅</div>}
@@ -1270,8 +1697,13 @@ function ImportLeaveModal({onClose,onImport,userName}){
       </div>
       {step==='done'&&<button className="btn btn-primary" onClick={onClose}>Done</button>}
     </div>}
+
+    </div>{/* end scrollable content */}
+    {/* Hidden file input for re-upload */}
+    {step!=='upload'&&<input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,.txt,.docx,.doc,.pdf,.rtf,.md" style={{display:'none'}} onChange={e=>{if(e.target.files[0]){setParsed(null);setStep('upload');setTimeout(()=>handleFile(e.target.files[0]),50)}}}/>}
   </div></div>);
 }
+
 
 function getAutoReplyText(name,dates){
   const sorted=[...dates].sort();const ranges=groupConsecutiveDates(sorted);
@@ -1337,8 +1769,10 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
   const[name]=useState(editData?editData.name:(userName||''));
   const[type,setType]=useState(editData?editData.type:'PTO');
   const[dates,setDates]=useState(editData?[...editData.dates]:[]);
-  // halfDays: {dateStr: 'first'|'second'|'full'}  — only stored for non-full days
+  // halfDays: {dateStr: 'first'|'second'|'full'}
   const[halfDays,setHalfDays]=useState(()=>editData&&editData.halfDays?{...editData.halfDays}:{});
+  // dateTypes: {dateStr: 'PTO'|'Sick'|'Business Travel'|'Mixed'|'Other'} — per-date override
+  const[dateTypes,setDateTypes]=useState(()=>editData&&editData.dateTypes?{...editData.dateTypes}:{});
   const[rangeStart,setRangeStart]=useState('');
   const[rangeEnd,setRangeEnd]=useState('');
   const[dateInput,setDateInput]=useState('');
@@ -1346,6 +1780,24 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
   const[tab,setTab]=useState('dates');
   const[saveErr,setSaveErr]=useState('');
   const[editFilter,setEditFilter]=useState({date:'',project:''});
+
+  const setDateType=(dateStr,val)=>setDateTypes(dt=>{
+    const n={...dt};
+    if(!val||val===type)delete n[dateStr]; // if same as default, no need to store
+    else n[dateStr]=val;
+    return n;
+  });
+
+  // Compute effective type for a date
+  const effectiveType=(dateStr)=>dateTypes[dateStr]||type;
+
+  // Auto-update the overall type badge when dates have mixed types
+  const uniqueTypes=useMemo(()=>{
+    if(dates.length===0)return new Set([type]);
+    const s=new Set(dates.map(d=>dateTypes[d]||type));
+    return s;
+  },[dates,dateTypes,type]);
+  const displayType=uniqueTypes.size>1?'Mixed':[...uniqueTypes][0]||type;
 
   const setHalfDay=(dateStr,val)=>setHalfDays(hd=>{
     const n={...hd};
@@ -1357,7 +1809,7 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
   // noCalls: set of dateStrs where user says no customer calls
   const[noCalls,setNoCalls]=useState(()=>{
     // On edit, restore from backup entries tagged __NO_CALLS__
-    if(!editData?.backup)return new Set();
+    if(!(editData&&editData.backup))return new Set();
     const s=new Set();
     editData.backup.split('\n').forEach(line=>{
       const m=line.match(/^\[(\d{4}-\d{2}-\d{2})\]\s*__NO_CALLS__/);
@@ -1368,7 +1820,7 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
 
   // Load previous entries from editData, filtering out __NO_CALLS__ sentinels
   const parseInitialEntries=()=>{
-    if(!editData?.backup)return[];
+    if(!(editData&&editData.backup))return[];
     return parseProjectEntries(editData.backup)
       .filter(p=>p.project!=='__NO_CALLS__')
       .map(p=>({...p,newPerson:'',showPicker:false,pickerQ:''}));
@@ -1380,7 +1832,7 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
   const previousEntries=useMemo(()=>{
     if(!allUserData)return[];
     const myRecord=allUserData.find(m=>m.name.toLowerCase()===name.toLowerCase());
-    if(!myRecord?.backup)return[];
+    if(!myRecord||!myRecord.backup)return[];
     return parseProjectEntries(myRecord.backup).filter(p=>p.project&&p.project!=='__NO_CALLS__');
   },[allUserData,name]);
 
@@ -1458,6 +1910,7 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
     setEntries(e=>e.filter(en=>en.date!==dateStr));
     setNoCalls(s=>{const n=new Set(s);n.delete(dateStr);return n});
     setHalfDays(hd=>{const n={...hd};delete n[dateStr];return n});
+    setDateTypes(dt=>{const n={...dt};delete n[dateStr];return n});
   };
 
   const filteredEntries=useMemo(()=>{
@@ -1494,7 +1947,7 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
       setTab('projects');
       return;
     }
-    onSave({name:name.trim(),type,dates,backup:buildFinalBackup(),halfDays});
+    onSave({name:name.trim(),type:displayType,dates,backup:buildFinalBackup(),halfDays,dateTypes});
   };
 
   const lbl={fontSize:12,color:'var(--text2)',marginBottom:4,display:'block',fontWeight:500};
@@ -1512,9 +1965,10 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
     {editData&&<div style={{fontSize:12,color:'var(--text2)',marginBottom:12,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)'}}>Editing leave for <strong>{editData.name}</strong> — you can also edit previous project agenda below.</div>}
     <div style={{marginBottom:14,padding:'8px 12px',background:'var(--surface2)',borderRadius:8,border:'1px solid var(--border)',fontSize:14,fontWeight:600}}>{name||userName||'You'}</div>
 
-    <label style={lbl}>Leave Type</label>
-    <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
+    <label style={lbl}>Default Leave Type <span style={{fontSize:10.5,color:'var(--text3)',fontWeight:400}}>(applies to all dates — override per date below)</span></label>
+    <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
       {['PTO','Sick','Business Travel','Mixed','Other'].map(t=>(<button key={t} onClick={()=>setType(t)} style={{padding:'5px 14px',borderRadius:999,fontSize:12,fontWeight:500,border:'1px solid',borderColor:type===t?'var(--accent)':'var(--border)',background:type===t?'var(--accent-light)':'transparent',color:type===t?'var(--accent)':'var(--text2)',cursor:'pointer',transition:'all .15s'}}>{t}</button>))}
+      {uniqueTypes.size>1&&<span style={{fontSize:11,color:'var(--amber)',marginLeft:4}}>⚠ Mixed — dates have different types</span>}
     </div>
 
     {/* Tab switcher with completion status */}
@@ -1558,46 +2012,66 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
 
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
         <span style={{fontSize:11.5,color:'var(--text2)',fontWeight:500}}>{dates.length} date{dates.length!==1?'s':''} · {weekdays.length} weekday{weekdays.length!==1?'s':''} · <span style={{color:'var(--accent)'}}>{countLeaveDays(dates,halfDays)} leave day{countLeaveDays(dates,halfDays)!==1?'s':''}</span></span>
-        {dates.length>0&&<button className="btn btn-sm btn-danger" onClick={()=>{setDates([]);setEntries([]);setNoCalls(new Set());setHalfDays({})}} style={{fontSize:10,padding:'2px 8px'}}>Clear all</button>}
-      </div>
-      <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:10,minHeight:24}}>
-        {dates.length===0?<span style={{fontSize:12,color:'var(--text3)',fontStyle:'italic'}}>No dates added yet</span>:dates.map(d=>{
-          const hd=halfDays[d];
-          return(<span key={d} className={'chip '+(isToday(d)?'chip-today':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5,gap:3}}>
-            {fmtDate(d)}
-            {!isWeekday(d)&&<span style={{fontSize:9,opacity:.6}}> wknd</span>}
-            {hd&&hd!=='full'&&<span style={{fontSize:9.5,background:'rgba(255,255,255,.3)',borderRadius:4,padding:'0 4px',marginLeft:2,fontFamily:'sans-serif'}}>{hd==='first'?'AM':'PM'}</span>}
-            <span style={{cursor:'pointer',marginLeft:2,opacity:.6}} onClick={()=>deleteDateEntry(d)}>×</span>
-          </span>);
-        })}
+        {dates.length>0&&<button className="btn btn-sm btn-danger" onClick={()=>{setDates([]);setEntries([]);setNoCalls(new Set());setHalfDays({});setDateTypes({})}} style={{fontSize:10,padding:'2px 8px'}}>Clear all</button>}
       </div>
 
-      {/* Half-day picker — shown when there are weekday dates */}
-      {weekdays.length>0&&<div style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:'10px 12px',marginBottom:10}}>
-        <div style={{fontSize:11.5,fontWeight:600,color:'var(--text2)',marginBottom:8}}>Half-day settings <span style={{fontSize:10,color:'var(--text3)',fontWeight:400}}>(optional — set per weekday if partial leave)</span></div>
-        <div style={{display:'flex',flexDirection:'column',gap:5}}>
-          {weekdays.map(d=>{
-            const hd=halfDays[d]||'full';
-            return(<div key={d} style={{display:'flex',alignItems:'center',gap:10,padding:'5px 8px',background:'var(--surface)',borderRadius:7,border:'1px solid var(--border)'}}>
-              <span style={{fontSize:11.5,fontFamily:"'JetBrains Mono',monospace",color:'var(--accent)',minWidth:58,flexShrink:0}}>{fmtDate(d)}</span>
-              <span style={{fontSize:11,color:'var(--text3)',flex:1}}>{new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'short'})}</span>
-              <div style={{display:'flex',gap:4}}>
-                {['full','first','second'].map(v=>(
-                  <button key={v} onClick={()=>setHalfDay(d,v)} style={{padding:'3px 9px',borderRadius:6,fontSize:11,fontWeight:500,border:'1px solid',cursor:'pointer',transition:'all .12s',
-                    borderColor:hd===v?'var(--accent)':'var(--border)',
-                    background:hd===v?'var(--accent)':'transparent',
-                    color:hd===v?'#fff':'var(--text2)'}}>
+      {dates.length===0
+        ?<div style={{fontSize:12,color:'var(--text3)',fontStyle:'italic',marginBottom:10,padding:'8px 0'}}>No dates added yet</div>
+        :<div style={{display:'flex',flexDirection:'column',gap:3,marginBottom:10}}>
+          {/* Column headers */}
+          <div style={{display:'grid',gridTemplateColumns:'90px 1fr 1fr 24px',gap:6,padding:'2px 6px'}}>
+            <div style={{fontSize:10,color:'var(--text3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.4px'}}>Date</div>
+            <div style={{fontSize:10,color:'var(--text3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.4px'}}>Leave Type</div>
+            <div style={{fontSize:10,color:'var(--text3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.4px'}}>Half Day</div>
+            <div/>
+          </div>
+          {dates.map(d=>{
+            const halfVal=halfDays[d]||'full';
+            const dt=dateTypes[d]||type;
+            const typeColors={PTO:'var(--indigo)',Sick:'var(--red)','Business Travel':'var(--cyan)',Mixed:'var(--amber)',Other:'var(--pink)'};
+            const typeBg={PTO:'var(--indigo-bg)',Sick:'var(--red-bg)','Business Travel':'rgba(12,133,153,.08)',Mixed:'var(--amber-bg)',Other:'rgba(194,37,92,.08)'};
+            const isWd=isWeekday(d);
+            return(<div key={d} style={{display:'grid',gridTemplateColumns:'90px 1fr 1fr 24px',gap:6,alignItems:'center',padding:'5px 6px',background:'var(--surface2)',borderRadius:7,border:'1px solid var(--border)'}}>
+              {/* Date */}
+              <div>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11.5,color:isToday(d)?'var(--red)':'var(--accent)',fontWeight:600}}>{fmtDate(d)}</span>
+                {!isWd&&<span style={{fontSize:9,color:'var(--text3)',marginLeft:4}}>wknd</span>}
+              </div>
+              {/* Leave Type — pill selector */}
+              <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
+                {[['PTO','PTO'],['Sick','Sick'],['BT','Business Travel'],['Mix','Mixed'],['Other','Other']].map(([label,val])=>{
+                  const isActive=dt===val;
+                  return(<button key={val} onClick={()=>setDateType(d,val)}
+                    style={{padding:'2px 7px',borderRadius:999,fontSize:10,fontWeight:500,border:'1px solid',cursor:'pointer',transition:'all .1s',whiteSpace:'nowrap',
+                      borderColor:isActive?typeColors[val]:'var(--border)',
+                      background:isActive?typeBg[val]:'transparent',
+                      color:isActive?typeColors[val]:'var(--text3)'}}>
+                    {label}
+                  </button>);
+                })}
+              </div>
+              {/* Half Day — only for weekdays */}
+              <div style={{display:'flex',gap:3}}>
+                {isWd?['full','first','second'].map(v=>(
+                  <button key={v} onClick={()=>setHalfDay(d,v)}
+                    style={{padding:'2px 7px',borderRadius:6,fontSize:10,fontWeight:500,border:'1px solid',cursor:'pointer',transition:'all .1s',
+                      borderColor:halfVal===v?'var(--accent)':'var(--border)',
+                      background:halfVal===v?'var(--accent)':'transparent',
+                      color:halfVal===v?'#fff':'var(--text3)'}}>
                     {v==='full'?'Full':v==='first'?'½ AM':'½ PM'}
                   </button>
-                ))}
+                )):<span style={{fontSize:10,color:'var(--text3)',fontStyle:'italic'}}>—</span>}
               </div>
+              {/* Delete */}
+              <button onClick={()=>deleteDateEntry(d)}
+                style={{width:22,height:22,borderRadius:4,border:'none',background:'transparent',color:'var(--text3)',cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',padding:0}}
+                title="Remove date">×</button>
             </div>);
           })}
-        </div>
-        {Object.values(halfDays).some(v=>v&&v!=='full')&&<div style={{fontSize:11,color:'var(--amber)',marginTop:8}}>
-          ⚠ Half-days count as 0.5 days each. Total: <strong>{countLeaveDays(dates,halfDays)} leave days</strong>
+          {Object.values(halfDays).some(v=>v&&v!=='full')&&<div style={{fontSize:11,color:'var(--amber)',padding:'2px 6px'}}>
+            ⚠ Half-days count as 0.5. Total: <strong>{countLeaveDays(dates,halfDays)} leave days</strong>
+          </div>}
         </div>}
-      </div>}
 
       {weekdays.length>0&&<div style={{display:'flex',alignItems:'center',gap:6,fontSize:11}}>
         <span style={{color:'var(--green)'}}>✓ {weekdays.length} weekday{weekdays.length!==1?'s':''} selected</span>
@@ -1768,6 +2242,7 @@ function App(){
   const[showBulkExport,setShowBulkExport]=useState(false);
   const[showProjectsAgenda,setShowProjectsAgenda]=useState(false);
   const[showImport,setShowImport]=useState(false);
+  const[expandedDates,setExpandedDates]=useState(new Set());
   const[refreshing,setRefreshing]=useState(false);
   const toast=(msg,type='info')=>{const id=Date.now();setToasts(t=>[...t,{id,msg,type}]);setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),4000)};
 
@@ -1841,16 +2316,18 @@ function App(){
   };
 
   const handleSaveLeave=async(entry)=>{
-    // Do NOT filter by isFuture — user may save today's leave or back-dated entries
     const savedDates=[...new Set(entry.dates)].filter(d=>d&&d.match(/^\d{4}-\d{2}-\d{2}$/)).sort();
     const savedHalfDays=entry.halfDays||{};
     const cleanHalfDays={};
     savedDates.forEach(d=>{if(savedHalfDays[d]&&savedHalfDays[d]!=='full')cleanHalfDays[d]=savedHalfDays[d]});
+    // Clean dateTypes: only keep entries for saved dates
+    const rawDateTypes=entry.dateTypes||{};
+    const cleanDateTypes={};
+    savedDates.forEach(d=>{if(rawDateTypes[d])cleanDateTypes[d]=rawDateTypes[d]});
 
-    const finalEntry={...entry,dates:savedDates,halfDays:cleanHalfDays};
+    const finalEntry={...entry,dates:savedDates,halfDays:cleanHalfDays,dateTypes:cleanDateTypes};
     const wasEditing=editingIdx!==null;
 
-    // 1. Optimistically update local state immediately so UI shows data right away
     if(wasEditing){
       setData(d=>d.map((m,i)=>i===editingIdx?{...m,...finalEntry}:m));
       setEditingIdx(null);
@@ -1860,17 +2337,17 @@ function App(){
         setData(d=>d.map((m,i)=>{
           if(i!==ei)return m;
           const mg=new Set([...m.dates,...savedDates]);
-          return{...m,dates:[...mg].sort(),backup:finalEntry.backup||m.backup,type:finalEntry.type||m.type,halfDays:{...(m.halfDays||{}),...cleanHalfDays}};
+          return{...m,dates:[...mg].sort(),backup:finalEntry.backup||m.backup,type:finalEntry.type||m.type,halfDays:{...(m.halfDays||{}),...cleanHalfDays},dateTypes:{...(m.dateTypes||{}),...cleanDateTypes}};
         }));
       }else{
-        setData(d=>[...d,{name:finalEntry.name,dates:savedDates,backup:finalEntry.backup,type:finalEntry.type,raw:'',halfDays:cleanHalfDays}]);
+        setData(d=>[...d,{name:finalEntry.name,dates:savedDates,backup:finalEntry.backup,type:finalEntry.type,raw:'',halfDays:cleanHalfDays,dateTypes:cleanDateTypes}]);
       }
     }
     setShowAddLeave(false);
 
     // 2. Persist to Supabase and confirm
     try{
-      await upsertLeave(finalEntry,user?.email||'');
+      await upsertLeave(finalEntry,(user&&user.email)||'');
       // Sync project entries into the master lt_projects table
       syncLeaveProjectsToMaster(finalEntry.name,finalEntry.backup).catch(e=>console.warn('sync projects:',e.message));
       // 3. Reload from DB to confirm data is actually there
@@ -1971,13 +2448,28 @@ function App(){
                 <tr className="fade-in">
                   <td rowSpan={rowSpan} style={{fontWeight:600,whiteSpace:'nowrap',fontSize:13.5,verticalAlign:'top'}}>{m.name}{isMe&&<span style={{fontSize:10,color:'var(--accent)',marginLeft:4}}>(you)</span>}</td>
                   <td rowSpan={rowSpan} style={{verticalAlign:'top'}}><span className={'badge '+(tbc[m.type]||'badge-none')}>{m.type}</span></td>
-                  <td rowSpan={rowSpan} style={{maxWidth:260,verticalAlign:'top'}}><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{dc===0?<span style={{color:'var(--text3)',fontSize:12}}>No upcoming</span>:m.dates.slice(0,10).map(d=>{
-                    const half=hd[d];
-                    return(<span key={d} className={'chip '+(isToday(d)?'chip-today pulse':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5,gap:3}}>
-                      {fmtDate(d)}
-                      {half&&half!=='full'&&<span style={{fontSize:9,background:'rgba(255,255,255,.25)',borderRadius:3,padding:'0 3px',fontFamily:'sans-serif'}}>{half==='first'?'AM':'PM'}</span>}
-                    </span>);
-                  })}{dc>10&&<span className="chip chip-gray" style={{fontSize:10}}>+{dc-10}</span>}</div></td>
+                  <td rowSpan={rowSpan} style={{maxWidth:280,verticalAlign:'top'}}><div style={{display:'flex',flexWrap:'wrap',gap:4,alignItems:'center'}}>{dc===0?<span style={{color:'var(--text3)',fontSize:12}}>No upcoming</span>:(() => {
+                    const isExpanded=expandedDates.has(m.name);
+                    const visible=isExpanded?m.dates:m.dates.slice(0,10);
+                    const overflow=dc-10;
+                    return(<>{visible.map(d=>{
+                      const half=hd[d];
+                      return(<span key={d} className={'chip '+(isToday(d)?'chip-today pulse':'chip-future')} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5,gap:3}}>
+                        {fmtDate(d)}
+                        {half&&half!=='full'&&<span style={{fontSize:9,background:'rgba(255,255,255,.25)',borderRadius:3,padding:'0 3px',fontFamily:'sans-serif'}}>{half==='first'?'AM':'PM'}</span>}
+                      </span>);
+                    })}{!isExpanded&&overflow>0&&<span
+                      className="chip chip-gray"
+                      onClick={()=>setExpandedDates(s=>{const n=new Set(s);n.add(m.name);return n})}
+                      style={{fontSize:10,cursor:'pointer',userSelect:'none'}}
+                      title="Click to show all dates"
+                    >+{overflow} more</span>}{isExpanded&&<span
+                      className="chip chip-gray"
+                      onClick={()=>setExpandedDates(s=>{const n=new Set(s);n.delete(m.name);return n})}
+                      style={{fontSize:10,cursor:'pointer',userSelect:'none',color:'var(--accent)',borderColor:'var(--accent-border)',background:'var(--accent-light)'}}
+                      title="Click to collapse"
+                    >show less ↑</span>}</>);
+                  })()}</div></td>
                   <td rowSpan={rowSpan} style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,fontSize:14,textAlign:'center',verticalAlign:'top'}}>
                     <span style={totalDays>5?{color:'var(--amber)',background:'var(--amber-bg)',padding:'2px 8px',borderRadius:6}:{}}>{totalDays}</span>
                     {Object.values(hd).some(v=>v&&v!=='full')&&<div style={{fontSize:9.5,color:'var(--text3)',marginTop:2}}>½ day(s)</div>}
@@ -2020,7 +2512,7 @@ function App(){
     {showExport&&<ExportModal member={showExport} onClose={()=>setShowExport(null)}/>}
     {showBulkExport&&<BulkExportModal members={filtered} filterDesc={filterDesc} onClose={()=>setShowBulkExport(false)}/>}
     {showProjectsAgenda&&<ProjectsAgendaModal members={data} userName={user.name} allNames={allNames} onClose={()=>setShowProjectsAgenda(false)}/>}
-    {showImport&&<ImportLeaveModal userName={user.name} onClose={()=>setShowImport(false)} onImport={handleSaveLeave}/>}
+    {showImport&&<ImportLeaveModal userName={user.name} allNames={allNames} onClose={()=>setShowImport(false)} onImport={handleSaveLeave}/>}
     {showDeleteConfirm!==null&&data[showDeleteConfirm]&&<div className="overlay" onClick={()=>setShowDeleteConfirm(null)}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:420}}>
       <h3 style={{fontSize:17,fontWeight:600,marginBottom:12,color:'var(--red)'}}>Delete Leave Record</h3>
       <p style={{fontSize:13.5,marginBottom:8}}>Remove <strong>{data[showDeleteConfirm].name}</strong>?</p>
