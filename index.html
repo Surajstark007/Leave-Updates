@@ -283,6 +283,8 @@ async function upsertLeave(entry,addedBy){
   const nameCol=findNameColumn(schema); // always returns 'member_name' or confirmed column
   const has=col=>schema.size===0||schema.has(col); // if schema unknown, try all columns
 
+  console.log('upsertLeave called — entry.name:',JSON.stringify(entry.name),'nameCol:',nameCol,'schema size:',schema.size,'schema:',JSON.stringify([...schema]));
+
   // 2. Lookup existing row
   let existingData=[];
   try{
@@ -309,10 +311,13 @@ async function upsertLeave(entry,addedBy){
   };
 
   // 4. Helpers
-  const isColErr=(msg)=>/column|PGRST204|does not exist|unrecognized|unknown field|schema cache/i.test(msg);
+  const isColErr=(msg)=>/schema cache|PGRST204|does not exist|unrecognized|unknown field/i.test(msg)&&!/null value|violates not.null/i.test(msg);
+  const isNullConstraint=(msg)=>/null value.*violates not.null|violates not.null.*null value/i.test(msg);
   const extractBadCol=(msg)=>{
     const m=msg.match(/find the '(\w+)' column/)||msg.match(/'(\w+)'.*schema cache/)||msg.match(/column "(\w+)"/i);
-    return m?m[1]:null;
+    const col=m?m[1]:null;
+    // Never strip the name column — it's required
+    return col&&col!==nameCol?col:null;
   };
 
   const doSave=async(p)=>{
@@ -325,44 +330,43 @@ async function upsertLeave(entry,addedBy){
       if(!r.ok){const txt=await r.text();throw new Error(txt)}
       return r.json();
     }else{
-      // Always include the name column — it's NOT NULL, sending null will fail
-      // nameCol is guaranteed non-null (defaults to 'member_name')
-      const memberName=entry.name&&entry.name.trim();
-      if(!memberName)throw new Error('Cannot save leave: user name is empty. Please log out and log back in.');
-      const namePayload={[nameCol]:memberName};
+      const memberName=(entry.name||'').trim();
+      if(!memberName)throw new Error('Cannot save: your name is missing. Please log out and log back in.');
+      const body={[nameCol]:memberName,...p};
+      console.log('upsertLeave POST body:',JSON.stringify(body));
       const r=await fetch(SB_URL+'/rest/v1/lt_leaves',{
         method:'POST',
         headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
-        body:JSON.stringify({...namePayload,...p})
+        body:JSON.stringify(body)
       });
       if(!r.ok){const txt=await r.text();throw new Error(txt)}
       return r.json();
     }
   };
 
-  // 5. Self-healing retry — strip each bad column as errors identify them
+  // 5. Self-healing retry — strip unknown columns one by one
   let payload=makePayload();
   for(let i=0;i<10;i++){
     try{
       const result=await doSave(payload);
-      // Update schema cache with what actually worked
-      Object.keys(payload).forEach(k=>schema.add(k));
       return result;
     }catch(e){
+      // Null constraint on member_name = name was missing somehow — throw immediately with clear message
+      if(isNullConstraint(e.message)){
+        throw new Error('Save failed: member_name is required but was null. entry.name="'+(entry.name||'')+'", nameCol='+nameCol);
+      }
       if(!isColErr(e.message))throw e;
       const bad=extractBadCol(e.message);
-      if(bad){
+      if(bad&&payload.hasOwnProperty(bad)){
         console.warn('upsertLeave: stripping unknown column:',bad,'and retrying');
         schema.delete(bad);
         const copy={...payload};delete copy[bad];payload=copy;
-        // Also handle name column mismatch
-        if(bad===nameCol){_leavesNameCol=null}
       }else{
         throw e;
       }
     }
   }
-  throw new Error('Save failed after 10 retries — check Supabase table schema');
+  throw new Error('Save failed after 10 retries');
 }
 async function softDeleteLeave(name){
   const nameCol=_leavesNameCol||'member_name';
