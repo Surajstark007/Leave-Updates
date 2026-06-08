@@ -229,17 +229,11 @@ async function fetchUserLeaves(){
 }
 
 async function upsertLeave(entry,addedBy){
-  let memberName='';
-  if(entry&&entry.name)memberName=String(entry.name).trim();
-  if(!memberName&&addedBy)memberName=String(addedBy).split('@')[0].trim();
-  if(!memberName)memberName='Unknown';
+  // Get member name — never null
+  const memberName=(entry&&entry.name&&String(entry.name).trim())||
+                   (addedBy&&String(addedBy).split('@')[0].trim())||
+                   'Unknown';
 
-  // DEBUG — show exactly what we're about to send
-  const debugMsg='About to save:\nmember_name: "'+memberName+'"\ndates: '+JSON.stringify(entry.dates||[]).slice(0,60)+'\nentry.name raw: '+JSON.stringify(entry.name)+'\naddedBy: '+JSON.stringify(addedBy);
-  console.log('[upsert]',debugMsg);
-
-  // Exact columns that exist in lt_leaves (confirmed from Supabase):
-  // id, member_name, dates, type, backup, half_days, date_types, added_by, updated_at, created_at, deleted
   const payload={
     member_name:memberName,
     dates:JSON.stringify(entry.dates||[]),
@@ -247,40 +241,24 @@ async function upsertLeave(entry,addedBy){
     backup:entry.backup||'',
     half_days:JSON.stringify(entry.halfDays||{}),
     date_types:JSON.stringify(entry.dateTypes||{}),
-    added_by:addedBy||'',
+    added_by:String(addedBy||''),
     updated_at:new Date().toISOString(),
   };
 
-  console.log('[upsert] payload:',JSON.stringify(payload).slice(0,200));
+  console.log('[upsertLeave] memberName=',memberName,'payload=',JSON.stringify(payload).slice(0,150));
 
-  // Check for existing row
+  // Look for existing row using sbFetch (same pattern as logAction which works)
   let existingId=null;
   try{
-    const lu=await fetch(SB_URL+'/rest/v1/lt_leaves?member_name=ilike.'+encodeURIComponent(memberName)+'&limit=1',{
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-    });
-    if(lu.ok){const rows=await lu.json();if(Array.isArray(rows)&&rows.length>0)existingId=rows[0].id;}
-  }catch(e){console.warn('[upsert] lookup failed:',e.message)}
+    const rows=await sbFetch('lt_leaves?member_name=eq.'+encodeURIComponent(memberName)+'&limit=1');
+    if(rows&&rows.length>0)existingId=rows[0].id;
+  }catch(e){console.warn('[upsertLeave] lookup err:',e.message)}
 
-  const url=existingId?SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingId:SB_URL+'/rest/v1/lt_leaves';
-  const method=existingId?'PATCH':'POST';
-  // PATCH doesn't need member_name (it's in the WHERE clause)
-  const body=existingId?Object.assign({},payload):payload;
-
-  const r=await fetch(url,{
-    method:method,
-    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
-    body:JSON.stringify(body)
-  });
-  const txt=await r.text();
-  console.log('[upsert] response status:',r.status,'body:',txt.slice(0,300));
-  if(!r.ok){
-    let msg=txt;
-    try{const j=JSON.parse(txt);msg=j.message||j.details||txt}catch{}
-    // Include the actual payload in the error so we can see what was sent
-    throw new Error(msg+' | SENT: '+JSON.stringify(body).slice(0,200));
+  if(existingId){
+    return sbFetch('lt_leaves?id=eq.'+existingId,{method:'PATCH',body:JSON.stringify(payload)});
+  }else{
+    return sbFetch('lt_leaves',{method:'POST',body:JSON.stringify(payload)});
   }
-  return txt?JSON.parse(txt):null;
 }
 async function softDeleteLeave(name){
   const nameCol=_leavesNameCol||'member_name';
