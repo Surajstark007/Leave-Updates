@@ -234,6 +234,10 @@ async function upsertLeave(entry,addedBy){
   if(!memberName&&addedBy)memberName=String(addedBy).split('@')[0].trim();
   if(!memberName)memberName='Unknown';
 
+  // DEBUG — show exactly what we're about to send
+  const debugMsg='About to save:\nmember_name: "'+memberName+'"\ndates: '+JSON.stringify(entry.dates||[]).slice(0,60)+'\nentry.name raw: '+JSON.stringify(entry.name)+'\naddedBy: '+JSON.stringify(addedBy);
+  console.log('[upsert]',debugMsg);
+
   // Exact columns that exist in lt_leaves (confirmed from Supabase):
   // id, member_name, dates, type, backup, half_days, date_types, added_by, updated_at, created_at, deleted
   const payload={
@@ -269,11 +273,12 @@ async function upsertLeave(entry,addedBy){
     body:JSON.stringify(body)
   });
   const txt=await r.text();
-  console.log('[upsert] response status:',r.status,'body:',txt.slice(0,200));
+  console.log('[upsert] response status:',r.status,'body:',txt.slice(0,300));
   if(!r.ok){
     let msg=txt;
     try{const j=JSON.parse(txt);msg=j.message||j.details||txt}catch{}
-    throw new Error(msg);
+    // Include the actual payload in the error so we can see what was sent
+    throw new Error(msg+' | SENT: '+JSON.stringify(body).slice(0,200));
   }
   return txt?JSON.parse(txt):null;
 }
