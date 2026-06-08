@@ -2283,17 +2283,56 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
 // ─── SQL SETUP MODAL ───
 function SqlSetupModal({onClose,onFixed}){
   const[copied,setCopied]=useState(false);
-  const[done,setDone]=useState(false);
 
-  const sql=`-- Run these in Supabase → SQL Editor:
-ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS dates jsonb DEFAULT '[]';
-ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS type text DEFAULT 'PTO';
-ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS backup text DEFAULT '';
-ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS half_days jsonb DEFAULT '{}';
-ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS date_types jsonb DEFAULT '{}';
-ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS added_by text DEFAULT '';
-ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
-ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS deleted boolean DEFAULT false;`;
+  // The ONLY thing needed now — columns exist, just need RLS permissions
+  const sql=`-- Fix permissions so the app can read and write lt_leaves
+-- Run this in Supabase → SQL Editor → paste → Run
+
+-- Option A: simplest — disable RLS entirely for lt_leaves
+ALTER TABLE lt_leaves DISABLE ROW LEVEL SECURITY;
+
+-- Option B: keep RLS but allow anon access (use ONE of the two options above)
+-- ALTER TABLE lt_leaves ENABLE ROW LEVEL SECURITY;
+-- DROP POLICY IF EXISTS "allow_all" ON lt_leaves;
+-- CREATE POLICY "allow_all" ON lt_leaves FOR ALL TO anon USING (true) WITH CHECK (true);`;
+
+  const supabaseUrl='https://supabase.com/dashboard/project/wplarfdgdwhbbtjrgjrw/sql/new?content='+encodeURIComponent('ALTER TABLE lt_leaves DISABLE ROW LEVEL SECURITY;');
+  const copy=()=>{navigator.clipboard.writeText(sql).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2500)})};
+
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:540}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
+      <div>
+        <h3 style={{fontSize:17,fontWeight:700,color:'var(--red)'}}>⚠ Database permission error</h3>
+        <div style={{fontSize:12.5,color:'var(--text2)',marginTop:4}}>The columns exist but the app doesn't have permission to write to <code>lt_leaves</code>. One SQL line fixes this.</div>
+      </div>
+      <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
+    </div>
+
+    <div style={{background:'var(--surface2)',border:'2px solid var(--accent)',borderRadius:10,padding:16,marginBottom:14}}>
+      <div style={{fontSize:13,fontWeight:700,marginBottom:4}}>Run this ONE line in Supabase SQL Editor:</div>
+      <code style={{fontSize:14,color:'var(--accent)',display:'block',padding:'8px 12px',background:'var(--surface)',borderRadius:6,marginBottom:12,letterSpacing:.3}}>
+        ALTER TABLE lt_leaves DISABLE ROW LEVEL SECURITY;
+      </code>
+      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+        <a href={supabaseUrl} target="_blank" rel="noreferrer"
+          style={{display:'inline-flex',alignItems:'center',gap:6,padding:'9px 18px',background:'var(--accent)',color:'#fff',borderRadius:8,fontSize:13,fontWeight:700,textDecoration:'none'}}>
+          Open Supabase SQL Editor ↗
+        </a>
+        <button className="btn btn-secondary" onClick={copy} style={{fontSize:12.5}}>{copied?'✓ Copied!':'Copy SQL'}</button>
+      </div>
+    </div>
+
+    <pre style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 12px',fontSize:11,lineHeight:1.65,color:'var(--text)',whiteSpace:'pre',overflowX:'auto',fontFamily:"'JetBrains Mono',monospace",marginBottom:12}}>{sql}</pre>
+
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+      <div style={{fontSize:11.5,color:'var(--text3)'}}>After running, click Refresh App and try again.</div>
+      <div style={{display:'flex',gap:8}}>
+        <button className="btn btn-secondary" onClick={onClose}>Close</button>
+        <button className="btn btn-primary" onClick={()=>{onClose();window.location.reload()}}>Refresh App</button>
+      </div>
+    </div>
+  </div></div>);
+}
 
   // Build URL with SQL pre-filled for Supabase SQL editor
   const supabaseUrl='https://supabase.com/dashboard/project/wplarfdgdwhbbtjrgjrw/sql/new?query='+encodeURIComponent(sql);
@@ -2492,6 +2531,8 @@ function App(){
         const canvasMembers=data.filter(m=>m.raw!==undefined&&m.raw!=='');
         setData(mergeCanvasAndUserLeaves(canvasMembers.map(m=>({...m})),freshLeaves));
       }catch{}
+      // Show the setup modal to guide the user
+      setShowSqlSetup(true);
       toast('Save failed — '+detail.slice(0,120),'error');
     }
 
