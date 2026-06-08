@@ -204,9 +204,9 @@ async function readCache(){
   return data&&data[0]?{markdown:data[0].markdown_content,updated_at:data[0].updated_at}:null;
 }
 // ─── SUPABASE TABLE SCHEMA DISCOVERY ───
-let _leavesSchema=null; // null=unknown, Set=known columns
-let _leavesNameCol=null; // the column used to identify a person
-// Force clear any stale cached schema assumption on each page load
+let _leavesSchema=null;
+let _leavesNameCol=null;
+// Always re-probe on page load — never use a stale in-memory schema
 _leavesSchema=null;_leavesNameCol=null;
 
 async function getLeavesSchema(){
@@ -1608,11 +1608,19 @@ function ImportLeaveModal({onClose,onImport,userName,allNames}){
       if(e.agenda)s+=' | Agenda: '+e.agenda;
       return s;
     }).join('\n');
-    setImportLog(l=>[...l,parsed.dates.length+' leave dates ('+parsed.type+')']);
+    const effectiveName=(userName&&userName.trim())||'Unknown';
+    console.log('[import] userName='+JSON.stringify(userName)+' effectiveName='+JSON.stringify(effectiveName));
+    setImportLog(l=>[...l,parsed.dates.length+' leave dates ('+parsed.type+') for '+effectiveName]);
     setImportLog(l=>[...l,parsed.entries.filter(e=>e.project||e.isNoCalls).length+' project / agenda entries']);
-    await onImport({name:userName,type:parsed.type,dates:parsed.dates,backup:backupStr,halfDays:parsed.halfDays,dateTypes:parsed.dateTypes||{}});
-    setImportLog(l=>[...l,'Saved to database ✓']);
-    setImporting(false);setStep('done');
+    try{
+      await onImport({name:effectiveName,type:parsed.type,dates:parsed.dates,backup:backupStr,halfDays:parsed.halfDays||{},dateTypes:parsed.dateTypes||{}});
+      setImportLog(l=>[...l,'Saved to database ✓']);
+      setImporting(false);setStep('done');
+    }catch(err){
+      console.error('[import] save failed:',err.message);
+      setImportLog(l=>[...l,'⚠ Save failed: '+err.message.slice(0,100)]);
+      setImporting(false);setStep('preview');
+    }
   };
 
   // Shared inline input style
@@ -2609,14 +2617,17 @@ function App(){
       toast('Leave saved ✓','success');
     }catch(e){
       console.error('upsertLeave failed:',e.message);
-      // Parse Supabase JSON error body for a readable message
       let detail=e.message||'Network error';
       try{const j=JSON.parse(detail);detail=j.message||j.hint||j.details||detail}catch{}
-      // If it's a schema error, prompt user to set up the table
-      if(/schema cache|does not exist|PGRST204|column/i.test(detail)){
+      // Only show SQL setup modal for genuine schema/column-missing errors
+      // NOT for null constraint violations (those are data issues, not schema issues)
+      const isSchemaErr=/schema cache|does not exist|PGRST204/i.test(detail);
+      const isNullErr=/violates not.null|null value.*column/i.test(detail);
+      if(isSchemaErr&&!isNullErr){
+        // Reset cache so next attempt re-probes
+        _leavesSchema=null;_leavesNameCol=null;
         setShowSqlSetup(true);
       }
-      // Still reload from DB — the retry logic may have partially succeeded
       try{
         const freshLeaves=await fetchUserLeaves();
         const canvasMembers=data.filter(m=>m.raw!==undefined&&m.raw!=='');
