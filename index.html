@@ -229,87 +229,53 @@ async function fetchUserLeaves(){
 }
 
 async function upsertLeave(entry,addedBy){
-  // Step 1: Get the member name — never allow null
   let memberName='';
   if(entry&&entry.name)memberName=String(entry.name).trim();
   if(!memberName&&addedBy)memberName=String(addedBy).split('@')[0].trim();
   if(!memberName)memberName='Unknown';
-  console.log('[upsert] START memberName='+JSON.stringify(memberName)+' dates='+(entry&&entry.dates?entry.dates.length:0));
 
-  // Step 2: Check for existing row
-  let existingId=null;
-  try{
-    const lu=await fetch(SB_URL+'/rest/v1/lt_leaves?member_name=ilike.'+encodeURIComponent(memberName)+'&limit=1',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
-    if(lu.ok){const rows=await lu.json();if(Array.isArray(rows)&&rows.length>0)existingId=rows[0].id;}
-    console.log('[upsert] existing row id='+existingId);
-  }catch(ex){console.warn('[upsert] lookup failed:',ex.message)}
-
-  // Step 3: Build payload with all plausible column names
-  // The retry loop will strip any column that doesn't exist in the actual schema
-  const allFields={
+  // Exact columns that exist in lt_leaves (confirmed from Supabase):
+  // id, member_name, dates, type, backup, half_days, date_types, added_by, updated_at, created_at, deleted
+  const payload={
     member_name:memberName,
     dates:JSON.stringify(entry.dates||[]),
     type:entry.type||'PTO',
-    leave_type:entry.type||'PTO',
     backup:entry.backup||'',
-    backup_info:entry.backup||'',
     half_days:JSON.stringify(entry.halfDays||{}),
     date_types:JSON.stringify(entry.dateTypes||{}),
     added_by:addedBy||'',
     updated_at:new Date().toISOString(),
   };
 
-  // Step 4: Retry loop — strip unknown columns one by one
-  let payload=Object.assign({},allFields);
-  for(let attempt=0;attempt<20;attempt++){
-    console.log('[upsert] attempt '+(attempt+1)+' keys: '+Object.keys(payload).join(', '));
-    const url=existingId?SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingId:SB_URL+'/rest/v1/lt_leaves';
-    const method=existingId?'PATCH':'POST';
-    let responseText='';
-    try{
-      const r=await fetch(url,{
-        method:method,
-        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
-        body:JSON.stringify(payload)
-      });
-      responseText=await r.text();
-      if(r.ok){
-        console.log('[upsert] SUCCESS attempt '+(attempt+1));
-        return responseText?JSON.parse(responseText):null;
-      }
-      // Parse error from Supabase
-      let errObj={};
-      try{errObj=JSON.parse(responseText)}catch{}
-      const errMsg=errObj.message||errObj.details||responseText||'unknown error';
-      console.error('[upsert] error attempt '+(attempt+1)+': '+errMsg);
+  console.log('[upsert] payload:',JSON.stringify(payload).slice(0,200));
 
-      // Is it a "column does not exist in schema" error?
-      const schemaMatch=errMsg.match(/column of '(\w+)'|find the '(\w+)' column|'(\w+)'.*schema cache|column "(\w+)" of relation/);
-      if(schemaMatch){
-        const badCol=schemaMatch[1]||schemaMatch[2]||schemaMatch[3]||schemaMatch[4];
-        if(badCol&&badCol!=='member_name'&&Object.prototype.hasOwnProperty.call(payload,badCol)){
-          console.log('[upsert] stripping column: '+badCol);
-          const next=Object.assign({},payload);
-          delete next[badCol];
-          payload=next;
-          continue;
-        }
-      }
+  // Check for existing row
+  let existingId=null;
+  try{
+    const lu=await fetch(SB_URL+'/rest/v1/lt_leaves?member_name=ilike.'+encodeURIComponent(memberName)+'&limit=1',{
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    if(lu.ok){const rows=await lu.json();if(Array.isArray(rows)&&rows.length>0)existingId=rows[0].id;}
+  }catch(e){console.warn('[upsert] lookup failed:',e.message)}
 
-      // NOT NULL violation — the column exists but value sent was null
-      // member_name is explicitly set above — if this fires, something else is wrong
-      if(errMsg.indexOf('violates not-null')>=0||errMsg.indexOf('not-null constraint')>=0){
-        throw new Error('NOT NULL violation ('+errMsg+'). Payload sent: '+JSON.stringify(payload));
-      }
+  const url=existingId?SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingId:SB_URL+'/rest/v1/lt_leaves';
+  const method=existingId?'PATCH':'POST';
+  // PATCH doesn't need member_name (it's in the WHERE clause)
+  const body=existingId?Object.assign({},payload):payload;
 
-      // Any other error — give up
-      throw new Error(errMsg);
-    }catch(ex){
-      if(ex.message.indexOf('[upsert]')===0||ex.message.indexOf('NOT NULL')===0||ex.message.indexOf('Payload')===0)throw ex;
-      throw new Error(ex.message);
-    }
+  const r=await fetch(url,{
+    method:method,
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify(body)
+  });
+  const txt=await r.text();
+  console.log('[upsert] response status:',r.status,'body:',txt.slice(0,200));
+  if(!r.ok){
+    let msg=txt;
+    try{const j=JSON.parse(txt);msg=j.message||j.details||txt}catch{}
+    throw new Error(msg);
   }
-  throw new Error('Could not save after 20 attempts');
+  return txt?JSON.parse(txt):null;
 }
 async function softDeleteLeave(name){
   const nameCol=_leavesNameCol||'member_name';
@@ -2521,19 +2487,12 @@ function App(){
       console.error('upsertLeave failed:',e.message);
       let detail=e.message||'Network error';
       try{const j=JSON.parse(detail);detail=j.message||j.hint||j.details||detail}catch{}
-      // Only show SQL setup modal for genuine schema/column-missing errors
-      // NOT for null constraint violations (those are data issues, not schema issues)
-      const isSchemaErr=/schema cache|does not exist|PGRST204/i.test(detail);
-      const isNullErr=/violates not.null|null value.*column/i.test(detail);
-      if(isSchemaErr&&!isNullErr){
-        setShowSqlSetup(true);
-      }
       try{
         const freshLeaves=await fetchUserLeaves();
         const canvasMembers=data.filter(m=>m.raw!==undefined&&m.raw!=='');
         setData(mergeCanvasAndUserLeaves(canvasMembers.map(m=>({...m})),freshLeaves));
       }catch{}
-      toast('Save failed — '+detail.slice(0,100),'error');
+      toast('Save failed — '+detail.slice(0,120),'error');
     }
 
     if(savedDates.length>0){
