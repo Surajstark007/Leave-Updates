@@ -204,43 +204,67 @@ async function readCache(){
   return data&&data[0]?{markdown:data[0].markdown_content,updated_at:data[0].updated_at}:null;
 }
 // ─── SUPABASE TABLE SCHEMA DISCOVERY ───
-// Probes lt_leaves once per session to find which columns actually exist.
-// Results cached in memory so we only probe once.
 let _leavesSchema=null; // null=unknown, Set=known columns
+let _leavesNameCol=null; // the column used to identify a person (name / employee / person_name etc)
+
 async function getLeavesSchema(){
   if(_leavesSchema)return _leavesSchema;
   try{
-    // Fetch one row (or empty) — PostgREST returns column info in the response even for 0 rows
-    const r=await fetch(SB_URL+'/rest/v1/lt_leaves?limit=1',{
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/json'}
+    // PostgREST exposes OpenAPI at /rest/v1/ — parse definitions to get real column names
+    const r=await fetch(SB_URL+'/rest/v1/',{
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/openapi+json'}
     });
-    if(!r.ok){_leavesSchema=new Set(['name','dates','type']);return _leavesSchema}
-    // Check Content-Range and actual data to infer columns
-    const rows=await r.json();
-    if(rows&&rows.length>0){
-      _leavesSchema=new Set(Object.keys(rows[0]));
-    }else{
-      // Empty table — try inserting and catching errors, or use a safe default set
-      // Instead, try a HEAD request to get column info via PostgREST describe
-      const h=await fetch(SB_URL+'/rest/v1/lt_leaves',{
-        method:'HEAD',
-        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/openapi+json'}
-      });
-      // If empty table, assume minimal schema and let progressive retry handle the rest
-      _leavesSchema=new Set(['name','dates','type','backup','added_by','updated_at','deleted','half_days','date_types','created_at']);
+    if(r.ok){
+      const spec=await r.json();
+      // Look for lt_leaves in definitions
+      const def=spec&&spec.definitions&&(spec.definitions['lt_leaves']||spec.definitions['lt_leaves_insert']);
+      if(def&&def.properties){
+        _leavesSchema=new Set(Object.keys(def.properties));
+        console.log('lt_leaves schema from OpenAPI:',{..._leavesSchema});
+        return _leavesSchema;
+      }
     }
-  }catch{
-    _leavesSchema=new Set(['name','dates','type']);
-  }
+  }catch(e){console.warn('OpenAPI probe failed:',e.message)}
+
+  // Fallback: try fetching a row to get column names from actual data
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/lt_leaves?limit=5',{
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    if(r.ok){
+      const rows=await r.json();
+      if(rows&&rows.length>0){
+        _leavesSchema=new Set(Object.keys(rows[0]));
+        console.log('lt_leaves schema from data rows:',{..._leavesSchema});
+        return _leavesSchema;
+      }
+    }
+  }catch(e){console.warn('Row probe failed:',e.message)}
+
+  // Can't determine schema — start empty, let self-healing retry discover columns
+  _leavesSchema=new Set();
   return _leavesSchema;
+}
+
+// Find which column stores the person's name (could be 'name', 'employee', 'person', etc.)
+function findNameColumn(schema){
+  if(_leavesNameCol)return _leavesNameCol;
+  const candidates=['name','employee','employee_name','person','person_name','member','username','user_name','display_name'];
+  for(const c of candidates){if(schema.has(c)){_leavesNameCol=c;return c}}
+  return null; // unknown — will use POST without filter
 }
 
 async function fetchUserLeaves(){
   try{
-    const r=await fetch(SB_URL+'/rest/v1/lt_leaves?deleted=eq.false&order=created_at.desc',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+    const schema=await getLeavesSchema();
+    const nameCol=findNameColumn(schema);
+    // Build query — filter out deleted if the column exists
+    let url=SB_URL+'/rest/v1/lt_leaves?limit=500';
+    if(schema.has('deleted'))url+='&deleted=eq.false';
+    if(schema.has('created_at'))url+='&order=created_at.desc';
+    const r=await fetch(url,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
     if(!r.ok)throw new Error('fetch failed: '+r.status);
     const data=await r.json();
-    // Cache in localStorage as fallback
     localStorage.setItem('cx_lt_leaves_cache',JSON.stringify(data));
     return data;
   }catch(e){
@@ -248,35 +272,45 @@ async function fetchUserLeaves(){
     try{return JSON.parse(localStorage.getItem('cx_lt_leaves_cache')||'[]')}catch{return[]}
   }
 }
+
 async function upsertLeave(entry,addedBy){
-  // 1. Discover what columns the table actually has
+  // 1. Get real schema
   const schema=await getLeavesSchema();
+  const nameCol=findNameColumn(schema);
+  const has=col=>schema.has(col)||schema.size===0; // if schema unknown, try everything
 
-  // 2. Lookup existing row
+  // 2. Lookup existing row using the real name column
   let existingData=[];
-  try{
-    const r=await fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(entry.name)+'&deleted=eq.false&limit=1',{
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-    });
-    if(r.ok)existingData=await r.json();
-  }catch(e){console.warn('upsertLeave lookup failed:',e.message)}
+  if(nameCol){
+    try{
+      const r=await fetch(SB_URL+'/rest/v1/lt_leaves?'+nameCol+'=ilike.'+encodeURIComponent(entry.name)+(schema.has('deleted')?'&deleted=eq.false':'')+'&limit=1',{
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+      });
+      if(r.ok)existingData=await r.json();
+    }catch(e){console.warn('upsertLeave lookup failed:',e.message)}
+  }
 
-  // 3. Build payload using only columns that exist in the schema
-  const has=col=>schema.has(col);
-  const payload={};
-  if(has('type'))payload.type=entry.type;
-  if(has('dates'))payload.dates=JSON.stringify(entry.dates);
-  if(has('backup'))payload.backup=entry.backup||'';
-  if(has('updated_at'))payload.updated_at=new Date().toISOString();
-  if(has('added_by'))payload.added_by=addedBy||'';
-  if(has('half_days'))payload.half_days=JSON.stringify(entry.halfDays||{});
-  if(has('date_types'))payload.date_types=JSON.stringify(entry.dateTypes||{});
+  // 3. Build payload — only include columns we believe exist
+  const makePayload=()=>{
+    const p={};
+    if(has('type'))p.type=entry.type;
+    if(has('dates'))p.dates=JSON.stringify(entry.dates);
+    if(has('backup'))p.backup=entry.backup||'';
+    if(has('updated_at'))p.updated_at=new Date().toISOString();
+    if(has('added_by'))p.added_by=addedBy||'';
+    if(has('half_days'))p.half_days=JSON.stringify(entry.halfDays||{});
+    if(has('date_types'))p.date_types=JSON.stringify(entry.dateTypes||{});
+    return p;
+  };
 
-  // 4. Helper: does the error indicate a missing column?
-  const isColumnError=(msg)=>/column|PGRST204|does not exist|unrecognized|unknown field|schema cache/i.test(msg);
+  // 4. Helpers
+  const isColErr=(msg)=>/column|PGRST204|does not exist|unrecognized|unknown field|schema cache/i.test(msg);
+  const extractBadCol=(msg)=>{
+    const m=msg.match(/find the '(\w+)' column/)||msg.match(/'(\w+)'.*schema cache/)||msg.match(/column "(\w+)"/i);
+    return m?m[1]:null;
+  };
 
-  // 5. Attempt save — if a column error still fires, remove that column and retry
-  const attemptSave=async(p)=>{
+  const doSave=async(p)=>{
     if(existingData&&existingData.length>0){
       const r=await fetch(SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingData[0].id,{
         method:'PATCH',
@@ -286,8 +320,8 @@ async function upsertLeave(entry,addedBy){
       if(!r.ok){const txt=await r.text();throw new Error(txt)}
       return r.json();
     }else{
-      const namePayload={};
-      if(has('name'))namePayload.name=entry.name;
+      // New row — include the name column
+      const namePayload=nameCol?{[nameCol]:entry.name}:{};
       const r=await fetch(SB_URL+'/rest/v1/lt_leaves',{
         method:'POST',
         headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
@@ -298,30 +332,29 @@ async function upsertLeave(entry,addedBy){
     }
   };
 
-  // Extract the offending column name from the error and retry without it
-  const extractBadColumn=(msg)=>{
-    const m=msg.match(/find the '(\w+)' column/)||msg.match(/'(\w+)'.*schema cache/)||msg.match(/column "(\w+)"/);
-    return m?m[1]:null;
-  };
-
-  let currentPayload={...payload};
-  for(let attempt=0;attempt<8;attempt++){
+  // 5. Self-healing retry — strip each bad column as errors identify them
+  let payload=makePayload();
+  for(let i=0;i<10;i++){
     try{
-      return await attemptSave(currentPayload);
+      const result=await doSave(payload);
+      // Update schema cache with what actually worked
+      Object.keys(payload).forEach(k=>schema.add(k));
+      return result;
     }catch(e){
-      if(!isColumnError(e.message))throw e;
-      const badCol=extractBadColumn(e.message);
-      if(badCol&&currentPayload.hasOwnProperty(badCol)){
-        console.warn('upsertLeave: removing unknown column and retrying:',badCol);
-        schema.delete(badCol); // remember for future calls
-        const{[badCol]:_,...rest}=currentPayload;
-        currentPayload=rest;
+      if(!isColErr(e.message))throw e;
+      const bad=extractBadCol(e.message);
+      if(bad){
+        console.warn('upsertLeave: stripping unknown column:',bad,'and retrying');
+        schema.delete(bad);
+        const copy={...payload};delete copy[bad];payload=copy;
+        // Also handle name column mismatch
+        if(bad===nameCol){_leavesNameCol=null}
       }else{
-        throw e; // can't figure out what to remove
+        throw e;
       }
     }
   }
-  throw new Error('Could not save after multiple retries');
+  throw new Error('Save failed after 10 retries — check Supabase table schema');
 }
 async function softDeleteLeave(name){
   return fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(name)+'&deleted=eq.false',{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({deleted:true,updated_at:new Date().toISOString()})});
@@ -404,7 +437,10 @@ async function syncLeaveProjectsToMaster(userName,backupStr){
 function mergeCanvasAndUserLeaves(canvasMembers,userLeaves){
   const merged=[...canvasMembers];const deletedNames=new Set();
   for(const ul of userLeaves){
-    if(ul.deleted){deletedNames.add(ul.name.toLowerCase());continue}
+    // Handle flexible name column — could be 'name', 'employee', 'person', etc.
+    const ulName=ul.name||ul.employee||ul.employee_name||ul.person||ul.person_name||ul.member||ul.username||ul.display_name||'';
+    if(!ulName)continue;
+    if(ul.deleted){deletedNames.add(ulName.toLowerCase());continue}
     let dates=[];
     try{dates=typeof ul.dates==='string'?JSON.parse(ul.dates):ul.dates||[]}catch{dates=[]}
     let halfDays={};
@@ -415,7 +451,7 @@ function mergeCanvasAndUserLeaves(canvasMembers,userLeaves){
     // The view filters handle display (upcoming/today/week/all).
     // Filtering here causes data to vanish after the leave date passes.
     const validDates=dates.filter(d=>d&&d.match(/^\d{4}-\d{2}-\d{2}$/));
-    const idx=merged.findIndex(m=>m.name.toLowerCase()===ul.name.toLowerCase());
+    const idx=merged.findIndex(m=>m.name.toLowerCase()===ulName.toLowerCase());
     if(idx>=0){
       const mergedDates=new Set([...merged[idx].dates,...validDates]);
       merged[idx]={
@@ -427,7 +463,7 @@ function mergeCanvasAndUserLeaves(canvasMembers,userLeaves){
         dateTypes:{...(merged[idx].dateTypes||{}),...dateTypes}
       };
     }else{
-      merged.push({name:ul.name,dates:validDates.sort(),backup:ul.backup||'',type:ul.type||'PTO',raw:'',halfDays,dateTypes});
+      merged.push({name:ulName,dates:validDates.sort(),backup:ul.backup||'',type:ul.type||'PTO',raw:'',halfDays,dateTypes});
     }
   }
   return merged.filter(m=>!deletedNames.has(m.name.toLowerCase()));
@@ -2318,8 +2354,22 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
 // Shown when Supabase schema is missing columns — gives user exact SQL to run
 function SqlSetupModal({onClose}){
   const[copied,setCopied]=useState(false);
-  const sql=`-- Run this in your Supabase SQL Editor to set up the lt_leaves table
--- Go to: https://supabase.com/dashboard → your project → SQL Editor
+  const[diagnosing,setDiagnosing]=useState(false);
+  const[actualSchema,setActualSchema]=useState(null);
+
+  const diagnose=async()=>{
+    setDiagnosing(true);
+    try{
+      // Reset cache so we re-probe
+      _leavesSchema=null;_leavesNameCol=null;
+      const schema=await getLeavesSchema();
+      setActualSchema([...schema].sort());
+    }catch(e){setActualSchema(['Error: '+e.message])}
+    setDiagnosing(false);
+  };
+
+  const sql=`-- Run in Supabase SQL Editor → your project → SQL Editor
+-- This creates lt_leaves with all required columns, or adds missing ones
 
 CREATE TABLE IF NOT EXISTS lt_leaves (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -2335,7 +2385,10 @@ CREATE TABLE IF NOT EXISTS lt_leaves (
   deleted boolean DEFAULT false
 );
 
--- If the table already exists, add missing columns:
+-- If table already exists, add any missing columns:
+ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS name text;
+ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS type text DEFAULT 'PTO';
+ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS dates jsonb DEFAULT '[]';
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS backup text DEFAULT '';
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS half_days jsonb DEFAULT '{}';
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS date_types jsonb DEFAULT '{}';
@@ -2343,39 +2396,66 @@ ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS added_by text DEFAULT '';
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS deleted boolean DEFAULT false;
 
--- Enable Row Level Security (allow anon reads and writes for the app key):
+-- Allow the app to read and write (disable RLS or add policy):
 ALTER TABLE lt_leaves ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "allow_all" ON lt_leaves FOR ALL USING (true) WITH CHECK (true);`;
+DROP POLICY IF EXISTS "allow_all" ON lt_leaves;
+CREATE POLICY "allow_all" ON lt_leaves FOR ALL USING (true) WITH CHECK (true);
+
+-- Also run for lt_projects table:
+CREATE TABLE IF NOT EXISTS lt_projects (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  name text,
+  date text,
+  project text DEFAULT '',
+  next_call text DEFAULT '',
+  backup text DEFAULT '',
+  agenda text DEFAULT '',
+  source text DEFAULT 'standalone',
+  updated_at timestamptz DEFAULT now(),
+  created_at timestamptz DEFAULT now(),
+  deleted boolean DEFAULT false
+);
+ALTER TABLE lt_projects ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "allow_all" ON lt_projects;
+CREATE POLICY "allow_all" ON lt_projects FOR ALL USING (true) WITH CHECK (true);`;
 
   const copy=()=>{navigator.clipboard.writeText(sql).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000)})};
 
-  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:660}}>
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:680}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14}}>
       <div>
         <h3 style={{fontSize:17,fontWeight:600,color:'var(--red)'}}>⚠ Database setup required</h3>
-        <div style={{fontSize:12,color:'var(--text2)',marginTop:3}}>The <code style={{background:'var(--surface2)',padding:'1px 5px',borderRadius:3}}>lt_leaves</code> table is missing columns. Run the SQL below in your Supabase project to fix it.</div>
+        <div style={{fontSize:12,color:'var(--text2)',marginTop:3}}>The <code style={{background:'var(--surface2)',padding:'1px 5px',borderRadius:3}}>lt_leaves</code> table is missing columns. Run the SQL below in Supabase to fix it.</div>
       </div>
       <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
     </div>
 
-    <div style={{marginBottom:12,display:'flex',gap:10,flexWrap:'wrap'}}>
+    <div style={{marginBottom:12,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
       <a href="https://supabase.com/dashboard/project/wplarfdgdwhbbtjrgjrw/sql/new" target="_blank" rel="noreferrer"
         style={{display:'inline-flex',alignItems:'center',gap:6,padding:'7px 14px',background:'var(--accent)',color:'#fff',borderRadius:8,fontSize:12.5,fontWeight:500,textDecoration:'none'}}>
         Open Supabase SQL Editor ↗
       </a>
-      <button className="btn btn-secondary" onClick={copy} style={{fontSize:12.5}}>
-        {copied?'✓ Copied!':'Copy SQL'}
-      </button>
+      <button className="btn btn-secondary" onClick={copy} style={{fontSize:12.5}}>{copied?'✓ Copied!':'Copy SQL'}</button>
+      <button className="btn btn-secondary" onClick={diagnose} disabled={diagnosing} style={{fontSize:12.5}}>{diagnosing?'Probing…':'Diagnose current schema'}</button>
     </div>
 
-    <pre style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:'12px 14px',fontSize:11.5,overflowX:'auto',overflowY:'auto',maxHeight:340,lineHeight:1.6,color:'var(--text)',whiteSpace:'pre',fontFamily:"'JetBrains Mono',monospace,monospace"}}>
-      {sql}
-    </pre>
+    {actualSchema&&<div style={{marginBottom:12,padding:'10px 14px',background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8}}>
+      <div style={{fontSize:11.5,fontWeight:600,color:'var(--text2)',marginBottom:5}}>Columns found in lt_leaves right now:</div>
+      {actualSchema.length===0
+        ?<div style={{fontSize:12,color:'var(--red)'}}>No columns detected — table may be empty or inaccessible</div>
+        :<div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+          {actualSchema.map(c=><span key={c} style={{fontSize:11,background:'var(--indigo-bg)',color:'var(--indigo)',border:'1px solid rgba(92,71,224,.2)',borderRadius:4,padding:'1px 7px'}}>{c}</span>)}
+        </div>
+      }
+      {actualSchema.length>0&&!actualSchema.includes('name')&&<div style={{marginTop:8,fontSize:12,color:'var(--amber)'}}>⚠ No "name" column found. The app needs one called <strong>name</strong>. Run the SQL above to add it.</div>}
+    </div>}
 
-    <div style={{marginTop:12,fontSize:12,color:'var(--text3)',lineHeight:1.55}}>
-      After running the SQL, click Refresh in the app and try saving again. Your data entered so far is preserved in local state.
+    <pre style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:'12px 14px',fontSize:11,overflowX:'auto',overflowY:'auto',maxHeight:320,lineHeight:1.6,color:'var(--text)',whiteSpace:'pre',fontFamily:"'JetBrains Mono',monospace"}}>{sql}</pre>
+
+    <div style={{marginTop:10,fontSize:12,color:'var(--text3)',lineHeight:1.55}}>
+      After running the SQL, click <strong>Refresh</strong> in the app and try saving again.
     </div>
-    <div style={{marginTop:12,display:'flex',justifyContent:'flex-end'}}>
+    <div style={{marginTop:10,display:'flex',justifyContent:'flex-end'}}>
       <button className="btn btn-primary" onClick={onClose}>Got it</button>
     </div>
   </div></div>);
