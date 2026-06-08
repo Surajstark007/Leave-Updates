@@ -205,7 +205,9 @@ async function readCache(){
 }
 // ─── SUPABASE TABLE SCHEMA DISCOVERY ───
 let _leavesSchema=null; // null=unknown, Set=known columns
-let _leavesNameCol=null; // the column used to identify a person (name / employee / person_name etc)
+let _leavesNameCol=null; // the column used to identify a person
+// Force clear any stale cached schema assumption on each page load
+_leavesSchema=null;_leavesNameCol=null;
 
 async function getLeavesSchema(){
   if(_leavesSchema)return _leavesSchema;
@@ -249,7 +251,7 @@ async function getLeavesSchema(){
 // Find which column stores the person's name (could be 'name', 'employee', 'person', etc.)
 function findNameColumn(schema){
   if(_leavesNameCol)return _leavesNameCol;
-  const candidates=['name','employee','employee_name','person','person_name','member','username','user_name','display_name'];
+  const candidates=['member_name','name','employee','employee_name','person','person_name','member','username','user_name','display_name'];
   for(const c of candidates){if(schema.has(c)){_leavesNameCol=c;return c}}
   return null; // unknown — will use POST without filter
 }
@@ -357,7 +359,8 @@ async function upsertLeave(entry,addedBy){
   throw new Error('Save failed after 10 retries — check Supabase table schema');
 }
 async function softDeleteLeave(name){
-  return fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(name)+'&deleted=eq.false',{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({deleted:true,updated_at:new Date().toISOString()})});
+  const nameCol=_leavesNameCol||'member_name';
+  return fetch(SB_URL+'/rest/v1/lt_leaves?'+nameCol+'=ilike.'+encodeURIComponent(name)+'&deleted=eq.false',{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({deleted:true,updated_at:new Date().toISOString()})});
 }
 
 // ─── STANDALONE PROJECT ENTRIES (lt_projects table) ───
@@ -438,7 +441,7 @@ function mergeCanvasAndUserLeaves(canvasMembers,userLeaves){
   const merged=[...canvasMembers];const deletedNames=new Set();
   for(const ul of userLeaves){
     // Handle flexible name column — could be 'name', 'employee', 'person', etc.
-    const ulName=ul.name||ul.employee||ul.employee_name||ul.person||ul.person_name||ul.member||ul.username||ul.display_name||'';
+    const ulName=ul.member_name||ul.name||ul.employee||ul.employee_name||ul.person||ul.person_name||ul.member||ul.username||ul.display_name||'';
     if(!ulName)continue;
     if(ul.deleted){deletedNames.add(ulName.toLowerCase());continue}
     let dates=[];
@@ -2369,11 +2372,10 @@ function SqlSetupModal({onClose}){
   };
 
   const sql=`-- Run in Supabase SQL Editor → your project → SQL Editor
--- This creates lt_leaves with all required columns, or adds missing ones
 
 CREATE TABLE IF NOT EXISTS lt_leaves (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  name text NOT NULL,
+  member_name text NOT NULL,
   type text DEFAULT 'PTO',
   dates jsonb DEFAULT '[]',
   backup text DEFAULT '',
@@ -2386,7 +2388,7 @@ CREATE TABLE IF NOT EXISTS lt_leaves (
 );
 
 -- If table already exists, add any missing columns:
-ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS name text;
+ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS member_name text;
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS type text DEFAULT 'PTO';
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS dates jsonb DEFAULT '[]';
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS backup text DEFAULT '';
@@ -2396,12 +2398,12 @@ ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS added_by text DEFAULT '';
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS deleted boolean DEFAULT false;
 
--- Allow the app to read and write (disable RLS or add policy):
+-- Allow the app to read and write:
 ALTER TABLE lt_leaves ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "allow_all" ON lt_leaves;
 CREATE POLICY "allow_all" ON lt_leaves FOR ALL USING (true) WITH CHECK (true);
 
--- Also run for lt_projects table:
+-- Also for lt_projects:
 CREATE TABLE IF NOT EXISTS lt_projects (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   name text,
@@ -2447,7 +2449,8 @@ CREATE POLICY "allow_all" ON lt_projects FOR ALL USING (true) WITH CHECK (true);
           {actualSchema.map(c=><span key={c} style={{fontSize:11,background:'var(--indigo-bg)',color:'var(--indigo)',border:'1px solid rgba(92,71,224,.2)',borderRadius:4,padding:'1px 7px'}}>{c}</span>)}
         </div>
       }
-      {actualSchema.length>0&&!actualSchema.includes('name')&&<div style={{marginTop:8,fontSize:12,color:'var(--amber)'}}>⚠ No "name" column found. The app needs one called <strong>name</strong>. Run the SQL above to add it.</div>}
+      {actualSchema.length>0&&!actualSchema.includes('name')&&!actualSchema.includes('member_name')&&<div style={{marginTop:8,fontSize:12,color:'var(--amber)'}}>⚠ No name/member_name column found. The app needs one called <strong>member_name</strong> or <strong>name</strong>. Run the SQL above to add it.</div>}
+      {actualSchema.length>0&&actualSchema.includes('member_name')&&<div style={{marginTop:8,fontSize:12,color:'var(--green)'}}>✓ Found <strong>member_name</strong> — the app will use this column.</div>}
     </div>}
 
     <pre style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:'12px 14px',fontSize:11,overflowX:'auto',overflowY:'auto',maxHeight:320,lineHeight:1.6,color:'var(--text)',whiteSpace:'pre',fontFamily:"'JetBrains Mono',monospace"}}>{sql}</pre>
