@@ -252,8 +252,10 @@ async function getLeavesSchema(){
 function findNameColumn(schema){
   if(_leavesNameCol)return _leavesNameCol;
   const candidates=['member_name','name','employee','employee_name','person','person_name','member','username','user_name','display_name'];
-  for(const c of candidates){if(schema.has(c)){_leavesNameCol=c;return c}}
-  return null; // unknown — will use POST without filter
+  for(const c of candidates){if(schema&&schema.has(c)){_leavesNameCol=c;return c}}
+  // Default to member_name — confirmed from actual lt_leaves table structure
+  _leavesNameCol='member_name';
+  return _leavesNameCol;
 }
 
 async function fetchUserLeaves(){
@@ -276,21 +278,22 @@ async function fetchUserLeaves(){
 }
 
 async function upsertLeave(entry,addedBy){
-  // 1. Get real schema
+  // 1. Get real schema (non-blocking — we have a confirmed default)
   const schema=await getLeavesSchema();
-  const nameCol=findNameColumn(schema);
-  const has=col=>schema.has(col)||schema.size===0; // if schema unknown, try everything
+  const nameCol=findNameColumn(schema); // always returns 'member_name' or confirmed column
+  const has=col=>schema.size===0||schema.has(col); // if schema unknown, try all columns
 
-  // 2. Lookup existing row using the real name column
+  // 2. Lookup existing row
   let existingData=[];
-  if(nameCol){
-    try{
-      const r=await fetch(SB_URL+'/rest/v1/lt_leaves?'+nameCol+'=ilike.'+encodeURIComponent(entry.name)+(schema.has('deleted')?'&deleted=eq.false':'')+'&limit=1',{
+  try{
+    const memberName=(entry.name||'').trim();
+    if(memberName){
+      const r=await fetch(SB_URL+'/rest/v1/lt_leaves?'+nameCol+'=ilike.'+encodeURIComponent(memberName)+'&limit=1',{
         headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
       });
       if(r.ok)existingData=await r.json();
-    }catch(e){console.warn('upsertLeave lookup failed:',e.message)}
-  }
+    }
+  }catch(e){console.warn('upsertLeave lookup failed:',e.message)}
 
   // 3. Build payload — only include columns we believe exist
   const makePayload=()=>{
@@ -322,8 +325,11 @@ async function upsertLeave(entry,addedBy){
       if(!r.ok){const txt=await r.text();throw new Error(txt)}
       return r.json();
     }else{
-      // New row — include the name column
-      const namePayload=nameCol?{[nameCol]:entry.name}:{};
+      // Always include the name column — it's NOT NULL, sending null will fail
+      // nameCol is guaranteed non-null (defaults to 'member_name')
+      const memberName=entry.name&&entry.name.trim();
+      if(!memberName)throw new Error('Cannot save leave: user name is empty. Please log out and log back in.');
+      const namePayload={[nameCol]:memberName};
       const r=await fetch(SB_URL+'/rest/v1/lt_leaves',{
         method:'POST',
         headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
