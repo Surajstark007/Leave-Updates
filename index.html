@@ -260,17 +260,16 @@ function findNameColumn(schema){
 
 async function fetchUserLeaves(){
   try{
-    const schema=await getLeavesSchema();
-    const nameCol=findNameColumn(schema);
-    // Build query — filter out deleted if the column exists
-    let url=SB_URL+'/rest/v1/lt_leaves?limit=500';
-    if(schema.has('deleted'))url+='&deleted=eq.false';
-    if(schema.has('created_at'))url+='&order=created_at.desc';
-    const r=await fetch(url,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+    // Fetch all rows without assuming column names exist
+    const r=await fetch(SB_URL+'/rest/v1/lt_leaves?limit=500&order=id.desc',{
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
     if(!r.ok)throw new Error('fetch failed: '+r.status);
     const data=await r.json();
-    localStorage.setItem('cx_lt_leaves_cache',JSON.stringify(data));
-    return data;
+    // Filter out deleted rows client-side (handles both deleted=true and missing column)
+    const active=(data||[]).filter(row=>!row.deleted);
+    localStorage.setItem('cx_lt_leaves_cache',JSON.stringify(active));
+    return active;
   }catch(e){
     console.warn('fetchUserLeaves fallback to localStorage:',e.message);
     try{return JSON.parse(localStorage.getItem('cx_lt_leaves_cache')||'[]')}catch{return[]}
@@ -278,99 +277,79 @@ async function fetchUserLeaves(){
 }
 
 async function upsertLeave(entry,addedBy){
-  // 1. Get real schema (non-blocking — we have a confirmed default)
-  const schema=await getLeavesSchema();
-  const nameCol=findNameColumn(schema); // always returns 'member_name' or confirmed column
-  const has=col=>schema.size===0||schema.has(col); // if schema unknown, try all columns
+  const memberName=((entry.name||'')+'').trim()||(addedBy||'').split('@')[0]||'Unknown';
+  console.log('[upsert] member_name=',memberName,'dates=',entry.dates&&entry.dates.length);
 
-  console.log('upsertLeave called — entry.name:',JSON.stringify(entry.name),'nameCol:',nameCol,'schema size:',schema.size,'schema:',JSON.stringify([...schema]));
-
-  // Guard: name must never be null — use addedBy or 'Unknown' as last resort
-  const resolvedName=(entry.name&&entry.name.trim())||(addedBy&&addedBy.split('@')[0])||'Unknown';
-  if(!entry.name||!entry.name.trim()){
-    console.warn('upsertLeave: entry.name was empty, using fallback:',resolvedName);
-  }
-
-  // 2. Lookup existing row
-  let existingData=[];
+  // Try to find an existing row for this person
+  let existingId=null;
   try{
-    if(resolvedName){
-      const r=await fetch(SB_URL+'/rest/v1/lt_leaves?'+nameCol+'=ilike.'+encodeURIComponent(resolvedName)+'&limit=1',{
-        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-      });
-      if(r.ok)existingData=await r.json();
-    }
-  }catch(e){console.warn('upsertLeave lookup failed:',e.message)}
+    const r=await fetch(SB_URL+'/rest/v1/lt_leaves?member_name=ilike.'+encodeURIComponent(memberName)+'&limit=1',{
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    if(r.ok){const rows=await r.json();if(rows&&rows.length>0)existingId=rows[0].id;}
+  }catch(e){console.warn('[upsert] lookup error:',e.message)}
 
-  // 3. Build payload — only include columns we believe exist
-  const makePayload=()=>{
-    const p={};
-    if(has('type'))p.type=entry.type;
-    if(has('dates'))p.dates=JSON.stringify(entry.dates);
-    if(has('backup'))p.backup=entry.backup||'';
-    if(has('updated_at'))p.updated_at=new Date().toISOString();
-    if(has('added_by'))p.added_by=addedBy||'';
-    if(has('half_days'))p.half_days=JSON.stringify(entry.halfDays||{});
-    if(has('date_types'))p.date_types=JSON.stringify(entry.dateTypes||{});
-    return p;
+  // Build minimal payload — only the columns we know exist
+  // Progressively add optional columns; if we get a column error, remove it and retry
+  const base={
+    member_name:memberName,
+    dates:JSON.stringify(entry.dates||[]),
+    leave_type:entry.type||'PTO',
+    type:entry.type||'PTO',
+    backup_info:entry.backup||'',
+    backup:entry.backup||'',
+    half_days:JSON.stringify(entry.halfDays||{}),
+    date_types:JSON.stringify(entry.dateTypes||{}),
+    added_by:addedBy||'',
+    updated_at:new Date().toISOString(),
   };
 
-  // 4. Helpers
-  const isColErr=(msg)=>/schema cache|PGRST204|does not exist|unrecognized|unknown field/i.test(msg)&&!/null value|violates not.null/i.test(msg);
-  const isNullConstraint=(msg)=>/null value.*violates not.null|violates not.null.*null value/i.test(msg);
-  const extractBadCol=(msg)=>{
-    const m=msg.match(/find the '(\w+)' column/)||msg.match(/'(\w+)'.*schema cache/)||msg.match(/column "(\w+)"/i);
-    const col=m?m[1]:null;
-    // Never strip the name column — it's required
-    return col&&col!==nameCol?col:null;
+  const save=async(payload)=>{
+    const url=existingId
+      ?SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingId
+      :SB_URL+'/rest/v1/lt_leaves';
+    const r=await fetch(url,{
+      method:existingId?'PATCH':'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify(payload)
+    });
+    const txt=await r.text();
+    if(!r.ok)throw new Error(txt);
+    return txt?JSON.parse(txt):null;
   };
 
-  const doSave=async(p)=>{
-    if(existingData&&existingData.length>0){
-      const r=await fetch(SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingData[0].id,{
-        method:'PATCH',
-        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
-        body:JSON.stringify(p)
-      });
-      if(!r.ok){const txt=await r.text();throw new Error(txt)}
-      return r.json();
-    }else{
-      const memberName=resolvedName;
-      const body={[nameCol]:memberName,...p};
-      console.log('upsertLeave POST body:',JSON.stringify(body));
-      const r=await fetch(SB_URL+'/rest/v1/lt_leaves',{
-        method:'POST',
-        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
-        body:JSON.stringify(body)
-      });
-      if(!r.ok){const txt=await r.text();throw new Error(txt)}
-      return r.json();
-    }
-  };
-
-  // 5. Self-healing retry — strip unknown columns one by one
-  let payload=makePayload();
-  for(let i=0;i<10;i++){
+  // Self-healing: strip unknown columns one at a time until it saves
+  let payload={...base};
+  let lastErr=null;
+  for(let attempt=0;attempt<15;attempt++){
     try{
-      const result=await doSave(payload);
+      console.log('[upsert] attempt',attempt+1,'payload keys:',Object.keys(payload).join(', '));
+      const result=await save(payload);
+      console.log('[upsert] SUCCESS on attempt',attempt+1);
       return result;
     }catch(e){
-      // Null constraint on member_name = name was missing somehow — throw immediately with clear message
-      if(isNullConstraint(e.message)){
-        throw new Error('Save failed: member_name is required but was null. entry.name="'+(entry.name||'')+'", nameCol='+nameCol);
+      lastErr=e.message;
+      console.warn('[upsert] attempt',attempt+1,'failed:',lastErr.slice(0,150));
+      // Parse the error JSON if possible
+      let errMsg=lastErr;
+      try{const j=JSON.parse(lastErr);errMsg=j.message||j.details||lastErr}catch{}
+      // If it's a NOT NULL violation on member_name — something is very wrong, give up
+      if(/null value.*member_name|member_name.*null/i.test(errMsg)){
+        throw new Error('member_name is null — entry.name was: '+JSON.stringify(entry.name));
       }
-      if(!isColErr(e.message))throw e;
-      const bad=extractBadCol(e.message);
-      if(bad&&payload.hasOwnProperty(bad)){
-        console.warn('upsertLeave: stripping unknown column:',bad,'and retrying');
-        schema.delete(bad);
-        const copy={...payload};delete copy[bad];payload=copy;
-      }else{
-        throw e;
+      // If it's a column/schema error — strip the bad column
+      const colMatch=errMsg.match(/column of '(\w+)'|find the '(\w+)' column|'(\w+)'.*schema cache/);
+      const col=colMatch?(colMatch[1]||colMatch[2]||colMatch[3]):null;
+      if(col&&payload.hasOwnProperty(col)){
+        console.log('[upsert] stripping column:',col);
+        const p={...payload};delete p[col];payload=p;
+        continue;
       }
+      // Not a column error we can fix — give up
+      throw new Error(errMsg);
     }
   }
-  throw new Error('Save failed after 10 retries');
+  throw new Error('Save failed after all retries: '+lastErr);
 }
 async function softDeleteLeave(name){
   const nameCol=_leavesNameCol||'member_name';
@@ -454,33 +433,33 @@ async function syncLeaveProjectsToMaster(userName,backupStr){
 function mergeCanvasAndUserLeaves(canvasMembers,userLeaves){
   const merged=[...canvasMembers];const deletedNames=new Set();
   for(const ul of userLeaves){
-    // Handle flexible name column — could be 'name', 'employee', 'person', etc.
-    const ulName=ul.member_name||ul.name||ul.employee||ul.employee_name||ul.person||ul.person_name||ul.member||ul.username||ul.display_name||'';
+    // Handle all possible name column variants
+    const ulName=(ul.member_name||ul.name||ul.employee||ul.employee_name||ul.person||ul.person_name||ul.member||ul.username||ul.display_name||'').trim();
     if(!ulName)continue;
     if(ul.deleted){deletedNames.add(ulName.toLowerCase());continue}
+    // Handle all possible dates column variants
+    const rawDates=ul.dates||ul.leave_dates||ul.date_list||'[]';
     let dates=[];
-    try{dates=typeof ul.dates==='string'?JSON.parse(ul.dates):ul.dates||[]}catch{dates=[]}
+    try{dates=typeof rawDates==='string'?JSON.parse(rawDates):rawDates||[]}catch{dates=[]}
+    // Handle all possible half_days column variants
+    const rawHD=ul.half_days||ul.halfdays||ul.half_day||'{}';
     let halfDays={};
-    try{halfDays=typeof ul.half_days==='string'?JSON.parse(ul.half_days):ul.half_days||{}}catch{halfDays={}}
+    try{halfDays=typeof rawHD==='string'?JSON.parse(rawHD):rawHD||{}}catch{halfDays={}}
+    // Handle all possible date_types column variants
+    const rawDT=ul.date_types||ul.datetypes||ul.leave_types||'{}';
     let dateTypes={};
-    try{dateTypes=typeof ul.date_types==='string'?JSON.parse(ul.date_types):ul.date_types||{}}catch{dateTypes={}}
-    // Keep all user-saved dates — do NOT filter by isFuture here.
-    // The view filters handle display (upcoming/today/week/all).
-    // Filtering here causes data to vanish after the leave date passes.
-    const validDates=dates.filter(d=>d&&d.match(/^\d{4}-\d{2}-\d{2}$/));
+    try{dateTypes=typeof rawDT==='string'?JSON.parse(rawDT):rawDT||{}}catch{dateTypes={}}
+    // Handle all possible type column variants
+    const ulType=ul.type||ul.leave_type||ul.leavetype||'PTO';
+    // Handle all possible backup column variants
+    const ulBackup=ul.backup||ul.backup_info||ul.backup_person||'';
+    const validDates=dates.filter(d=>d&&d.match&&d.match(/^\d{4}-\d{2}-\d{2}$/));
     const idx=merged.findIndex(m=>m.name.toLowerCase()===ulName.toLowerCase());
     if(idx>=0){
       const mergedDates=new Set([...merged[idx].dates,...validDates]);
-      merged[idx]={
-        ...merged[idx],
-        dates:[...mergedDates].sort(),
-        backup:ul.backup||merged[idx].backup,
-        type:ul.type||merged[idx].type,
-        halfDays:{...(merged[idx].halfDays||{}),...halfDays},
-        dateTypes:{...(merged[idx].dateTypes||{}),...dateTypes}
-      };
+      merged[idx]={...merged[idx],dates:[...mergedDates].sort(),backup:ulBackup||merged[idx].backup,type:ulType||merged[idx].type,halfDays:{...(merged[idx].halfDays||{}),...halfDays},dateTypes:{...(merged[idx].dateTypes||{}),...dateTypes}};
     }else{
-      merged.push({name:ulName,dates:validDates.sort(),backup:ul.backup||'',type:ul.type||'PTO',raw:'',halfDays,dateTypes});
+      merged.push({name:ulName,dates:validDates.sort(),backup:ulBackup||'',type:ulType||'PTO',raw:'',halfDays,dateTypes});
     }
   }
   return merged.filter(m=>!deletedNames.has(m.name.toLowerCase()));
