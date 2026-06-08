@@ -229,7 +229,6 @@ async function fetchUserLeaves(){
 }
 
 async function upsertLeave(entry,addedBy){
-  // Get member name — never null
   const memberName=(entry&&entry.name&&String(entry.name).trim())||
                    (addedBy&&String(addedBy).split('@')[0].trim())||
                    'Unknown';
@@ -247,18 +246,36 @@ async function upsertLeave(entry,addedBy){
 
   console.log('[upsertLeave] memberName=',memberName,'payload=',JSON.stringify(payload).slice(0,150));
 
-  // Look for existing row using sbFetch (same pattern as logAction which works)
+  // Use Prefer: return=minimal so PostgREST doesn't try to SELECT the row back
+  // (SELECT may be blocked by RLS even when INSERT is allowed)
+  const headers={
+    'apikey':SB_KEY,
+    'Authorization':'Bearer '+SB_KEY,
+    'Content-Type':'application/json',
+    'Prefer':'return=minimal',
+  };
+
+  // Look for existing row
   let existingId=null;
   try{
-    const rows=await sbFetch('lt_leaves?member_name=eq.'+encodeURIComponent(memberName)+'&limit=1');
-    if(rows&&rows.length>0)existingId=rows[0].id;
+    const lu=await fetch(SB_URL+'/rest/v1/lt_leaves?member_name=eq.'+encodeURIComponent(memberName)+'&limit=1',{headers});
+    if(lu.ok){const rows=await lu.json();if(Array.isArray(rows)&&rows.length>0)existingId=rows[0].id;}
   }catch(e){console.warn('[upsertLeave] lookup err:',e.message)}
 
-  if(existingId){
-    return sbFetch('lt_leaves?id=eq.'+existingId,{method:'PATCH',body:JSON.stringify(payload)});
-  }else{
-    return sbFetch('lt_leaves',{method:'POST',body:JSON.stringify(payload)});
+  const url=existingId
+    ?SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingId
+    :SB_URL+'/rest/v1/lt_leaves';
+  const method=existingId?'PATCH':'POST';
+
+  const r=await fetch(url,{method,headers,body:JSON.stringify(payload)});
+  const txt=await r.text();
+  console.log('[upsertLeave] status:',r.status,'response:',txt.slice(0,100));
+  if(!r.ok){
+    let msg=txt;
+    try{const j=JSON.parse(txt);msg=j.message||j.hint||j.details||txt}catch{}
+    throw new Error(msg);
   }
+  return true; // success — don't need the row back
 }
 async function softDeleteLeave(name){
   const nameCol=_leavesNameCol||'member_name';
@@ -2514,9 +2531,7 @@ function App(){
         const canvasMembers=data.filter(m=>m.raw!==undefined&&m.raw!=='');
         setData(mergeCanvasAndUserLeaves(canvasMembers.map(m=>({...m})),freshLeaves));
       }catch{}
-      // Show the setup modal to guide the user
-      setShowSqlSetup(true);
-      toast('Save failed — '+detail.slice(0,120),'error');
+      toast('Save failed — '+detail.slice(0,200),'error');
     }
 
     if(savedDates.length>0){
@@ -2538,6 +2553,19 @@ function App(){
       </div>
       <div style={{display:'flex',alignItems:'center',gap:8}}>
         <button className="btn btn-secondary btn-sm" onClick={handleRefresh} disabled={refreshing}><span className={refreshing?'spin':''} style={{display:'inline-flex'}}><Icon name="refresh" size={14}/></span> {refreshing?'…':'Refresh'}</button>
+        <button className="btn btn-sm" style={{background:'#888',color:'#fff',border:'none',fontSize:11}} onClick={async()=>{
+          const testName='DB_TEST_'+Date.now();
+          const h={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'};
+          try{
+            const r=await fetch(SB_URL+'/rest/v1/lt_leaves',{method:'POST',headers:h,body:JSON.stringify({member_name:testName,dates:'[]',type:'PTO',backup:'',half_days:'{}',date_types:'{}',added_by:'test',updated_at:new Date().toISOString()})});
+            const txt=await r.text();
+            if(r.ok){
+              alert('✅ DB INSERT WORKS! Status: '+r.status+'\nThe table connection is fine.\nTry saving your leave now.');
+            }else{
+              alert('❌ FAILED (status '+r.status+'):\n'+txt);
+            }
+          }catch(err){alert('❌ Network error:\n'+err.message)}
+        }}>Test DB</button>
         <button className="btn btn-sm" onClick={()=>setShowImport(true)} style={{background:'var(--green-bg)',color:'var(--green)',border:'1px solid rgba(43,138,62,.25)'}}><Icon name="download" size={14}/> Import</button>
         <button className="btn btn-sm" onClick={()=>setShowProjectsAgenda(true)} style={{background:'var(--indigo-bg)',color:'var(--indigo)',border:'1px solid rgba(92,71,224,.2)'}}><Icon name="clipboard" size={14}/> Projects &amp; Agenda</button>
         <button className="btn btn-primary btn-sm" onClick={()=>{setEditingIdx(null);setShowAddLeave(true)}}><Icon name="plus" size={14}/> Add My Leave</button>
