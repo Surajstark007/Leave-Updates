@@ -285,12 +285,17 @@ async function upsertLeave(entry,addedBy){
 
   console.log('upsertLeave called — entry.name:',JSON.stringify(entry.name),'nameCol:',nameCol,'schema size:',schema.size,'schema:',JSON.stringify([...schema]));
 
+  // Guard: name must never be null — use addedBy or 'Unknown' as last resort
+  const resolvedName=(entry.name&&entry.name.trim())||(addedBy&&addedBy.split('@')[0])||'Unknown';
+  if(!entry.name||!entry.name.trim()){
+    console.warn('upsertLeave: entry.name was empty, using fallback:',resolvedName);
+  }
+
   // 2. Lookup existing row
   let existingData=[];
   try{
-    const memberName=(entry.name||'').trim();
-    if(memberName){
-      const r=await fetch(SB_URL+'/rest/v1/lt_leaves?'+nameCol+'=ilike.'+encodeURIComponent(memberName)+'&limit=1',{
+    if(resolvedName){
+      const r=await fetch(SB_URL+'/rest/v1/lt_leaves?'+nameCol+'=ilike.'+encodeURIComponent(resolvedName)+'&limit=1',{
         headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
       });
       if(r.ok)existingData=await r.json();
@@ -330,8 +335,7 @@ async function upsertLeave(entry,addedBy){
       if(!r.ok){const txt=await r.text();throw new Error(txt)}
       return r.json();
     }else{
-      const memberName=(entry.name||'').trim();
-      if(!memberName)throw new Error('Cannot save: your name is missing. Please log out and log back in.');
+      const memberName=resolvedName;
       const body={[nameCol]:memberName,...p};
       console.log('upsertLeave POST body:',JSON.stringify(body));
       const r=await fetch(SB_URL+'/rest/v1/lt_leaves',{
@@ -2595,11 +2599,15 @@ function App(){
     }
     setShowAddLeave(false);
 
+    // Ensure name is always set — fall back to logged-in user if entry.name is somehow empty
+    const guaranteedName=(finalEntry.name&&finalEntry.name.trim())||(user&&user.name&&user.name.trim())||'Unknown';
+    const entryWithName={...finalEntry,name:guaranteedName};
+
     // 2. Persist to Supabase and confirm
     try{
-      await upsertLeave(finalEntry,(user&&user.email)||'');
+      await upsertLeave(entryWithName,(user&&user.email)||'');
       // Sync project entries into the master lt_projects table (fire and forget)
-      syncLeaveProjectsToMaster(finalEntry.name,finalEntry.backup).catch(e=>console.warn('sync projects:',e.message));
+      syncLeaveProjectsToMaster(entryWithName.name,entryWithName.backup).catch(e=>console.warn('sync projects:',e.message));
       // 3. Reload from DB to confirm data is actually there
       const freshLeaves=await fetchUserLeaves();
       const canvasMembers=data.filter(m=>m.raw!==undefined&&m.raw!=='');
