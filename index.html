@@ -217,39 +217,55 @@ async function fetchUserLeaves(){
   }
 }
 async function upsertLeave(entry,addedBy){
-  const existing=await fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(entry.name)+'&deleted=eq.false&limit=1',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
-  const existingData=await existing.json();
+  // Lookup existing row — with error handling
+  let existingData=[];
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(entry.name)+'&deleted=eq.false&limit=1',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+    if(r.ok)existingData=await r.json();
+  }catch(e){console.warn('upsertLeave lookup failed:',e.message)}
 
-  // Try with half_days first; if that fails (column may not exist), retry without it
-  const tryUpsert=async(withHalfDays)=>{
+  // Build payload — progressively drop columns that don't exist in the schema
+  const tryUpsert=async(cols)=>{
     const payload={
       type:entry.type,
       dates:JSON.stringify(entry.dates),
-      backup:entry.backup,
+      backup:entry.backup||'',
       updated_at:new Date().toISOString(),
-      added_by:addedBy,
-      ...(withHalfDays?{half_days:JSON.stringify(entry.halfDays||{}),date_types:JSON.stringify(entry.dateTypes||{})}:{})
+      added_by:addedBy||'',
+      ...(cols.halfDays?{half_days:JSON.stringify(entry.halfDays||{})}:{}),
+      ...(cols.dateTypes?{date_types:JSON.stringify(entry.dateTypes||{})}:{})
     };
     if(existingData&&existingData.length>0){
-      const r=await fetch(SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingData[0].id,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)});
+      const r=await fetch(SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingData[0].id,{
+        method:'PATCH',
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+        body:JSON.stringify(payload)
+      });
       if(!r.ok){const txt=await r.text();throw new Error(txt)}
       return r.json();
     }else{
-      const r=await fetch(SB_URL+'/rest/v1/lt_leaves',{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({name:entry.name,...payload})});
+      const r=await fetch(SB_URL+'/rest/v1/lt_leaves',{
+        method:'POST',
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+        body:JSON.stringify({name:entry.name,...payload})
+      });
       if(!r.ok){const txt=await r.text();throw new Error(txt)}
       return r.json();
     }
   };
 
-  try{
-    return await tryUpsert(true);
-  }catch(e1){
-    // If it failed due to unknown column half_days, retry without it
-    if(e1.message.includes('half_days')||e1.message.includes('column')){
-      console.warn('half_days column missing, retrying without it');
-      return await tryUpsert(false);
+  // Helper: does the error message indicate an unknown/missing column?
+  const isColumnError=(msg)=>/column|PGRST204|does not exist|unrecognized|unknown field/i.test(msg);
+
+  // Try with all columns → drop date_types → drop half_days too → bare minimum
+  try{return await tryUpsert({halfDays:true,dateTypes:true})}catch(e1){
+    if(!isColumnError(e1.message))throw e1;
+    console.warn('upsertLeave: column error, retrying without date_types:',e1.message.slice(0,120));
+    try{return await tryUpsert({halfDays:true,dateTypes:false})}catch(e2){
+      if(!isColumnError(e2.message))throw e2;
+      console.warn('upsertLeave: column error, retrying without half_days either:',e2.message.slice(0,120));
+      return await tryUpsert({halfDays:false,dateTypes:false});
     }
-    throw e1;
   }
 }
 async function softDeleteLeave(name){
@@ -2366,21 +2382,25 @@ function App(){
     // 2. Persist to Supabase and confirm
     try{
       await upsertLeave(finalEntry,(user&&user.email)||'');
-      // Sync project entries into the master lt_projects table
+      // Sync project entries into the master lt_projects table (fire and forget)
       syncLeaveProjectsToMaster(finalEntry.name,finalEntry.backup).catch(e=>console.warn('sync projects:',e.message));
       // 3. Reload from DB to confirm data is actually there
       const freshLeaves=await fetchUserLeaves();
       const canvasMembers=data.filter(m=>m.raw!==undefined&&m.raw!=='');
-      const freshMerged=mergeCanvasAndUserLeaves(
-        canvasMembers.map(m=>({...m})),
-        freshLeaves
-      );
-      setData(freshMerged);
+      setData(mergeCanvasAndUserLeaves(canvasMembers.map(m=>({...m})),freshLeaves));
       toast('Leave saved ✓','success');
     }catch(e){
-      // Data is still in local state but not persisted — warn clearly
       console.error('upsertLeave failed:',e.message);
-      toast('⚠ Saved locally only — database error: '+e.message.slice(0,60),'error');
+      // Parse Supabase JSON error body for a readable message
+      let detail=e.message||'Network error';
+      try{const j=JSON.parse(detail);detail=j.message||j.hint||j.details||detail}catch{}
+      // Still reload from DB — the retry logic may have partially succeeded
+      try{
+        const freshLeaves=await fetchUserLeaves();
+        const canvasMembers=data.filter(m=>m.raw!==undefined&&m.raw!=='');
+        setData(mergeCanvasAndUserLeaves(canvasMembers.map(m=>({...m})),freshLeaves));
+      }catch{}
+      toast('Save failed — '+detail.slice(0,100),'error');
     }
 
     if(savedDates.length>0){
