@@ -212,13 +212,13 @@ function findNameColumn(){return _leavesNameCol;}
 
 async function fetchUserLeaves(){
   try{
-    // Fetch all rows without assuming column names exist
     const r=await fetch(SB_URL+'/rest/v1/lt_leaves?limit=500&order=id.desc',{
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/json'}
     });
-    if(!r.ok)throw new Error('fetch failed: '+r.status);
+    if(!r.ok){console.warn('fetchUserLeaves HTTP',r.status);throw new Error('fetch failed: '+r.status)}
     const data=await r.json();
-    // Filter out deleted rows client-side (handles both deleted=true and missing column)
+    console.log('[fetchUserLeaves] got',data&&data.length,'rows');
+    if(data&&data.length>0)console.log('[fetchUserLeaves] first row keys:',Object.keys(data[0]).join(', '));
     const active=(data||[]).filter(row=>!row.deleted);
     localStorage.setItem('cx_lt_leaves_cache',JSON.stringify(active));
     return active;
@@ -2393,7 +2393,7 @@ function App(){
   const[user,setUser]=useState(()=>{try{return JSON.parse(localStorage.getItem('cx_lt_session'))}catch{return null}});
   const[data,setData]=useState([]);
   const[lastSync,setLastSync]=useState('Loading...');
-  const[view,setView]=useState('upcoming');const[weekDate,setWeekDate]=useState(new Date());
+  const[view,setView]=useState('all');const[weekDate,setWeekDate]=useState(new Date());
   const[typeFilter,setTypeFilter]=useState('All');const[search,setSearch]=useState('');
   const[selectedUsers,setSelectedUsers]=useState([]);
   const[showAddLeave,setShowAddLeave]=useState(false);const[showUserPicker,setShowUserPicker]=useState(false);
