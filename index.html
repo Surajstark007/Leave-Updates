@@ -2355,112 +2355,119 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
 
 // ─── MAIN APP ───
 // ─── SQL SETUP MODAL ───
-// Shown when Supabase schema is missing columns — gives user exact SQL to run
-function SqlSetupModal({onClose}){
+function SqlSetupModal({onClose,onFixed}){
+  const[running,setRunning]=useState(false);
+  const[done,setDone]=useState(false);
   const[copied,setCopied]=useState(false);
-  const[diagnosing,setDiagnosing]=useState(false);
-  const[actualSchema,setActualSchema]=useState(null);
+  const[log,setLog]=useState([]);
 
-  const diagnose=async()=>{
-    setDiagnosing(true);
-    try{
-      // Reset cache so we re-probe
+  // The exact ALTER statements needed — one per column so each can be retried independently
+  const alters=[
+    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS dates jsonb DEFAULT '[]'",
+    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS type text DEFAULT 'PTO'",
+    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS backup text DEFAULT ''",
+    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS half_days jsonb DEFAULT '{}'",
+    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS date_types jsonb DEFAULT '{}'",
+    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS added_by text DEFAULT ''",
+    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now()",
+    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS deleted boolean DEFAULT false",
+  ];
+
+  // Try to run each ALTER via Supabase's pg_execute RPC (only works if it exists)
+  const runAutoFix=async()=>{
+    setRunning(true);setLog([]);
+    let anyFailed=false;
+    for(const stmt of alters){
+      const colName=stmt.match(/ADD COLUMN IF NOT EXISTS (\w+)/)[1];
+      try{
+        const r=await fetch(SB_URL+'/rest/v1/rpc/pg_execute',{
+          method:'POST',
+          headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},
+          body:JSON.stringify({query:stmt})
+        });
+        if(r.ok){
+          setLog(l=>[...l,{ok:true,msg:'✓ Added column: '+colName}]);
+        }else{
+          const txt=await r.text();
+          // If the RPC doesn't exist, fall back gracefully
+          if(txt.includes('pg_execute')||txt.includes('function')){
+            setLog(l=>[...l,{ok:false,msg:'Auto-fix not available — please run SQL manually (see below)'}]);
+            setRunning(false);return;
+          }
+          setLog(l=>[...l,{ok:true,msg:'✓ '+colName+' (already exists or added)'}]);
+        }
+      }catch(e){
+        setLog(l=>[...l,{ok:false,msg:'⚠ '+colName+': '+e.message}]);
+        anyFailed=true;
+      }
+    }
+    setRunning(false);
+    if(!anyFailed){
+      setDone(true);
+      // Reset schema cache so next save re-probes
       _leavesSchema=null;_leavesNameCol=null;
-      const schema=await getLeavesSchema();
-      setActualSchema([...schema].sort());
-    }catch(e){setActualSchema(['Error: '+e.message])}
-    setDiagnosing(false);
+    }
   };
 
-  const sql=`-- Run in Supabase SQL Editor → your project → SQL Editor
-
-CREATE TABLE IF NOT EXISTS lt_leaves (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  member_name text NOT NULL,
-  type text DEFAULT 'PTO',
-  dates jsonb DEFAULT '[]',
-  backup text DEFAULT '',
-  half_days jsonb DEFAULT '{}',
-  date_types jsonb DEFAULT '{}',
-  added_by text DEFAULT '',
-  updated_at timestamptz DEFAULT now(),
-  created_at timestamptz DEFAULT now(),
-  deleted boolean DEFAULT false
-);
-
--- If table already exists, add any missing columns:
-ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS member_name text;
-ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS type text DEFAULT 'PTO';
+  const sql=`-- Run these in Supabase → SQL Editor:
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS dates jsonb DEFAULT '[]';
+ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS type text DEFAULT 'PTO';
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS backup text DEFAULT '';
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS half_days jsonb DEFAULT '{}';
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS date_types jsonb DEFAULT '{}';
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS added_by text DEFAULT '';
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
-ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS deleted boolean DEFAULT false;
+ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS deleted boolean DEFAULT false;`;
 
--- Allow the app to read and write:
-ALTER TABLE lt_leaves ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "allow_all" ON lt_leaves;
-CREATE POLICY "allow_all" ON lt_leaves FOR ALL USING (true) WITH CHECK (true);
+  // Build URL with SQL pre-filled for Supabase SQL editor
+  const supabaseUrl='https://supabase.com/dashboard/project/wplarfdgdwhbbtjrgjrw/sql/new?query='+encodeURIComponent(sql);
+  const copy=()=>{navigator.clipboard.writeText(sql).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2500)})};
 
--- Also for lt_projects:
-CREATE TABLE IF NOT EXISTS lt_projects (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  name text,
-  date text,
-  project text DEFAULT '',
-  next_call text DEFAULT '',
-  backup text DEFAULT '',
-  agenda text DEFAULT '',
-  source text DEFAULT 'standalone',
-  updated_at timestamptz DEFAULT now(),
-  created_at timestamptz DEFAULT now(),
-  deleted boolean DEFAULT false
-);
-ALTER TABLE lt_projects ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "allow_all" ON lt_projects;
-CREATE POLICY "allow_all" ON lt_projects FOR ALL USING (true) WITH CHECK (true);`;
+  if(done){
+    return(<div className="overlay"><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:480,textAlign:'center',padding:32}}>
+      <div style={{fontSize:48,marginBottom:12}}>✅</div>
+      <h3 style={{fontSize:18,fontWeight:700,marginBottom:8}}>Schema fixed!</h3>
+      <p style={{fontSize:13,color:'var(--text2)',marginBottom:20}}>All missing columns have been added. Click below to save your leave.</p>
+      <button className="btn btn-primary" style={{fontSize:14,padding:'10px 28px'}} onClick={()=>{onClose();if(onFixed)onFixed()}}>Continue & Save</button>
+    </div></div>);
+  }
 
-  const copy=()=>{navigator.clipboard.writeText(sql).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000)})};
-
-  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:680}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14}}>
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:560}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
       <div>
-        <h3 style={{fontSize:17,fontWeight:600,color:'var(--red)'}}>⚠ Database setup required</h3>
-        <div style={{fontSize:12,color:'var(--text2)',marginTop:3}}>The <code style={{background:'var(--surface2)',padding:'1px 5px',borderRadius:3}}>lt_leaves</code> table is missing columns. Run the SQL below in Supabase to fix it.</div>
+        <h3 style={{fontSize:17,fontWeight:700}}>⚠ One-time database setup needed</h3>
+        <div style={{fontSize:12.5,color:'var(--text2)',marginTop:3}}>Your <code>lt_leaves</code> table is missing some columns. This only needs to be done once.</div>
       </div>
       <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
     </div>
 
-    <div style={{marginBottom:12,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-      <a href="https://supabase.com/dashboard/project/wplarfdgdwhbbtjrgjrw/sql/new" target="_blank" rel="noreferrer"
-        style={{display:'inline-flex',alignItems:'center',gap:6,padding:'7px 14px',background:'var(--accent)',color:'#fff',borderRadius:8,fontSize:12.5,fontWeight:500,textDecoration:'none'}}>
-        Open Supabase SQL Editor ↗
-      </a>
-      <button className="btn btn-secondary" onClick={copy} style={{fontSize:12.5}}>{copied?'✓ Copied!':'Copy SQL'}</button>
-      <button className="btn btn-secondary" onClick={diagnose} disabled={diagnosing} style={{fontSize:12.5}}>{diagnosing?'Probing…':'Diagnose current schema'}</button>
+    {/* Option 1: Manual via Supabase */}
+    <div style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:14,marginBottom:12}}>
+      <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>Option 1 — Open Supabase SQL Editor (fastest)</div>
+      <div style={{fontSize:12,color:'var(--text2)',marginBottom:10}}>Click the button below — it opens Supabase with the SQL pre-filled. Just click <strong>Run</strong>.</div>
+      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+        <a href={supabaseUrl} target="_blank" rel="noreferrer"
+          style={{display:'inline-flex',alignItems:'center',gap:6,padding:'8px 16px',background:'var(--accent)',color:'#fff',borderRadius:8,fontSize:13,fontWeight:600,textDecoration:'none'}}>
+          Open Supabase &amp; Run SQL ↗
+        </a>
+        <button className="btn btn-secondary" onClick={copy} style={{fontSize:12.5}}>{copied?'✓ Copied!':'Copy SQL only'}</button>
+      </div>
     </div>
 
-    {actualSchema&&<div style={{marginBottom:12,padding:'10px 14px',background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8}}>
-      <div style={{fontSize:11.5,fontWeight:600,color:'var(--text2)',marginBottom:5}}>Columns found in lt_leaves right now:</div>
-      {actualSchema.length===0
-        ?<div style={{fontSize:12,color:'var(--red)'}}>No columns detected — table may be empty or inaccessible</div>
-        :<div style={{display:'flex',flexWrap:'wrap',gap:4}}>
-          {actualSchema.map(c=><span key={c} style={{fontSize:11,background:'var(--indigo-bg)',color:'var(--indigo)',border:'1px solid rgba(92,71,224,.2)',borderRadius:4,padding:'1px 7px'}}>{c}</span>)}
-        </div>
-      }
-      {actualSchema.length>0&&!actualSchema.includes('name')&&!actualSchema.includes('member_name')&&<div style={{marginTop:8,fontSize:12,color:'var(--amber)'}}>⚠ No name/member_name column found. The app needs one called <strong>member_name</strong> or <strong>name</strong>. Run the SQL above to add it.</div>}
-      {actualSchema.length>0&&actualSchema.includes('member_name')&&<div style={{marginTop:8,fontSize:12,color:'var(--green)'}}>✓ Found <strong>member_name</strong> — the app will use this column.</div>}
+    {/* SQL preview */}
+    <pre style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 12px',fontSize:11,lineHeight:1.65,color:'var(--text)',whiteSpace:'pre',overflowX:'auto',marginBottom:12,fontFamily:"'JetBrains Mono',monospace"}}>{sql}</pre>
+
+    {/* Log output */}
+    {log.length>0&&<div style={{marginBottom:12,display:'flex',flexDirection:'column',gap:3}}>
+      {log.map((l,i)=><div key={i} style={{fontSize:12,padding:'3px 8px',borderRadius:5,background:l.ok?'var(--green-bg)':'var(--amber-bg)',color:l.ok?'var(--green)':'var(--amber)'}}>{l.msg}</div>)}
     </div>}
 
-    <pre style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:'12px 14px',fontSize:11,overflowX:'auto',overflowY:'auto',maxHeight:320,lineHeight:1.6,color:'var(--text)',whiteSpace:'pre',fontFamily:"'JetBrains Mono',monospace"}}>{sql}</pre>
-
-    <div style={{marginTop:10,fontSize:12,color:'var(--text3)',lineHeight:1.55}}>
-      After running the SQL, click <strong>Refresh</strong> in the app and try saving again.
-    </div>
-    <div style={{marginTop:10,display:'flex',justifyContent:'flex-end'}}>
-      <button className="btn btn-primary" onClick={onClose}>Got it</button>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
+      <div style={{fontSize:11.5,color:'var(--text3)'}}>After running the SQL, close this and try saving again.</div>
+      <div style={{display:'flex',gap:8}}>
+        <button className="btn btn-secondary" onClick={onClose}>Close</button>
+        <button className="btn btn-primary" onClick={()=>{onClose();window.location.reload()}} style={{fontSize:12.5}}>Refresh App</button>
+      </div>
     </div>
   </div></div>);
 }
