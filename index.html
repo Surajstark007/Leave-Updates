@@ -203,6 +203,38 @@ async function readCache(){
   if(!r.ok)return null;const data=await r.json();
   return data&&data[0]?{markdown:data[0].markdown_content,updated_at:data[0].updated_at}:null;
 }
+// ─── SUPABASE TABLE SCHEMA DISCOVERY ───
+// Probes lt_leaves once per session to find which columns actually exist.
+// Results cached in memory so we only probe once.
+let _leavesSchema=null; // null=unknown, Set=known columns
+async function getLeavesSchema(){
+  if(_leavesSchema)return _leavesSchema;
+  try{
+    // Fetch one row (or empty) — PostgREST returns column info in the response even for 0 rows
+    const r=await fetch(SB_URL+'/rest/v1/lt_leaves?limit=1',{
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/json'}
+    });
+    if(!r.ok){_leavesSchema=new Set(['name','dates','type']);return _leavesSchema}
+    // Check Content-Range and actual data to infer columns
+    const rows=await r.json();
+    if(rows&&rows.length>0){
+      _leavesSchema=new Set(Object.keys(rows[0]));
+    }else{
+      // Empty table — try inserting and catching errors, or use a safe default set
+      // Instead, try a HEAD request to get column info via PostgREST describe
+      const h=await fetch(SB_URL+'/rest/v1/lt_leaves',{
+        method:'HEAD',
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/openapi+json'}
+      });
+      // If empty table, assume minimal schema and let progressive retry handle the rest
+      _leavesSchema=new Set(['name','dates','type','backup','added_by','updated_at','deleted','half_days','date_types','created_at']);
+    }
+  }catch{
+    _leavesSchema=new Set(['name','dates','type']);
+  }
+  return _leavesSchema;
+}
+
 async function fetchUserLeaves(){
   try{
     const r=await fetch(SB_URL+'/rest/v1/lt_leaves?deleted=eq.false&order=created_at.desc',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
@@ -217,68 +249,79 @@ async function fetchUserLeaves(){
   }
 }
 async function upsertLeave(entry,addedBy){
-  // Lookup existing row — with error handling
+  // 1. Discover what columns the table actually has
+  const schema=await getLeavesSchema();
+
+  // 2. Lookup existing row
   let existingData=[];
   try{
-    const r=await fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(entry.name)+'&deleted=eq.false&limit=1',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+    const r=await fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(entry.name)+'&deleted=eq.false&limit=1',{
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
     if(r.ok)existingData=await r.json();
   }catch(e){console.warn('upsertLeave lookup failed:',e.message)}
 
-  // Helper: does the error indicate an unknown/missing column?
+  // 3. Build payload using only columns that exist in the schema
+  const has=col=>schema.has(col);
+  const payload={};
+  if(has('type'))payload.type=entry.type;
+  if(has('dates'))payload.dates=JSON.stringify(entry.dates);
+  if(has('backup'))payload.backup=entry.backup||'';
+  if(has('updated_at'))payload.updated_at=new Date().toISOString();
+  if(has('added_by'))payload.added_by=addedBy||'';
+  if(has('half_days'))payload.half_days=JSON.stringify(entry.halfDays||{});
+  if(has('date_types'))payload.date_types=JSON.stringify(entry.dateTypes||{});
+
+  // 4. Helper: does the error indicate a missing column?
   const isColumnError=(msg)=>/column|PGRST204|does not exist|unrecognized|unknown field|schema cache/i.test(msg);
 
-  // Build payload from a set of included columns
-  const buildPayload=(cols)=>({
-    type:entry.type,
-    dates:JSON.stringify(entry.dates),
-    updated_at:new Date().toISOString(),
-    added_by:addedBy||'',
-    ...(cols.backup?{backup:entry.backup||''}:{}),
-    ...(cols.halfDays?{half_days:JSON.stringify(entry.halfDays||{})}:{}),
-    ...(cols.dateTypes?{date_types:JSON.stringify(entry.dateTypes||{})}:{})
-  });
-
-  const doRequest=async(payload)=>{
+  // 5. Attempt save — if a column error still fires, remove that column and retry
+  const attemptSave=async(p)=>{
     if(existingData&&existingData.length>0){
       const r=await fetch(SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingData[0].id,{
         method:'PATCH',
         headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
-        body:JSON.stringify(payload)
+        body:JSON.stringify(p)
       });
       if(!r.ok){const txt=await r.text();throw new Error(txt)}
       return r.json();
     }else{
+      const namePayload={};
+      if(has('name'))namePayload.name=entry.name;
       const r=await fetch(SB_URL+'/rest/v1/lt_leaves',{
         method:'POST',
         headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
-        body:JSON.stringify({name:entry.name,...payload})
+        body:JSON.stringify({...namePayload,...p})
       });
       if(!r.ok){const txt=await r.text();throw new Error(txt)}
       return r.json();
     }
   };
 
-  // Progressive retry — drop optional columns one by one until the schema accepts the payload
-  const attempts=[
-    {backup:true, halfDays:true,  dateTypes:true},
-    {backup:true, halfDays:true,  dateTypes:false},
-    {backup:true, halfDays:false, dateTypes:false},
-    {backup:false,halfDays:false, dateTypes:false},
-  ];
-  let lastErr;
-  for(const cols of attempts){
+  // Extract the offending column name from the error and retry without it
+  const extractBadColumn=(msg)=>{
+    const m=msg.match(/find the '(\w+)' column/)||msg.match(/'(\w+)'.*schema cache/)||msg.match(/column "(\w+)"/);
+    return m?m[1]:null;
+  };
+
+  let currentPayload={...payload};
+  for(let attempt=0;attempt<8;attempt++){
     try{
-      const result=await doRequest(buildPayload(cols));
-      if(Object.values(cols).some(v=>!v))
-        console.warn('upsertLeave succeeded with reduced columns:',JSON.stringify(cols));
-      return result;
+      return await attemptSave(currentPayload);
     }catch(e){
-      if(!isColumnError(e.message))throw e; // non-column error — don't retry
-      lastErr=e;
-      console.warn('upsertLeave column error, trying next fallback:',e.message.slice(0,100));
+      if(!isColumnError(e.message))throw e;
+      const badCol=extractBadColumn(e.message);
+      if(badCol&&currentPayload.hasOwnProperty(badCol)){
+        console.warn('upsertLeave: removing unknown column and retrying:',badCol);
+        schema.delete(badCol); // remember for future calls
+        const{[badCol]:_,...rest}=currentPayload;
+        currentPayload=rest;
+      }else{
+        throw e; // can't figure out what to remove
+      }
     }
   }
-  throw lastErr;
+  throw new Error('Could not save after multiple retries');
 }
 async function softDeleteLeave(name){
   return fetch(SB_URL+'/rest/v1/lt_leaves?name=ilike.'+encodeURIComponent(name)+'&deleted=eq.false',{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({deleted:true,updated_at:new Date().toISOString()})});
@@ -2271,6 +2314,73 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
 }
 
 // ─── MAIN APP ───
+// ─── SQL SETUP MODAL ───
+// Shown when Supabase schema is missing columns — gives user exact SQL to run
+function SqlSetupModal({onClose}){
+  const[copied,setCopied]=useState(false);
+  const sql=`-- Run this in your Supabase SQL Editor to set up the lt_leaves table
+-- Go to: https://supabase.com/dashboard → your project → SQL Editor
+
+CREATE TABLE IF NOT EXISTS lt_leaves (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  name text NOT NULL,
+  type text DEFAULT 'PTO',
+  dates jsonb DEFAULT '[]',
+  backup text DEFAULT '',
+  half_days jsonb DEFAULT '{}',
+  date_types jsonb DEFAULT '{}',
+  added_by text DEFAULT '',
+  updated_at timestamptz DEFAULT now(),
+  created_at timestamptz DEFAULT now(),
+  deleted boolean DEFAULT false
+);
+
+-- If the table already exists, add missing columns:
+ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS backup text DEFAULT '';
+ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS half_days jsonb DEFAULT '{}';
+ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS date_types jsonb DEFAULT '{}';
+ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS added_by text DEFAULT '';
+ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
+ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS deleted boolean DEFAULT false;
+
+-- Enable Row Level Security (allow anon reads and writes for the app key):
+ALTER TABLE lt_leaves ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "allow_all" ON lt_leaves FOR ALL USING (true) WITH CHECK (true);`;
+
+  const copy=()=>{navigator.clipboard.writeText(sql).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000)})};
+
+  return(<div className="overlay" onClick={onClose}><div className="modal fade-in" onClick={e=>e.stopPropagation()} style={{maxWidth:660}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14}}>
+      <div>
+        <h3 style={{fontSize:17,fontWeight:600,color:'var(--red)'}}>⚠ Database setup required</h3>
+        <div style={{fontSize:12,color:'var(--text2)',marginTop:3}}>The <code style={{background:'var(--surface2)',padding:'1px 5px',borderRadius:3}}>lt_leaves</code> table is missing columns. Run the SQL below in your Supabase project to fix it.</div>
+      </div>
+      <button className="btn-icon" onClick={onClose}><Icon name="x" size={16}/></button>
+    </div>
+
+    <div style={{marginBottom:12,display:'flex',gap:10,flexWrap:'wrap'}}>
+      <a href="https://supabase.com/dashboard/project/wplarfdgdwhbbtjrgjrw/sql/new" target="_blank" rel="noreferrer"
+        style={{display:'inline-flex',alignItems:'center',gap:6,padding:'7px 14px',background:'var(--accent)',color:'#fff',borderRadius:8,fontSize:12.5,fontWeight:500,textDecoration:'none'}}>
+        Open Supabase SQL Editor ↗
+      </a>
+      <button className="btn btn-secondary" onClick={copy} style={{fontSize:12.5}}>
+        {copied?'✓ Copied!':'Copy SQL'}
+      </button>
+    </div>
+
+    <pre style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:'12px 14px',fontSize:11.5,overflowX:'auto',overflowY:'auto',maxHeight:340,lineHeight:1.6,color:'var(--text)',whiteSpace:'pre',fontFamily:"'JetBrains Mono',monospace,monospace"}}>
+      {sql}
+    </pre>
+
+    <div style={{marginTop:12,fontSize:12,color:'var(--text3)',lineHeight:1.55}}>
+      After running the SQL, click Refresh in the app and try saving again. Your data entered so far is preserved in local state.
+    </div>
+    <div style={{marginTop:12,display:'flex',justifyContent:'flex-end'}}>
+      <button className="btn btn-primary" onClick={onClose}>Got it</button>
+    </div>
+  </div></div>);
+}
+
 function App(){
   const[theme,setTheme]=useState(()=>localStorage.getItem('cx_lt_theme')||'light');
   useEffect(()=>{document.documentElement.setAttribute('data-theme',theme);localStorage.setItem('cx_lt_theme',theme)},[theme]);
@@ -2282,6 +2392,7 @@ function App(){
   const[selectedUsers,setSelectedUsers]=useState([]);
   const[showAddLeave,setShowAddLeave]=useState(false);const[showUserPicker,setShowUserPicker]=useState(false);
   const[toasts,setToasts]=useState([]);const[editingIdx,setEditingIdx]=useState(null);
+  const[showSqlSetup,setShowSqlSetup]=useState(false);
   const[showOoo,setShowOoo]=useState(false);const[oooData,setOooData]=useState(null);
   const[showDeleteConfirm,setShowDeleteConfirm]=useState(null);
   const[showExport,setShowExport]=useState(null);  // single member export
@@ -2406,6 +2517,10 @@ function App(){
       // Parse Supabase JSON error body for a readable message
       let detail=e.message||'Network error';
       try{const j=JSON.parse(detail);detail=j.message||j.hint||j.details||detail}catch{}
+      // If it's a schema error, prompt user to set up the table
+      if(/schema cache|does not exist|PGRST204|column/i.test(detail)){
+        setShowSqlSetup(true);
+      }
       // Still reload from DB — the retry logic may have partially succeeded
       try{
         const freshLeaves=await fetchUserLeaves();
@@ -2424,6 +2539,7 @@ function App(){
   const tbc={PTO:'badge-pto',Sick:'badge-sick',Mixed:'badge-mixed','Business Travel':'badge-bt',Other:'badge-other'};
 
   return(<div style={{minHeight:'100vh',background:'var(--bg)'}}>
+    {showSqlSetup&&<SqlSetupModal onClose={()=>setShowSqlSetup(false)}/>}
     <ToastContainer toasts={toasts} remove={id=>setToasts(t=>t.filter(x=>x.id!==id))}/>
 
     <header style={{position:'sticky',top:0,zIndex:50,padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',background:'var(--header-bg)',backdropFilter:'blur(16px)',borderBottom:'1px solid var(--header-border)'}}>
