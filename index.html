@@ -157,30 +157,26 @@ function parseCanvasMarkdown(md){
 }
 function parseProjectEntries(backupStr,includeNoCalls){
   if(!backupStr)return[];
-  // Split into logical entries — a new entry starts with [YYYY-MM-DD] or is the first line
-  // Lines that don't start with [ are continuation lines (multi-line agenda) belonging to the previous entry
   const rawLines=backupStr.split('\n');
   const entryLines=[];
   let current='';
   for(let i=0;i<rawLines.length;i++){
     const line=rawLines[i];
     if(!line.trim())continue;
-    // A new entry starts with [date] or (if no date) is a standalone project line
-    // — but ONLY if we're starting fresh or this line has a [date] prefix
-    // A new entry ONLY starts with [date] prefix
-    // Any other line is a continuation of the previous entry's agenda
-    const isNewEntry=line.match(/^\[\d{4}-\d{2}-\d{2}\]/);
-    if(isNewEntry){
+    // Only start a new entry when the line has a [date] prefix
+    const hasDate=line.match(/^\[\d{4}-\d{2}-\d{2}\]/);
+    if(hasDate){
       if(current)entryLines.push(current);
       current=line;
     }else if(!current){
-      // First line with no date — treat as standalone entry
       current=line;
     }else{
-      // Continuation — append to current entry's agenda
-      // If current has a pipe (| Agenda: ...) append after it, else add pipe
-      if(current.includes(' | Agenda: ')){current=current+'\n'+line.trim()}
-      else{current=current+' | Agenda: '+line.trim()}
+      // No date — continuation line, append to previous entry's agenda
+      if(current.includes(' | Agenda: ')){
+        current=current+' · '+line.trim();
+      }else{
+        current=current+' | Agenda: '+line.trim();
+      }
     }
   }
   if(current)entryLines.push(current);
@@ -191,19 +187,23 @@ function parseProjectEntries(backupStr,includeNoCalls){
     if(dateMatch){date=dateMatch[1];line=line.slice(dateMatch[0].length)}
     if(line.trim()==='__NO_CALLS__'){isNoCalls=true;project='__NO_CALLS__'}
     else{
-      var pipeParts=line.split(' | ').map(function(s){return s.trim()});
+      var pipeParts=line.split(' | ');
       var mainPart=pipeParts[0]||'';
-      // Join all pipe parts after the first as agenda (handles multiple | in agenda)
-      agenda=pipeParts.slice(1).join(' | ').replace(/^Agenda:\s*/i,'');
+      agenda=pipeParts.slice(1).join(' | ').replace(/^Agenda:\s*/i,'').trim();
       var dashIdx=mainPart.indexOf(' - ');
-      if(dashIdx>-1){project=mainPart.substring(0,dashIdx).trim();personStr=mainPart.substring(dashIdx+3).trim()}
-      else{var colonIdx=mainPart.indexOf(':');if(colonIdx>-1){project=mainPart.substring(0,colonIdx).trim();personStr=mainPart.substring(colonIdx+1).trim()}else{project=mainPart;personStr=''}}
+      if(dashIdx>-1){
+        project=mainPart.substring(0,dashIdx).trim();
+        personStr=mainPart.substring(dashIdx+3).trim();
+      }else{
+        project=mainPart.trim();
+        personStr='';
+      }
     }
     var persons=personStr?personStr.split(/\s*,\s*/).filter(Boolean):[];
     return{date:date,project:project,persons:persons,agenda:agenda,isNoCalls:isNoCalls};
   }).filter(function(p){
     if(p.isNoCalls)return includeNoCalls?true:false;
-    return p.project||p.persons.length>0;
+    return p.project&&p.project!=='__NO_CALLS__';
   });
 }
 function getNoCallsDates(backupStr){
@@ -2689,7 +2689,7 @@ function App(){
                   </td>
                   <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].project&&projects[0].project!=='__NO_CALLS__'?projects[0].project:'':''}</td>
                   <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].persons.join(', ')||'':''}</td>
-                  <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',maxWidth:220,lineHeight:1.6}}>{projects[0]?projects[0].isNoCalls?<span style={{color:'var(--cyan)',fontSize:11}}>📵 No customer calls</span>:(projects[0].agenda||'').split(' · ').map((line,i,arr)=><span key={i}>{line}{i<arr.length-1&&<><br/></>}</span>):''}</td>
+                  <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',maxWidth:220,lineHeight:1.6}}>{projects[0]?projects[0].isNoCalls?<span style={{color:'var(--cyan)',fontSize:11}}>📵 No customer calls</span>:(()=>{const pts=(projects[0].agenda||'').split(' · ');return pts.map((pt,pi)=><span key={pi}>{pt}{pi!==pts.length-1&&<br/>}</span>)})():''}</td>
                   <td rowSpan={rowSpan} style={{verticalAlign:'top'}}>
                     <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
                       {/* Per-row export (always visible) */}
@@ -2705,7 +2705,7 @@ function App(){
                   <tr key={m.name+'-proj-'+pi} className="fade-in">
                     <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.project&&p.project!=='__NO_CALLS__'?p.project:''}</td>
                     <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.persons.join(', ')||''}</td>
-                    <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',maxWidth:220,lineHeight:1.6}}>{p.isNoCalls?<span style={{color:'var(--cyan)',fontSize:11}}>📵 No customer calls</span>:(p.agenda||'').split(' · ').map((line,i,arr)=><span key={i}>{line}{i<arr.length-1&&<><br/></>}</span>)}</td>
+                    <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',maxWidth:220,lineHeight:1.6}}>{p.isNoCalls?<span style={{color:'var(--cyan)',fontSize:11}}>📵 No customer calls</span>:(()=>{const pts=(p.agenda||'').split(' · ');return pts.map((pt,pi)=><span key={pi}>{pt}{pi!==pts.length-1&&<br/>}</span>)})()}</td>
                   </tr>
                 ))}
               </React.Fragment>);
