@@ -277,79 +277,87 @@ async function fetchUserLeaves(){
 }
 
 async function upsertLeave(entry,addedBy){
-  const memberName=((entry.name||'')+'').trim()||(addedBy||'').split('@')[0]||'Unknown';
-  console.log('[upsert] member_name=',memberName,'dates=',entry.dates&&entry.dates.length);
+  // Step 1: Get the member name — never allow null
+  let memberName='';
+  if(entry&&entry.name)memberName=String(entry.name).trim();
+  if(!memberName&&addedBy)memberName=String(addedBy).split('@')[0].trim();
+  if(!memberName)memberName='Unknown';
+  console.log('[upsert] START memberName='+JSON.stringify(memberName)+' dates='+(entry&&entry.dates?entry.dates.length:0));
 
-  // Try to find an existing row for this person
+  // Step 2: Check for existing row
   let existingId=null;
   try{
-    const r=await fetch(SB_URL+'/rest/v1/lt_leaves?member_name=ilike.'+encodeURIComponent(memberName)+'&limit=1',{
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-    });
-    if(r.ok){const rows=await r.json();if(rows&&rows.length>0)existingId=rows[0].id;}
-  }catch(e){console.warn('[upsert] lookup error:',e.message)}
+    const lu=await fetch(SB_URL+'/rest/v1/lt_leaves?member_name=ilike.'+encodeURIComponent(memberName)+'&limit=1',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+    if(lu.ok){const rows=await lu.json();if(Array.isArray(rows)&&rows.length>0)existingId=rows[0].id;}
+    console.log('[upsert] existing row id='+existingId);
+  }catch(ex){console.warn('[upsert] lookup failed:',ex.message)}
 
-  // Build minimal payload — only the columns we know exist
-  // Progressively add optional columns; if we get a column error, remove it and retry
-  const base={
+  // Step 3: Build payload with all plausible column names
+  // The retry loop will strip any column that doesn't exist in the actual schema
+  const allFields={
     member_name:memberName,
     dates:JSON.stringify(entry.dates||[]),
-    leave_type:entry.type||'PTO',
     type:entry.type||'PTO',
-    backup_info:entry.backup||'',
+    leave_type:entry.type||'PTO',
     backup:entry.backup||'',
+    backup_info:entry.backup||'',
     half_days:JSON.stringify(entry.halfDays||{}),
     date_types:JSON.stringify(entry.dateTypes||{}),
     added_by:addedBy||'',
     updated_at:new Date().toISOString(),
   };
 
-  const save=async(payload)=>{
-    const url=existingId
-      ?SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingId
-      :SB_URL+'/rest/v1/lt_leaves';
-    const r=await fetch(url,{
-      method:existingId?'PATCH':'POST',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
-      body:JSON.stringify(payload)
-    });
-    const txt=await r.text();
-    if(!r.ok)throw new Error(txt);
-    return txt?JSON.parse(txt):null;
-  };
-
-  // Self-healing: strip unknown columns one at a time until it saves
-  let payload={...base};
-  let lastErr=null;
-  for(let attempt=0;attempt<15;attempt++){
+  // Step 4: Retry loop — strip unknown columns one by one
+  let payload=Object.assign({},allFields);
+  for(let attempt=0;attempt<20;attempt++){
+    console.log('[upsert] attempt '+(attempt+1)+' keys: '+Object.keys(payload).join(', '));
+    const url=existingId?SB_URL+'/rest/v1/lt_leaves?id=eq.'+existingId:SB_URL+'/rest/v1/lt_leaves';
+    const method=existingId?'PATCH':'POST';
+    let responseText='';
     try{
-      console.log('[upsert] attempt',attempt+1,'payload keys:',Object.keys(payload).join(', '));
-      const result=await save(payload);
-      console.log('[upsert] SUCCESS on attempt',attempt+1);
-      return result;
-    }catch(e){
-      lastErr=e.message;
-      console.warn('[upsert] attempt',attempt+1,'failed:',lastErr.slice(0,150));
-      // Parse the error JSON if possible
-      let errMsg=lastErr;
-      try{const j=JSON.parse(lastErr);errMsg=j.message||j.details||lastErr}catch{}
-      // If it's a NOT NULL violation on member_name — something is very wrong, give up
-      if(/null value.*member_name|member_name.*null/i.test(errMsg)){
-        throw new Error('member_name is null — entry.name was: '+JSON.stringify(entry.name));
+      const r=await fetch(url,{
+        method:method,
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+        body:JSON.stringify(payload)
+      });
+      responseText=await r.text();
+      if(r.ok){
+        console.log('[upsert] SUCCESS attempt '+(attempt+1));
+        return responseText?JSON.parse(responseText):null;
       }
-      // If it's a column/schema error — strip the bad column
-      const colMatch=errMsg.match(/column of '(\w+)'|find the '(\w+)' column|'(\w+)'.*schema cache/);
-      const col=colMatch?(colMatch[1]||colMatch[2]||colMatch[3]):null;
-      if(col&&payload.hasOwnProperty(col)){
-        console.log('[upsert] stripping column:',col);
-        const p={...payload};delete p[col];payload=p;
-        continue;
+      // Parse error from Supabase
+      let errObj={};
+      try{errObj=JSON.parse(responseText)}catch{}
+      const errMsg=errObj.message||errObj.details||responseText||'unknown error';
+      console.error('[upsert] error attempt '+(attempt+1)+': '+errMsg);
+
+      // Is it a "column does not exist in schema" error?
+      const schemaMatch=errMsg.match(/column of '(\w+)'|find the '(\w+)' column|'(\w+)'.*schema cache|column "(\w+)" of relation/);
+      if(schemaMatch){
+        const badCol=schemaMatch[1]||schemaMatch[2]||schemaMatch[3]||schemaMatch[4];
+        if(badCol&&badCol!=='member_name'&&Object.prototype.hasOwnProperty.call(payload,badCol)){
+          console.log('[upsert] stripping column: '+badCol);
+          const next=Object.assign({},payload);
+          delete next[badCol];
+          payload=next;
+          continue;
+        }
       }
-      // Not a column error we can fix — give up
+
+      // NOT NULL violation — the column exists but value sent was null
+      // member_name is explicitly set above — if this fires, something else is wrong
+      if(errMsg.indexOf('violates not-null')>=0||errMsg.indexOf('not-null constraint')>=0){
+        throw new Error('NOT NULL violation ('+errMsg+'). Payload sent: '+JSON.stringify(payload));
+      }
+
+      // Any other error — give up
       throw new Error(errMsg);
+    }catch(ex){
+      if(ex.message.indexOf('[upsert]')===0||ex.message.indexOf('NOT NULL')===0||ex.message.indexOf('Payload')===0)throw ex;
+      throw new Error(ex.message);
     }
   }
-  throw new Error('Save failed after all retries: '+lastErr);
+  throw new Error('Could not save after 20 attempts');
 }
 async function softDeleteLeave(name){
   const nameCol=_leavesNameCol||'member_name';
