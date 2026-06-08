@@ -204,59 +204,11 @@ async function readCache(){
   return data&&data[0]?{markdown:data[0].markdown_content,updated_at:data[0].updated_at}:null;
 }
 // ─── SUPABASE TABLE SCHEMA DISCOVERY ───
-let _leavesSchema=null;
-let _leavesNameCol=null;
-// Always re-probe on page load — never use a stale in-memory schema
-_leavesSchema=null;_leavesNameCol=null;
+let _leavesSchema=new Set(["id","member_name","dates","type","backup","half_days","date_types","added_by","updated_at","created_at","deleted"]);
+let _leavesNameCol="member_name";
+async function getLeavesSchema(){return _leavesSchema;}
+function findNameColumn(){return _leavesNameCol;}
 
-async function getLeavesSchema(){
-  if(_leavesSchema)return _leavesSchema;
-  try{
-    // PostgREST exposes OpenAPI at /rest/v1/ — parse definitions to get real column names
-    const r=await fetch(SB_URL+'/rest/v1/',{
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/openapi+json'}
-    });
-    if(r.ok){
-      const spec=await r.json();
-      // Look for lt_leaves in definitions
-      const def=spec&&spec.definitions&&(spec.definitions['lt_leaves']||spec.definitions['lt_leaves_insert']);
-      if(def&&def.properties){
-        _leavesSchema=new Set(Object.keys(def.properties));
-        console.log('lt_leaves schema from OpenAPI:',{..._leavesSchema});
-        return _leavesSchema;
-      }
-    }
-  }catch(e){console.warn('OpenAPI probe failed:',e.message)}
-
-  // Fallback: try fetching a row to get column names from actual data
-  try{
-    const r=await fetch(SB_URL+'/rest/v1/lt_leaves?limit=5',{
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-    });
-    if(r.ok){
-      const rows=await r.json();
-      if(rows&&rows.length>0){
-        _leavesSchema=new Set(Object.keys(rows[0]));
-        console.log('lt_leaves schema from data rows:',{..._leavesSchema});
-        return _leavesSchema;
-      }
-    }
-  }catch(e){console.warn('Row probe failed:',e.message)}
-
-  // Can't determine schema — start empty, let self-healing retry discover columns
-  _leavesSchema=new Set();
-  return _leavesSchema;
-}
-
-// Find which column stores the person's name (could be 'name', 'employee', 'person', etc.)
-function findNameColumn(schema){
-  if(_leavesNameCol)return _leavesNameCol;
-  const candidates=['member_name','name','employee','employee_name','person','person_name','member','username','user_name','display_name'];
-  for(const c of candidates){if(schema&&schema.has(c)){_leavesNameCol=c;return c}}
-  // Default to member_name — confirmed from actual lt_leaves table structure
-  _leavesNameCol='member_name';
-  return _leavesNameCol;
-}
 
 async function fetchUserLeaves(){
   try{
@@ -2364,58 +2316,8 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
 // ─── MAIN APP ───
 // ─── SQL SETUP MODAL ───
 function SqlSetupModal({onClose,onFixed}){
-  const[running,setRunning]=useState(false);
-  const[done,setDone]=useState(false);
   const[copied,setCopied]=useState(false);
-  const[log,setLog]=useState([]);
-
-  // The exact ALTER statements needed — one per column so each can be retried independently
-  const alters=[
-    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS dates jsonb DEFAULT '[]'",
-    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS type text DEFAULT 'PTO'",
-    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS backup text DEFAULT ''",
-    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS half_days jsonb DEFAULT '{}'",
-    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS date_types jsonb DEFAULT '{}'",
-    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS added_by text DEFAULT ''",
-    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now()",
-    "ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS deleted boolean DEFAULT false",
-  ];
-
-  // Try to run each ALTER via Supabase's pg_execute RPC (only works if it exists)
-  const runAutoFix=async()=>{
-    setRunning(true);setLog([]);
-    let anyFailed=false;
-    for(const stmt of alters){
-      const colName=stmt.match(/ADD COLUMN IF NOT EXISTS (\w+)/)[1];
-      try{
-        const r=await fetch(SB_URL+'/rest/v1/rpc/pg_execute',{
-          method:'POST',
-          headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},
-          body:JSON.stringify({query:stmt})
-        });
-        if(r.ok){
-          setLog(l=>[...l,{ok:true,msg:'✓ Added column: '+colName}]);
-        }else{
-          const txt=await r.text();
-          // If the RPC doesn't exist, fall back gracefully
-          if(txt.includes('pg_execute')||txt.includes('function')){
-            setLog(l=>[...l,{ok:false,msg:'Auto-fix not available — please run SQL manually (see below)'}]);
-            setRunning(false);return;
-          }
-          setLog(l=>[...l,{ok:true,msg:'✓ '+colName+' (already exists or added)'}]);
-        }
-      }catch(e){
-        setLog(l=>[...l,{ok:false,msg:'⚠ '+colName+': '+e.message}]);
-        anyFailed=true;
-      }
-    }
-    setRunning(false);
-    if(!anyFailed){
-      setDone(true);
-      // Reset schema cache so next save re-probes
-      _leavesSchema=null;_leavesNameCol=null;
-    }
-  };
+  const[done,setDone]=useState(false);
 
   const sql=`-- Run these in Supabase → SQL Editor:
 ALTER TABLE lt_leaves ADD COLUMN IF NOT EXISTS dates jsonb DEFAULT '[]';
@@ -2624,8 +2526,6 @@ function App(){
       const isSchemaErr=/schema cache|does not exist|PGRST204/i.test(detail);
       const isNullErr=/violates not.null|null value.*column/i.test(detail);
       if(isSchemaErr&&!isNullErr){
-        // Reset cache so next attempt re-probes
-        _leavesSchema=null;_leavesNameCol=null;
         setShowSqlSetup(true);
       }
       try{
