@@ -248,7 +248,7 @@ async function fetchUserLeaves(){
     const data=await r.json();
     console.log('[fetchUserLeaves] got',data&&data.length,'rows');
     if(data&&data.length>0)console.log('[fetchUserLeaves] first row keys:',Object.keys(data[0]).join(', '));
-    const active=(data||[]).filter(row=>!row.deleted);
+    const active=(data||[]).filter(row=>row.deleted!==true);
     localStorage.setItem('cx_lt_leaves_cache',JSON.stringify(active));
     return active;
   }catch(e){
@@ -2492,22 +2492,21 @@ function App(){
     // 2. Persist to Supabase and confirm
     try{
       await upsertLeave(entryWithName,(user&&user.email)||'');
-      // Sync project entries into the master lt_projects table (fire and forget)
+      // Sync project entries (fire and forget)
       syncLeaveProjectsToMaster(entryWithName.name,entryWithName.backup).catch(e=>console.warn('sync projects:',e.message));
-      // 3. Reload from DB to confirm data is actually there
+      // Reload from DB — use empty canvas base so DB is the source of truth
+      // Pass [] as canvas so only DB rows are shown (avoids stale data issues)
       const freshLeaves=await fetchUserLeaves();
-      const canvasMembers=data.filter(m=>m.raw!==undefined&&m.raw!=='');
-      setData(mergeCanvasAndUserLeaves(canvasMembers.map(m=>({...m})),freshLeaves));
+      setData(prev=>{
+        // Keep canvas members (raw !== '') as the base, merge fresh DB leaves on top
+        const canvas=prev.filter(m=>m.raw&&m.raw!=='');
+        return mergeCanvasAndUserLeaves(canvas.map(m=>({...m})),freshLeaves);
+      });
       toast('Leave saved ✓','success');
     }catch(e){
       console.error('upsertLeave failed:',e.message);
       let detail=e.message||'Network error';
       try{const j=JSON.parse(detail);detail=j.message||j.hint||j.details||detail}catch{}
-      try{
-        const freshLeaves=await fetchUserLeaves();
-        const canvasMembers=data.filter(m=>m.raw!==undefined&&m.raw!=='');
-        setData(mergeCanvasAndUserLeaves(canvasMembers.map(m=>({...m})),freshLeaves));
-      }catch{}
       toast('Save failed — '+detail.slice(0,200),'error');
     }
 
