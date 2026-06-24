@@ -163,47 +163,30 @@ function parseProjectEntries(backupStr,includeNoCalls){
   for(let i=0;i<rawLines.length;i++){
     const line=rawLines[i];
     if(!line.trim())continue;
-    // Only start a new entry when the line has a [date] prefix
     const hasDate=line.match(/^\[\d{4}-\d{2}-\d{2}\]/);
-    if(hasDate){
-      if(current)entryLines.push(current);
-      current=line;
-    }else if(!current){
-      current=line;
-    }else{
-      // No date — continuation line, append to previous entry's agenda
-      if(current.includes(' | Agenda: ')){
-        current=current+' · '+line.trim();
-      }else{
-        current=current+' | Agenda: '+line.trim();
-      }
-    }
+    if(hasDate){if(current)entryLines.push(current);current=line;}
+    else if(!current){current=line;}
+    else{current=current+(current.includes(' | Agenda: ')?' · ':' | Agenda: ')+line.trim();}
   }
   if(current)entryLines.push(current);
-
   return entryLines.map(function(line){
     var project='',personStr='',agenda='',date='',isNoCalls=false;
     var dateMatch=line.match(/^\[(\d{4}-\d{2}-\d{2})\]\s*/);
-    if(dateMatch){date=dateMatch[1];line=line.slice(dateMatch[0].length)}
-    if(line.trim()==='__NO_CALLS__'){isNoCalls=true;project='__NO_CALLS__'}
+    if(dateMatch){date=dateMatch[1];line=line.slice(dateMatch[0].length);}
+    if(line.trim()==='__NO_CALLS__'){isNoCalls=true;project='__NO_CALLS__';}
     else{
       var pipeParts=line.split(' | ');
       var mainPart=pipeParts[0]||'';
       agenda=pipeParts.slice(1).join(' | ').replace(/^Agenda:\s*/i,'').trim();
       var dashIdx=mainPart.indexOf(' - ');
-      if(dashIdx>-1){
-        project=mainPart.substring(0,dashIdx).trim();
-        personStr=mainPart.substring(dashIdx+3).trim();
-      }else{
-        project=mainPart.trim();
-        personStr='';
-      }
+      if(dashIdx>-1){project=mainPart.substring(0,dashIdx).trim();personStr=mainPart.substring(dashIdx+3).trim();}
+      else{project=mainPart.trim();personStr='';}
     }
     var persons=personStr?personStr.split(/\s*,\s*/).filter(Boolean):[];
     return{date:date,project:project,persons:persons,agenda:agenda,isNoCalls:isNoCalls};
   }).filter(function(p){
-    if(p.isNoCalls)return includeNoCalls?true:false;
-    return p.project&&p.project!=='__NO_CALLS__';
+    if(p.isNoCalls)return!!includeNoCalls;
+    return!!(p.project&&p.project!=='__NO_CALLS__');
   });
 }
 function getNoCallsDates(backupStr){
@@ -2635,7 +2618,7 @@ function App(){
                   </td>
                   <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].project&&projects[0].project!=='__NO_CALLS__'?projects[0].project:'':''}</td>
                   <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{projects[0]?projects[0].persons.join(', ')||'':''}</td>
-                  <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',maxWidth:220,lineHeight:1.6,whiteSpace:'pre-wrap'}}>{projects[0]?projects[0].isNoCalls?'📵 No customer calls':(projects[0].agenda||'').replace(/ · /g,'\n'):''}</td>
+                  <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',maxWidth:220}}>{projects[0]?projects[0].isNoCalls?'📵 No calls':projects[0].agenda||'':''}</td>
                   <td rowSpan={rowSpan} style={{verticalAlign:'top'}}>
                     <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
                       {/* Per-row export (always visible) */}
@@ -2651,7 +2634,7 @@ function App(){
                   <tr key={m.name+'-proj-'+pi} className="fade-in">
                     <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.project&&p.project!=='__NO_CALLS__'?p.project:''}</td>
                     <td className="desktop-only" style={{fontSize:12,color:'var(--text2)'}}>{p.persons.join(', ')||''}</td>
-                    <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',maxWidth:220,lineHeight:1.6,whiteSpace:'pre-wrap'}}>{p.isNoCalls?'📵 No customer calls':(p.agenda||'').replace(/ · /g,'\n')}</td>
+                    <td className="desktop-only" style={{fontSize:12,color:'var(--text3)',maxWidth:220}}>{p.isNoCalls?'📵 No calls':p.agenda||''}</td>
                   </tr>
                 ))}
               </React.Fragment>);
