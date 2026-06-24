@@ -6,9 +6,9 @@
 <title>CX Leave Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.23.2/babel.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root,[data-theme="light"]{--bg:#faf7f4;--bg2:#f3ede6;--surface:#fff;--surface2:#f7f3ee;--surface3:#efe9e0;--border:#e0d5c7;--border2:#d4c5b3;--text:#2c1810;--text2:#6b5344;--text3:#9a8576;--accent:#e8590c;--accent2:#d9480f;--accent-light:rgba(232,89,12,.08);--accent-border:rgba(232,89,12,.2);--red:#e03131;--red-bg:rgba(224,49,49,.08);--red-border:rgba(224,49,49,.2);--green:#2b8a3e;--green-bg:rgba(43,138,62,.08);--amber:#e67700;--amber-bg:rgba(230,119,0,.08);--indigo:#5c47e0;--indigo-bg:rgba(92,71,224,.07);--cyan:#0c8599;--pink:#c2255c;--shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);--shadow-lg:0 4px 12px rgba(0,0,0,.08);--header-bg:rgba(255,255,255,.88);--header-border:rgba(224,213,199,.6);--overlay-bg:rgba(44,24,16,.3);--modal-bg:#fff;--input-bg:#f7f3ee;--badge-text:#fff;--chip-today-bg:rgba(224,49,49,.1);--chip-today-text:#c92a2a;--chip-today-border:rgba(224,49,49,.25);--chip-future-bg:rgba(92,71,224,.08);--chip-future-text:#5c47e0;--chip-future-border:rgba(92,71,224,.2);--toggle-bg:#e0d5c7}
@@ -66,8 +66,8 @@ tr:hover td{background:var(--accent-light)}
 </style>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel">
+<div id="root"><div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#9a8576;font-size:14px">Loading CX Leave Tracker…</div></div>
+<script type="text/babel" data-presets="react,env">
 const{useState,useEffect,useMemo,useRef}=React;
 const SB_URL='https://wplarfdgdwhbbtjrgjrw.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndwbGFyZmRnZHdoYmJ0anJnanJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNTk5MzYsImV4cCI6MjA5MzczNTkzNn0._6Ot3hk6u419alzt9ruLnDKD0CyevcIlBdPT7wZYCh0';
@@ -2292,6 +2292,27 @@ function AddLeaveModal({onClose,onSave,existingNames,editData,userName,allUserDa
   </div></div>);
 }
 
+// ─── ERROR BOUNDARY ───
+class ErrorBoundary extends React.Component{
+  constructor(props){super(props);this.state={error:null}}
+  static getDerivedStateFromError(e){return{error:e}}
+  componentDidCatch(e,info){console.error('CX Leave Tracker crashed:',e,info)}
+  render(){
+    if(this.state.error)return(
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',padding:20,background:'#faf7f4'}}>
+        <div style={{maxWidth:520,width:'100%',background:'#fff',border:'1px solid #e0d5c7',borderRadius:16,padding:32,textAlign:'center',boxShadow:'0 4px 12px rgba(0,0,0,.08)'}}>
+          <div style={{fontSize:36,marginBottom:12}}>⚠️</div>
+          <h2 style={{fontSize:18,fontWeight:700,color:'#c92a2a',marginBottom:8}}>Something went wrong</h2>
+          <p style={{fontSize:13,color:'#6b5344',marginBottom:16}}>An error prevented the app from loading. Check the browser console for details.</p>
+          <pre style={{fontSize:11,color:'#9a8576',background:'#f7f3ee',border:'1px solid #e0d5c7',borderRadius:8,padding:'10px 14px',textAlign:'left',overflowX:'auto',whiteSpace:'pre-wrap',marginBottom:20}}>{String(this.state.error)}</pre>
+          <button style={{padding:'9px 22px',background:'#e8590c',color:'#fff',border:'none',borderRadius:10,cursor:'pointer',fontSize:14,fontWeight:500}} onClick={()=>window.location.reload()}>Reload Page</button>
+        </div>
+      </div>
+    );
+    return this.props.children;
+  }
+}
+
 // ─── MAIN APP ───
 // ─── SQL SETUP MODAL ───
 function SqlSetupModal({onClose,onFixed}){
@@ -2671,7 +2692,7 @@ function App(){
   </div>);
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+ReactDOM.createRoot(document.getElementById('root')).render(<ErrorBoundary><App/></ErrorBoundary>);
 </script>
 </body>
 </html>
